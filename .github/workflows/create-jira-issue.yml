@@ -1,0 +1,141 @@
+name: Create Jira issue
+on:
+  issues:
+    types:
+      - opened
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  issue-sync:
+    name: Create Jira issue
+    runs-on: ubuntu-latest
+    env:
+      JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
+      JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+      JIRA_USER_EMAIL: ${{ secrets.JIRA_USER_EMAIL }}
+      PROJECT_KEY: ${{ secrets.PROJECT_KEY }}
+    steps:
+    - name: JIRA Login
+      run: |
+        curl --fail-with-body --request GET \
+          --url "${JIRA_BASE_URL}/rest/api/3/myself" \
+          --user "${JIRA_USER_EMAIL}:${JIRA_API_TOKEN}" \
+          --header "Accept: application/json"
+  
+    - name: Checkout develop
+      uses: actions/checkout@v4
+      with:
+        ref: develop
+  
+    - name: Issue Parser
+      uses: stefanbuck/github-issue-parser@v3
+      id: issue-parser
+      with:
+        template-path: .github/ISSUE_TEMPLATE/feature-report.yml
+    - name: Create JIRA issue
+      id: create-issue
+      run: |
+        LABELS=$(echo "${{ steps.issue-parser.outputs.issueparser_issue_label }}" | tr ',' '\n' | sed 's/^ *//;s/ *$//' | jq -R . | jq -s .)
+    
+        response=$(curl --fail --silent --request POST \
+          --url "${JIRA_BASE_URL}/rest/api/3/issue" \
+          --user "${JIRA_USER_EMAIL}:${JIRA_API_TOKEN}" \
+          --header "Accept: application/json" \
+          --header "Content-Type: application/json" \
+          --data "{
+            \"fields\": {
+              \"issuetype\": {
+                \"name\": \"${{ steps.issue-parser.outputs.issueparser_issue_type }}\"
+              },
+              \"labels\": ${LABELS},
+              \"parent\": {
+                \"key\": \"${{ steps.issue-parser.outputs.issueparser_epic_number }}\"
+              },
+              \"project\": {
+                \"key\": \"${PROJECT_KEY}\"
+              },
+              \"summary\": \"[BE] ${{ github.event.issue.title }}\",
+              \"description\": {
+                \"version\": 1,
+                \"type\": \"doc\",
+                \"content\": [
+                  {
+                    \"type\": \"heading\",
+                    \"attrs\": { \"level\": 3 },
+                    \"content\": [
+                      {
+                        \"type\": \"text\",
+                        \"text\": \"🌿 브랜치명\"
+                      }
+                    ]
+                  },
+                  {
+                    \"type\": \"paragraph\",
+                    \"content\": [
+                      {
+                        \"type\": \"text\",
+                        \"text\": \"${{ steps.issue-parser.outputs.issueparser_branch_name }}\"
+                      }
+                    ]
+                  },
+                  {
+                    \"type\": \"heading\",
+                    \"attrs\": { \"level\": 3 },
+                    \"content\": [
+                      {
+                        \"type\": \"text\",
+                        \"text\": \"📌 이슈 설명\"
+                      }
+                    ]
+                  },
+                  {
+                    \"type\": \"paragraph\",
+                    \"content\": [
+                      {
+                        \"type\": \"text\",
+                        \"text\": \"${{ steps.issue-parser.outputs.issueparser_issue_description }}\"
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          }")
+    
+        echo "Response: $response"
+
+        issue_key=$(echo "$response" | jq -r '.key')
+        echo "key=$issue_key" >> $GITHUB_ENV
+
+    - name: Create branch with JIRA issue key
+      run: |
+        TICKET_NUMBER="${{ env.key }}"
+        BRANCH_NAME="${{ steps.issue-parser.outputs.issueparser_branch_name }}"
+        NEW_BRANCH_NAME="feature/${TICKET_NUMBER}_$(echo ${BRANCH_NAME} | sed 's/ /-/g')"
+        git checkout -b "${NEW_BRANCH_NAME}"
+        git push origin "${NEW_BRANCH_NAME}"
+
+    - name: Update GitHub issue title
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        ISSUE_NUMBER: ${{ github.event.issue.number }}
+        ISSUE_TITLE: ${{ github.event.issue.title }}
+        JIRA_KEY: ${{ env.key }}
+      run: |
+        gh issue edit "$ISSUE_NUMBER" \
+          --repo "${{ github.repository }}" \
+          --title "[${JIRA_KEY}] ${ISSUE_TITLE}"
+
+    - name: Add Jira issue comment
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        ISSUE_NUMBER: ${{ github.event.issue.number }}
+        JIRA_KEY: ${{ env.key }}
+        JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
+      run: |
+        gh issue comment "$ISSUE_NUMBER" \
+          --repo "${{ github.repository }}" \
+          --body "Jira Issue Created: [${JIRA_KEY}](${JIRA_BASE_URL}/browse/${JIRA_KEY})"
