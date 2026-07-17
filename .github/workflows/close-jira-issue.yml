@@ -1,0 +1,72 @@
+name: Close Jira issue
+on:
+  issues:
+    types:
+      - closed
+
+jobs:
+  close-issue:
+    name: Close Jira issue
+    runs-on: ubuntu-latest
+    env:
+      JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
+      JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+      JIRA_USER_EMAIL: ${{ secrets.JIRA_USER_EMAIL }}
+    steps:
+    - name: JIRA Login
+      run: |
+        curl --fail --request GET \
+        --url "${JIRA_BASE_URL}/rest/api/3/myself" \
+        --user "${JIRA_USER_EMAIL}:${JIRA_API_TOKEN}" \
+        --header "Accept: application/json"
+  
+    - name: Extract JIRA ticket number from GitHub issue title
+      id: extract-key
+      run: |
+        ISSUE_TITLE="${{ github.event.issue.title }}"
+        JIRA_KEY=$(echo "$ISSUE_TITLE" | grep -oE '[A-Z]+-[0-9]+')
+        echo "JIRA_KEY=$JIRA_KEY" >> $GITHUB_ENV
+
+    - name: Close JIRA issue
+      if: env.JIRA_KEY != ''
+      shell: bash
+      run: |
+        transitions=$(curl --fail-with-body --silent \
+          --request GET \
+          --url "${JIRA_BASE_URL}/rest/api/3/issue/${JIRA_KEY}/transitions" \
+          --user "${JIRA_USER_EMAIL}:${JIRA_API_TOKEN}" \
+          --header "Accept: application/json")
+    
+        echo "Available transitions:"
+        echo "$transitions" | jq '.transitions[] | {id, name, targetStatus: .to.name}'
+    
+        transition_id=$(echo "$transitions" | jq -r '
+          .transitions[]
+          | select(
+              .name == "완료"
+              or .name == "Done"
+              or .name == "Closed"
+              or .to.name == "완료"
+              or .to.name == "Done"
+              or .to.name == "Closed"
+            )
+          | .id
+        ' | head -n 1)
+    
+        if [ -z "$transition_id" ] || [ "$transition_id" = "null" ]; then
+          echo "::error::사용 가능한 완료 전환을 찾지 못했습니다."
+          exit 1
+        fi
+    
+        echo "완료 전환 ID: $transition_id"
+    
+        curl --fail-with-body --silent \
+          --request POST \
+          --url "${JIRA_BASE_URL}/rest/api/3/issue/${JIRA_KEY}/transitions" \
+          --user "${JIRA_USER_EMAIL}:${JIRA_API_TOKEN}" \
+          --header "Accept: application/json" \
+          --header "Content-Type: application/json" \
+          --data "$(jq -n \
+            --arg transitionId "$transition_id" \
+            '{transition: {id: $transitionId}}'
+          )"
