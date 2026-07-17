@@ -1,0 +1,74 @@
+name: Project 이슈 생성
+description: Project Repository에 이슈를 생성하며, 생성된 이슈는 Jira와 연동됩니다.
+title: "이슈 이름을 작성해주세요"
+labels:
+  - order
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        GitHub 이슈를 생성하면 동일한 제목과 입력 내용을 바탕으로 Jira 이슈가 자동 생성됩니다.
+
+  - type: dropdown
+    id: issue_type
+    attributes:
+      label: ⚡️ 이슈 유형
+      description: Jira에서 생성할 이슈 유형을 선택해 주세요.
+      options:
+        - Story
+        - Task
+        - Bug
+        - Chore
+    validations:
+      required: true
+
+  - type: input
+    id: epic_number
+    attributes:
+      label: 🎟️ 상위 에픽 Number
+      description: Jira에서 상위 이슈로 사용할 에픽 티켓 번호를 입력해 주세요.
+      placeholder: ABC-00
+    validations:
+      required: true
+
+  - type: dropdown
+    id: issue_label
+    attributes:
+      label: 🏷️ 레이블
+      description: Jira 이슈 세부 사항에 추가할 레이블을 선택해 주세요.
+      multiple: true
+      options:
+        - backend
+        - frontend
+        - database
+        - infrastructure
+        - documentation
+        - refactor
+        - test
+    validations:
+      required: true
+
+  - type: input
+    id: branch_name
+    attributes:
+      label: 🌿 브랜치명
+      description: develop 브랜치에서 분기해 생성할 브랜치 이름을 입력해 주세요.
+      placeholder: user-login
+    validations:
+      required: true
+
+  - type: textarea
+    id: issue_description
+    attributes:
+      label: 📌 이슈 설명
+      description: Jira 이슈 본문에 포함할 작업 내용을 작성해 주세요.
+      placeholder: |
+        구현 목적과 주요 작업 내용을 작성해 주세요.
+
+        예시:
+        - 사용자 로그인 API 구현
+        - JWT 액세스 토큰 발급
+        - 로그인 실패 예외 처리
+    validations:
+      required: true
