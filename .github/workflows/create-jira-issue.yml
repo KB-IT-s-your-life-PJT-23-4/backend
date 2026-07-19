@@ -35,80 +35,122 @@ jobs:
       id: issue-parser
       with:
         template-path: .github/ISSUE_TEMPLATE/feature-report.yml
+        
     - name: Create JIRA issue
       id: create-issue
+      env:
+        ISSUE_TYPE: ${{ steps.issue-parser.outputs.issueparser_issue_type }}
+        ISSUE_LABELS: ${{ steps.issue-parser.outputs.issueparser_issue_label }}
+        EPIC_NUMBER: ${{ steps.issue-parser.outputs.issueparser_epic_number }}
+        BRANCH_NAME: ${{ steps.issue-parser.outputs.issueparser_branch_name }}
+        ISSUE_DESCRIPTION: ${{ steps.issue-parser.outputs.issueparser_issue_description }}
+        ISSUE_TITLE: ${{ github.event.issue.title }}
       run: |
-        LABELS=$(echo "${{ steps.issue-parser.outputs.issueparser_issue_label }}" | tr ',' '\n' | sed 's/^ *//;s/ *$//' | jq -R . | jq -s .)
+        set -euo pipefail
+
+        # 쉼표로 구분된 라벨을 JSON 배열로 변환
+        LABELS=$(printf '%s' "$ISSUE_LABELS" \
+          | tr ',' '\n' \
+          | sed 's/^ *//;s/ *$//' \
+          | sed '/^$/d' \
+          | jq -R . \
+          | jq -s .)
     
-        response=$(curl --fail --silent --request POST \
-          --url "${JIRA_BASE_URL}/rest/api/3/issue" \
-          --user "${JIRA_USER_EMAIL}:${JIRA_API_TOKEN}" \
-          --header "Accept: application/json" \
-          --header "Content-Type: application/json" \
-          --data "{
-            \"fields\": {
-              \"issuetype\": {
-                \"name\": \"${{ steps.issue-parser.outputs.issueparser_issue_type }}\"
+        # jq가 줄바꿈, 큰따옴표, 백슬래시 등을 자동으로 JSON 이스케이프
+        PAYLOAD=$(jq -n \
+          --arg issueType "$ISSUE_TYPE" \
+          --arg parentKey "$EPIC_NUMBER" \
+          --arg projectKey "$PROJECT_KEY" \
+          --arg summary "[FE] $ISSUE_TITLE" \
+          --arg branchName "$BRANCH_NAME" \
+          --arg description "$ISSUE_DESCRIPTION" \
+          --argjson labels "$LABELS" \
+          '{
+            fields: {
+              issuetype: {
+                name: $issueType
               },
-              \"labels\": ${LABELS},
-              \"parent\": {
-                \"key\": \"${{ steps.issue-parser.outputs.issueparser_epic_number }}\"
+              labels: $labels,
+              parent: {
+                key: $parentKey
               },
-              \"project\": {
-                \"key\": \"${PROJECT_KEY}\"
+              project: {
+                key: $projectKey
               },
-              \"summary\": \"[BE] ${{ github.event.issue.title }}\",
-              \"description\": {
-                \"version\": 1,
-                \"type\": \"doc\",
-                \"content\": [
+              summary: $summary,
+              description: {
+                version: 1,
+                type: "doc",
+                content: [
                   {
-                    \"type\": \"heading\",
-                    \"attrs\": { \"level\": 3 },
-                    \"content\": [
+                    type: "heading",
+                    attrs: {
+                      level: 3
+                    },
+                    content: [
                       {
-                        \"type\": \"text\",
-                        \"text\": \"🌿 브랜치명\"
+                        type: "text",
+                        text: "🌿 브랜치명"
                       }
                     ]
                   },
                   {
-                    \"type\": \"paragraph\",
-                    \"content\": [
+                    type: "paragraph",
+                    content: [
                       {
-                        \"type\": \"text\",
-                        \"text\": \"${{ steps.issue-parser.outputs.issueparser_branch_name }}\"
+                        type: "text",
+                        text: $branchName
                       }
                     ]
                   },
                   {
-                    \"type\": \"heading\",
-                    \"attrs\": { \"level\": 3 },
-                    \"content\": [
+                    type: "heading",
+                    attrs: {
+                      level: 3
+                    },
+                    content: [
                       {
-                        \"type\": \"text\",
-                        \"text\": \"📌 이슈 설명\"
+                        type: "text",
+                        text: "📌 이슈 설명"
                       }
                     ]
                   },
                   {
-                    \"type\": \"paragraph\",
-                    \"content\": [
+                    type: "paragraph",
+                    content: [
                       {
-                        \"type\": \"text\",
-                        \"text\": \"${{ steps.issue-parser.outputs.issueparser_issue_description }}\"
+                        type: "text",
+                        text: $description
                       }
                     ]
                   }
                 ]
               }
             }
-          }")
+          }')
+    
+        echo "Jira request payload:"
+        echo "$PAYLOAD" | jq .
+    
+        response=$(curl --fail-with-body --silent --show-error \
+          --request POST \
+          --url "${JIRA_BASE_URL}/rest/api/3/issue" \
+          --user "${JIRA_USER_EMAIL}:${JIRA_API_TOKEN}" \
+          --header "Accept: application/json" \
+          --header "Content-Type: application/json" \
+          --data "$PAYLOAD")
     
         echo "Response: $response"
-
+    
         issue_key=$(echo "$response" | jq -r '.key')
-        echo "key=$issue_key" >> $GITHUB_ENV
+    
+        if [ -z "$issue_key" ] || [ "$issue_key" = "null" ]; then
+          echo "Jira issue key를 응답에서 찾지 못했습니다."
+          exit 1
+        fi
+    
+        echo "key=$issue_key" >> "$GITHUB_ENV"
+        echo "issue_key=$issue_key" >> "$GITHUB_OUTPUT"
 
     - name: Create branch with JIRA issue key
       run: |
