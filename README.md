@@ -1,4 +1,4 @@
-# MiriZoom Backend
+# MiriZoom(미리줌) Backend
 
 프로젝트의 백엔드 애플리케이션 저장소입니다.
 
