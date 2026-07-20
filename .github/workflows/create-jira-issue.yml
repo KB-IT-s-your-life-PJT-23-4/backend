@@ -61,7 +61,7 @@ jobs:
           --arg issueType "$ISSUE_TYPE" \
           --arg parentKey "$EPIC_NUMBER" \
           --arg projectKey "$PROJECT_KEY" \
-          --arg summary "[FE] $ISSUE_TITLE" \
+          --arg summary "[BE] $ISSUE_TITLE" \
           --arg branchName "$BRANCH_NAME" \
           --arg description "$ISSUE_DESCRIPTION" \
           --argjson labels "$LABELS" \
