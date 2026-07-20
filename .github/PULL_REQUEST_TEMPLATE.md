@@ -8,7 +8,7 @@ PR 제목 형식:
 
 ## 관련 이슈
 
-- Jira: [PJT-123](https://YOUR-DOMAIN.atlassian.net/browse/PJT-123)
+- Jira: [KAN-123](https://lshyeong47.atlassian.net/browse/KAN-123)
 - GitHub: Closes #123
 
 <!--
