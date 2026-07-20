@@ -1,0 +1,5 @@
+# Copy this file to database.properties and replace the placeholders locally.
+jdbc.driver=com.mysql.cj.jdbc.Driver
+jdbc.url=jdbc:mysql://localhost:3306/project_db?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+jdbc.username=YOUR_DB_USERNAME
+jdbc.password=YOUR_DB_PASSWORD

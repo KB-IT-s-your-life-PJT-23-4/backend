@@ -46,3 +46,8 @@ dist
 dist-ssr
 coverage
 *.local
+
+### Local application secrets ###
+core/src/main/resources/database.properties
+core/src/main/resources/security.properties
+batch/src/main/resources/database.properties
