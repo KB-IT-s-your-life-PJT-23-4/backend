@@ -29,7 +29,7 @@ import javax.sql.DataSource;
 @MapperScan(basePackages = "com.example.project", annotationClass = org.apache.ibatis.annotations.Mapper.class)
 @PropertySource("classpath:database.properties")
 public class RootConfig {
-    @Bean(destroyMethod = "close")
+    @Bean
     public DataSource dataSource(
             @Value("${jdbc.driver}") String driver,
             @Value("${jdbc.url}") String url,
