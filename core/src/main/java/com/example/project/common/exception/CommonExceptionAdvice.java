@@ -1,5 +1,6 @@
 package com.example.project.common.exception;
 
+
 import lombok.extern.log4j.Log4j2;
 import org.springframework.http.HttpStatus;
 import org.springframework.ui.Model;
