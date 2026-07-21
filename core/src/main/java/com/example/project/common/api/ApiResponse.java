@@ -1,34 +1,42 @@
 package com.example.project.common.api;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import io.swagger.annotations.Api;
 import lombok.Getter;
+
+import java.time.LocalDateTime;
 
 @Getter
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class ApiResponse<T> {
-    private final boolean success;
-    private final int code;
-    private final String status;
-    private final String message;
+
+    private final int statusCode;
+    private final LocalDateTime timestamp;
+    private final String path;
     private final T data;
+    private final String message;
+    private final String error;
 
-    private ApiResponse(boolean success, ResponseCode responseCode, T data) {
-        this.success = success;
-        this.code = responseCode.getCode();
-        this.status = responseCode.getStatus();
-        this.message = responseCode.getMessage();
+    private ApiResponse(ResponseCode responseCode, String path, T data, boolean success) {
+        this.statusCode = responseCode.getCode();
+        this.timestamp = LocalDateTime.now();
+        this.path = path;
         this.data = data;
+
+        if (success) {
+            this.message = responseCode.getMessage();
+            this.error = null;
+        } else {
+            this.message = null;
+            this.error = responseCode.getMessage();
+        }
     }
 
-    public static <T> ApiResponse<T> success(ResponseCode responseCode, T data) {
-        return new ApiResponse<>(true, responseCode, data);
+    public static <T> ApiResponse<T> success(ResponseCode responseCode, String path, T data) {
+        return new ApiResponse<>(responseCode, path, data, true);
     }
 
-    public static ApiResponse<Void> success(ResponseCode responseCode) {
-        return new ApiResponse<>(true, responseCode, null);
-    }
-
-    public static ApiResponse<Void> error(ResponseCode responseCode) {
-        return new ApiResponse<>(false, responseCode, null);
+    public static ApiResponse<Void> error(ResponseCode responseCode, String path) {
+        return new ApiResponse<>(responseCode, path, null, false);
     }
 }
