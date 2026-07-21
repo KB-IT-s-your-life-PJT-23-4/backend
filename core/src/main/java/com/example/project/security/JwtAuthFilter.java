@@ -1,6 +1,10 @@
 package com.example.project.security;
 
-import org.springframework.security.core.Authentication;
+import io.jsonwebtoken.Claims;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import javax.servlet.FilterChain;
@@ -8,6 +12,7 @@ import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.util.List;
 
 public class JwtAuthFilter extends OncePerRequestFilter {
 
@@ -25,6 +30,17 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         String token = resolveToken(req);
 
         if (token != null && jwtProvider.isValid(token)) {
+            Claims claims = jwtProvider.parse(token);
+            String userId = claims.getSubject();
+            Object role = claims.get("role");
+
+            List<SimpleGrantedAuthority> authorities = role == null ?
+                    List.of() : List.of(new SimpleGrantedAuthority("ROLE_" + role));
+
+            var authentication = new UsernamePasswordAuthenticationToken(userId, null, authorities);
+            authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(req));
+
+            SecurityContextHolder.getContext().setAuthentication(authentication);
         }
 
         filterChain.doFilter(req, res);
