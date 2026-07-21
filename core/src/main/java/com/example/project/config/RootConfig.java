@@ -28,6 +28,7 @@ import javax.sql.DataSource;
         })
 @MapperScan(basePackages = "com.example.project", annotationClass = org.apache.ibatis.annotations.Mapper.class)
 @PropertySource("classpath:database.properties")
+@PropertySource("classpath:application.properties")
 public class RootConfig {
     @Bean
     public DataSource dataSource(
