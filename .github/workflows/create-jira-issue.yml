@@ -1,4 +1,5 @@
 name: Create Jira issue
+
 on:
   issues:
     types:
@@ -12,172 +13,231 @@ jobs:
   issue-sync:
     name: Create Jira issue
     runs-on: ubuntu-latest
+
     env:
       JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
       JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
       JIRA_USER_EMAIL: ${{ secrets.JIRA_USER_EMAIL }}
       PROJECT_KEY: ${{ secrets.PROJECT_KEY }}
+
     steps:
-    - name: JIRA Login
-      run: |
-        curl --fail-with-body --request GET \
-          --url "${JIRA_BASE_URL}/rest/api/3/myself" \
-          --user "${JIRA_USER_EMAIL}:${JIRA_API_TOKEN}" \
-          --header "Accept: application/json"
-  
-    - name: Checkout develop
-      uses: actions/checkout@v4
-      with:
-        ref: develop
-  
-    - name: Issue Parser
-      uses: stefanbuck/github-issue-parser@v3
-      id: issue-parser
-      with:
-        template-path: .github/ISSUE_TEMPLATE/feature-report.yml
-        
-    - name: Create JIRA issue
-      id: create-issue
-      env:
-        ISSUE_TYPE: ${{ steps.issue-parser.outputs.issueparser_issue_type }}
-        ISSUE_LABELS: ${{ steps.issue-parser.outputs.issueparser_issue_label }}
-        EPIC_NUMBER: ${{ steps.issue-parser.outputs.issueparser_epic_number }}
-        BRANCH_NAME: ${{ steps.issue-parser.outputs.issueparser_branch_name }}
-        ISSUE_DESCRIPTION: ${{ steps.issue-parser.outputs.issueparser_issue_description }}
-        ISSUE_TITLE: ${{ github.event.issue.title }}
-      run: |
-        set -euo pipefail
+      - name: JIRA Login
+        run: |
+          curl --fail-with-body --request GET \
+            --url "${JIRA_BASE_URL}/rest/api/3/myself" \
+            --user "${JIRA_USER_EMAIL}:${JIRA_API_TOKEN}" \
+            --header "Accept: application/json"
 
-        # 쉼표로 구분된 라벨을 JSON 배열로 변환
-        LABELS=$(printf '%s' "$ISSUE_LABELS" \
-          | tr ',' '\n' \
-          | sed 's/^ *//;s/ *$//' \
-          | sed '/^$/d' \
-          | jq -R . \
-          | jq -s .)
-    
-        # jq가 줄바꿈, 큰따옴표, 백슬래시 등을 자동으로 JSON 이스케이프
-        PAYLOAD=$(jq -n \
-          --arg issueType "$ISSUE_TYPE" \
-          --arg parentKey "$EPIC_NUMBER" \
-          --arg projectKey "$PROJECT_KEY" \
-          --arg summary "[BE] $ISSUE_TITLE" \
-          --arg branchName "$BRANCH_NAME" \
-          --arg description "$ISSUE_DESCRIPTION" \
-          --argjson labels "$LABELS" \
-          '{
-            fields: {
-              issuetype: {
-                name: $issueType
-              },
-              labels: $labels,
-              parent: {
-                key: $parentKey
-              },
-              project: {
-                key: $projectKey
-              },
-              summary: $summary,
-              description: {
-                version: 1,
-                type: "doc",
-                content: [
-                  {
-                    type: "heading",
-                    attrs: {
-                      level: 3
+      - name: Checkout develop
+        uses: actions/checkout@v4
+        with:
+          ref: develop
+          fetch-depth: 0
+
+      - name: Issue Parser
+        uses: stefanbuck/github-issue-parser@v3
+        id: issue-parser
+        with:
+          template-path: .github/ISSUE_TEMPLATE/feature-report.yml
+
+      - name: Create JIRA issue
+        id: create-issue
+        env:
+          ISSUE_TYPE: ${{ steps.issue-parser.outputs.issueparser_issue_type }}
+          ISSUE_LABELS: ${{ steps.issue-parser.outputs.issueparser_issue_label }}
+          EPIC_NUMBER: ${{ steps.issue-parser.outputs.issueparser_epic_number }}
+          BRANCH_TYPE: ${{ steps.issue-parser.outputs.issueparser_branch_type }}
+          BRANCH_NAME: ${{ steps.issue-parser.outputs.issueparser_branch_name }}
+          ISSUE_DESCRIPTION: ${{ steps.issue-parser.outputs.issueparser_issue_description }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+        run: |
+          set -euo pipefail
+
+          case "$BRANCH_TYPE" in
+            feature|fix|refactor)
+              ;;
+            *)
+              echo "지원하지 않는 브랜치 유형입니다: $BRANCH_TYPE"
+              exit 1
+              ;;
+          esac
+
+          LABELS=$(printf '%s' "$ISSUE_LABELS" \
+            | tr ',' '\n' \
+            | sed 's/^ *//;s/ *$//' \
+            | sed '/^$/d' \
+            | jq -R . \
+            | jq -s .)
+
+          PAYLOAD=$(jq -n \
+            --arg issueType "$ISSUE_TYPE" \
+            --arg parentKey "$EPIC_NUMBER" \
+            --arg projectKey "$PROJECT_KEY" \
+            --arg summary "[BE] $ISSUE_TITLE" \
+            --arg branchType "$BRANCH_TYPE" \
+            --arg branchName "$BRANCH_NAME" \
+            --arg description "$ISSUE_DESCRIPTION" \
+            --argjson labels "$LABELS" \
+            '{
+              fields: {
+                issuetype: {
+                  name: $issueType
+                },
+                labels: $labels,
+                parent: {
+                  key: $parentKey
+                },
+                project: {
+                  key: $projectKey
+                },
+                summary: $summary,
+                description: {
+                  version: 1,
+                  type: "doc",
+                  content: [
+                    {
+                      type: "heading",
+                      attrs: {
+                        level: 3
+                      },
+                      content: [
+                        {
+                          type: "text",
+                          text: "🌿 브랜치 유형"
+                        }
+                      ]
                     },
-                    content: [
-                      {
-                        type: "text",
-                        text: "🌿 브랜치명"
-                      }
-                    ]
-                  },
-                  {
-                    type: "paragraph",
-                    content: [
-                      {
-                        type: "text",
-                        text: $branchName
-                      }
-                    ]
-                  },
-                  {
-                    type: "heading",
-                    attrs: {
-                      level: 3
+                    {
+                      type: "paragraph",
+                      content: [
+                        {
+                          type: "text",
+                          text: $branchType
+                        }
+                      ]
                     },
-                    content: [
-                      {
-                        type: "text",
-                        text: "📌 이슈 설명"
-                      }
-                    ]
-                  },
-                  {
-                    type: "paragraph",
-                    content: [
-                      {
-                        type: "text",
-                        text: $description
-                      }
-                    ]
-                  }
-                ]
+                    {
+                      type: "heading",
+                      attrs: {
+                        level: 3
+                      },
+                      content: [
+                        {
+                          type: "text",
+                          text: "🌿 브랜치명"
+                        }
+                      ]
+                    },
+                    {
+                      type: "paragraph",
+                      content: [
+                        {
+                          type: "text",
+                          text: $branchName
+                        }
+                      ]
+                    },
+                    {
+                      type: "heading",
+                      attrs: {
+                        level: 3
+                      },
+                      content: [
+                        {
+                          type: "text",
+                          text: "📌 이슈 설명"
+                        }
+                      ]
+                    },
+                    {
+                      type: "paragraph",
+                      content: [
+                        {
+                          type: "text",
+                          text: $description
+                        }
+                      ]
+                    }
+                  ]
+                }
               }
-            }
-          }')
-    
-        echo "Jira request payload:"
-        echo "$PAYLOAD" | jq .
-    
-        response=$(curl --fail-with-body --silent --show-error \
-          --request POST \
-          --url "${JIRA_BASE_URL}/rest/api/3/issue" \
-          --user "${JIRA_USER_EMAIL}:${JIRA_API_TOKEN}" \
-          --header "Accept: application/json" \
-          --header "Content-Type: application/json" \
-          --data "$PAYLOAD")
-    
-        echo "Response: $response"
-    
-        issue_key=$(echo "$response" | jq -r '.key')
-    
-        if [ -z "$issue_key" ] || [ "$issue_key" = "null" ]; then
-          echo "Jira issue key를 응답에서 찾지 못했습니다."
-          exit 1
-        fi
-    
-        echo "key=$issue_key" >> "$GITHUB_ENV"
-        echo "issue_key=$issue_key" >> "$GITHUB_OUTPUT"
+            }')
 
-    - name: Create branch with JIRA issue key
-      run: |
-        TICKET_NUMBER="${{ env.key }}"
-        BRANCH_NAME="${{ steps.issue-parser.outputs.issueparser_branch_name }}"
-        NEW_BRANCH_NAME="feature/${TICKET_NUMBER}_$(echo ${BRANCH_NAME} | sed 's/ /-/g')"
-        git checkout -b "${NEW_BRANCH_NAME}"
-        git push origin "${NEW_BRANCH_NAME}"
+          echo "Jira request payload:"
+          echo "$PAYLOAD" | jq .
 
-    - name: Update GitHub issue title
-      env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        ISSUE_NUMBER: ${{ github.event.issue.number }}
-        ISSUE_TITLE: ${{ github.event.issue.title }}
-        JIRA_KEY: ${{ env.key }}
-      run: |
-        gh issue edit "$ISSUE_NUMBER" \
-          --repo "${{ github.repository }}" \
-          --title "[${JIRA_KEY}] ${ISSUE_TITLE}"
+          response=$(curl --fail-with-body --silent --show-error \
+            --request POST \
+            --url "${JIRA_BASE_URL}/rest/api/3/issue" \
+            --user "${JIRA_USER_EMAIL}:${JIRA_API_TOKEN}" \
+            --header "Accept: application/json" \
+            --header "Content-Type: application/json" \
+            --data "$PAYLOAD")
 
-    - name: Add Jira issue comment
-      env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        ISSUE_NUMBER: ${{ github.event.issue.number }}
-        JIRA_KEY: ${{ env.key }}
-        JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
-      run: |
-        gh issue comment "$ISSUE_NUMBER" \
-          --repo "${{ github.repository }}" \
-          --body "Jira Issue Created: [${JIRA_KEY}](${JIRA_BASE_URL}/browse/${JIRA_KEY})"
+          echo "Response: $response"
+
+          issue_key=$(echo "$response" | jq -r '.key')
+
+          if [ -z "$issue_key" ] || [ "$issue_key" = "null" ]; then
+            echo "Jira issue key를 응답에서 찾지 못했습니다."
+            exit 1
+          fi
+
+          echo "issue_key=$issue_key" >> "$GITHUB_OUTPUT"
+
+      - name: Create branch with JIRA issue key
+        env:
+          TICKET_NUMBER: ${{ steps.create-issue.outputs.issue_key }}
+          BRANCH_TYPE: ${{ steps.issue-parser.outputs.issueparser_branch_type }}
+          BRANCH_NAME: ${{ steps.issue-parser.outputs.issueparser_branch_name }}
+        run: |
+          set -euo pipefail
+
+          case "$BRANCH_TYPE" in
+            feature|fix|refactor)
+              ;;
+            *)
+              echo "지원하지 않는 브랜치 유형입니다: $BRANCH_TYPE"
+              exit 1
+              ;;
+          esac
+
+          SAFE_BRANCH_NAME=$(printf '%s' "$BRANCH_NAME" \
+            | tr '[:upper:]' '[:lower:]' \
+            | sed 's/[[:space:]]\+/-/g' \
+            | sed 's/[^a-z0-9._-]//g' \
+            | sed 's/--*/-/g' \
+            | sed 's/^-//;s/-$//')
+
+          if [ -z "$SAFE_BRANCH_NAME" ]; then
+            echo "유효한 브랜치 이름을 만들 수 없습니다."
+            exit 1
+          fi
+
+          NEW_BRANCH_NAME="${BRANCH_TYPE}/${TICKET_NUMBER}_${SAFE_BRANCH_NAME}"
+
+          echo "생성할 브랜치: $NEW_BRANCH_NAME"
+
+          git checkout -b "$NEW_BRANCH_NAME"
+          git push origin "$NEW_BRANCH_NAME"
+
+      - name: Update GitHub issue title
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          JIRA_KEY: ${{ steps.create-issue.outputs.issue_key }}
+        run: |
+          gh issue edit "$ISSUE_NUMBER" \
+            --repo "${{ github.repository }}" \
+            --title "[${JIRA_KEY}] ${ISSUE_TITLE}"
+
+      - name: Add Jira issue comment
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          JIRA_KEY: ${{ steps.create-issue.outputs.issue_key }}
+        run: |
+          gh issue comment "$ISSUE_NUMBER" \
+            --repo "${{ github.repository }}" \
+            --body "Jira Issue Created: [${JIRA_KEY}](${JIRA_BASE_URL}/browse/${JIRA_KEY})"
