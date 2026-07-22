@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.example.project.batch.law.mapper.LawArticleMapper">
+    <insert id="insertBatch" parameterType="list">
+        INSERT INTO law_article(law_name, article_no, title, content, effective_date)
+        VALUES
+        <foreach collection="list" item="a" separator=",">
+            (#{a.lawName}, #{a.articleNo}, #{a.title},#{a.content},#{a.effectiveDate})
+        </foreach>
+    </insert>
+</mapper>
