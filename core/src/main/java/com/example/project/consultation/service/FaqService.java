@@ -12,6 +12,12 @@ import java.util.List;
 @Service
 public class FaqService {
 
+    private static final String GREETING_MESSAGE =
+            "반갑습니다! 증여세와 절세 혜택에 대해 무엇이든 물어보세요. 아래의 자주 묻는 질문들을 통해 상담을 시작하실 수도 있습니다.";
+
+    private static final String DISCLAIMER =
+            "AI 상담 답변은 일반적인 세무 정보를 바탕으로 제공되는 참고용 정보이며, 법적 효력이나 세무 신고의 근거로 사용할 수 없습니다. 정확한 판단이 필요한 경우 세무 전문가와 상담해 주세요.";
+
     private static final List<Faq> FAQ_LIST = List.of(
             new Faq(1L, "현금 증여 공제",
                     "직계존속으로부터 증여받는 경우 10년간 5천만원(미성년자는 2천만원)까지 공제됩니다.", 1),
@@ -22,7 +28,7 @@ public class FaqService {
     );
 
     public FaqListResponse getFaqList() {
-        return FaqListResponse.from(FAQ_LIST);
+        return FaqListResponse.of(GREETING_MESSAGE, DISCLAIMER, FAQ_LIST);
     }
 
     public FaqAnswerResponse getFaqAnswer(Long faqId) {

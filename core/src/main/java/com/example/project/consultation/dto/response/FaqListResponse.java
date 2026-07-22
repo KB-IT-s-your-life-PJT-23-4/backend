@@ -5,6 +5,8 @@ import com.example.project.consultation.domain.Faq;
 import java.util.List;
 
 public record FaqListResponse(
+        String greetingMessage,
+        String disclaimer,
         List<FaqItem> faqList
 ) {
     public record FaqItem(
@@ -12,10 +14,10 @@ public record FaqListResponse(
             String question
     ) {}
 
-    public static FaqListResponse from(List<Faq> faqs) {
+    public static FaqListResponse of(String greetingMessage, String disclaimer, List<Faq> faqs) {
         List<FaqItem> items = faqs.stream()
                 .map(f -> new FaqItem(f.getId(), f.getQuestion()))
                 .toList();
-        return new FaqListResponse(items);
+        return new FaqListResponse(greetingMessage, disclaimer, items);
     }
 }
