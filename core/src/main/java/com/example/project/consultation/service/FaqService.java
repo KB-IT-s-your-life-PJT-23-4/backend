@@ -1,6 +1,9 @@
 package com.example.project.consultation.service;
 
+import com.example.project.common.api.ResponseCode;
+import com.example.project.common.exception.ServiceException;
 import com.example.project.consultation.domain.Faq;
+import com.example.project.consultation.dto.response.FaqAnswerResponse;
 import com.example.project.consultation.dto.response.FaqListResponse;
 import org.springframework.stereotype.Service;
 
@@ -20,5 +23,14 @@ public class FaqService {
 
     public FaqListResponse getFaqList() {
         return FaqListResponse.from(FAQ_LIST);
+    }
+
+    public FaqAnswerResponse getFaqAnswer(Long faqId) {
+        Faq faq = FAQ_LIST.stream()
+                .filter(f -> f.getId().equals(faqId))
+                .findFirst()
+                .orElseThrow(() -> new ServiceException(ResponseCode.RESOURCE_NOT_FOUND));
+
+        return FaqAnswerResponse.from(faq);
     }
 }
