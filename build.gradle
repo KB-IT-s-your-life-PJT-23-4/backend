@@ -6,7 +6,7 @@ group = 'org.scoula'
 version = '1.0-SNAPSHOT'
 
 ext {
-    javaVersion = '21'
+    javaVersion = '17'
     junitVersion = '5.10.3'
     springVersion = '5.3.39'
     securityVersion = '5.8.14'
