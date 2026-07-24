@@ -264,7 +264,7 @@ Spring Backend
 | 도메인   | 기본 경로                | 설명                |
 | ----- | -------------------- | ----------------- |
 | 인증    | `/api/auth`          | 회원가입, 로그인, 토큰 재발급 |
-| 회원    | `/api/members`       | 사용자 정보 관리         |
+| 회원    | `/api/users`         | 사용자 정보 관리         |
 | 수증자   | `/api/recipients`    | 수증자 정보 관리         |
 | 증여 내역 | `/api/gifts`         | 증여 내역 관리          |
 | 시뮬레이션 | `/api/simulations`   | 증여 시뮬레이션          |
@@ -302,7 +302,7 @@ Content-Type: application/json
   "code": "201",
   "message": "회원가입이 완료되었습니다.",
   "data": {
-    "memberId": 1,
+    "userId": 1,
     "email": "user@example.com",
     "name": "홍길동"
   }
@@ -335,8 +335,8 @@ Content-Type: application/json
   "data": {
     "accessToken": "Access Token",
     "refreshToken": "Refresh Token",
-    "member": {
-      "memberId": 1,
+    "user": {
+      "userId": 1,
       "name": "홍길동"
     }
   }
@@ -526,7 +526,7 @@ project-backend/
 │     │  │     │  ├─ dto/
 │     │  │     │  └─ mapper/
 │     │  │     │
-│     │  │     ├─ member/
+│     │  │     ├─ user/
 │     │  │     │  ├─ controller/
 │     │  │     │  ├─ service/
 │     │  │     │  ├─ mapper/
@@ -572,7 +572,7 @@ project-backend/
 │     │  ├─ resources/
 │     │  │  ├─ mapper/
 │     │  │  │  ├─ auth/
-│     │  │  │  ├─ member/
+│     │  │  │  ├─ user/
 │     │  │  │  ├─ recipient/
 │     │  │  │  ├─ gift/
 │     │  │  │  ├─ product/
@@ -596,7 +596,7 @@ project-backend/
 │     └─ test/
 │        ├─ java/
 │        │  └─ com/example/project/
-│        │     ├─ member/
+│        │     ├─ user/
 │        │     ├─ recipient/
 │        │     ├─ gift/
 │        │     ├─ simulation/
@@ -879,7 +879,7 @@ public interface RecipientMapper {
 
     RecipientVO findById(Long recipientId);
 
-    List<RecipientVO> findAllByMemberId(Long memberId);
+    List<RecipientVO> findAllByUserId(Long userId);
 
     int update(RecipientVO recipient);
 
@@ -895,17 +895,17 @@ public interface RecipientMapper {
 
 ```java
 @Mapper
-public interface MemberMapper {
+public interface UserMapper {
 
-    MemberVO findById(Long memberId);
+    UserVO findById(Long userId);
 
-    MemberVO findByEmail(String email);
+    UserVO findByEmail(String email);
 
-    int insert(MemberVO member);
+    int insert(UserVO user);
 
-    int update(MemberVO member);
+    int update(UserVO user);
 
-    int deleteById(Long memberId);
+    int deleteById(Long userId);
 }
 ```
 
@@ -918,11 +918,11 @@ public interface MemberMapper {
         PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 
-<mapper namespace="com.example.project.member.mapper.MemberMapper">
+<mapper namespace="com.example.project.user.mapper.UserMapper">
 
-    <resultMap id="memberResultMap"
-               type="com.example.project.member.domain.MemberVO">
-        <id property="memberId" column="member_id"/>
+    <resultMap id="userResultMap"
+               type="com.example.project.user.domain.UserVO">
+        <id property="userId" column="user_id"/>
         <result property="email" column="email"/>
         <result property="password" column="password"/>
         <result property="name" column="name"/>
@@ -932,15 +932,15 @@ public interface MemberMapper {
 
     <select id="findById"
             parameterType="long"
-            resultMap="memberResultMap">
-        SELECT member_id,
+            resultMap="userResultMap">
+        SELECT user_id,
                email,
                password,
                name,
                created_at,
                updated_at
-        FROM members
-        WHERE member_id = #{memberId}
+        FROM users
+        WHERE user_id = #{userId}
     </select>
 
 </mapper>
@@ -965,12 +965,12 @@ public interface MemberMapper {
 
 | 구분    | 규칙               | 예시                          |
 | ----- | ---------------- | --------------------------- |
-| 테이블   | 복수형 `snake_case` | `members`, `gift_histories` |
-| 컬럼    | `snake_case`     | `member_id`, `created_at`   |
-| 기본키   | `{단수 테이블명}_id`   | `member_id`                 |
+| 테이블   | 복수형 `snake_case` | `users`, `gift_histories`   |
+| 컬럼    | `snake_case`     | `user_id`, `created_at`     |
+| 기본키   | `{단수 테이블명}_id`   | `user_id`                   |
 | 외래키   | 참조 테이블 기본키명      | `recipient_id`              |
-| 인덱스   | `idx_테이블_컬럼`     | `idx_members_email`         |
-| 유니크 키 | `uk_테이블_컬럼`      | `uk_members_email`          |
+| 인덱스   | `idx_테이블_컬럼`     | `idx_users_email`           |
+| 유니크 키 | `uk_테이블_컬럼`      | `uk_users_email`            |
 
 ### 공통 컬럼 예시
 
@@ -991,7 +991,7 @@ updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 ```text
 database/
 ├─ ddl/
-│  ├─ V001__create_members.sql
+│  ├─ V001__create_users.sql
 │  ├─ V002__create_recipients.sql
 │  └─ V003__create_gift_histories.sql
 └─ dml/
@@ -1317,7 +1317,7 @@ Authorization: Bearer {accessToken}
 | --------------------- | ------------ |
 | `/api/auth/**`        | 전체 허용        |
 | `/api/products/**`    | 전체 또는 인증 사용자 |
-| `/api/members/**`     | 인증 사용자       |
+| `/api/users/**`       | 인증 사용자        |
 | `/api/recipients/**`  | 인증 사용자       |
 | `/api/simulations/**` | 인증 사용자       |
 | `/api/admin/**`       | 관리자          |
@@ -1354,7 +1354,7 @@ public class GlobalExceptionHandler {
 | -------------------------- | ------------ |
 | `BusinessException`        | 비즈니스 규칙 위반   |
 | `EntityNotFoundException`  | 조회한 데이터가 없음  |
-| `DuplicateMemberException` | 회원 이메일 중복    |
+| `DuplicateUserException`   | 회원 이메일 중복    |
 | `UnauthorizedException`    | 인증 실패        |
 | `ForbiddenException`       | 접근 권한 없음     |
 | `ExternalApiException`     | 외부 API 연동 실패 |
@@ -1441,7 +1441,7 @@ Spring Backend
 
 ```json
 {
-  "memberId": 1,
+  "userId": 1,
   "question": "미성년 자녀에게 증여할 때 공제 한도는 얼마인가요?",
   "conversationId": "conversation-001"
 }
@@ -1577,12 +1577,12 @@ class RecipientServiceTest {
 PascalCase를 사용합니다.
 
 ```text
-MemberController
-MemberService
-MemberServiceImpl
-MemberMapper
-MemberVO
-MemberResponse
+UserController
+UserService
+UserServiceImpl
+UserMapper
+UserVO
+UserResponse
 ```
 
 ### 변수와 메서드
@@ -1590,10 +1590,10 @@ MemberResponse
 camelCase를 사용합니다.
 
 ```java
-Long memberId;
-String memberName;
+Long userId;
+String userName;
 
-getMember();
+getUser();
 createRecipient();
 calculateGiftTax();
 ```
@@ -1630,10 +1630,10 @@ boolean canReissueToken;
 예시:
 
 ```text
-MemberSignupRequest
-MemberUpdateRequest
-MemberResponse
-MemberSummaryResponse
+UserSignupRequest
+UserUpdateRequest
+UserResponse
+UserSummaryResponse
 GiftSearchCondition
 ```
 
@@ -1653,7 +1653,7 @@ GiftSearchCondition
 브랜치명에는 Jira 티켓 번호와 작업명을 포함합니다.
 
 ```text
-feature/KAN-30_member-signup
+feature/KAN-30_user-signup
 feature/KAN-41_gift-simulation
 feature/KAN-52_fastapi-client
 fix/KAN-63_jwt-authentication
@@ -1665,7 +1665,7 @@ refactor/KAN-71_common-response
 ```bash
 git checkout develop
 git pull origin develop
-git checkout -b feature/KAN-30_member-signup
+git checkout -b feature/KAN-30_user-signup
 ```
 
 ### 작업 완료 후 Push
@@ -1673,7 +1673,7 @@ git checkout -b feature/KAN-30_member-signup
 ```bash
 git add .
 git commit -m "KAN-30 feat: 회원가입 API 구현"
-git push origin feature/KAN-30_member-signup
+git push origin feature/KAN-30_user-signup
 ```
 
 `main`과 `develop` 브랜치에는 직접 Push하지 않습니다.
@@ -1741,7 +1741,7 @@ Pull Request는 기능 단위로 작성합니다.
 
 ## 데이터베이스 변경 사항
 
-- members 테이블 사용
+- users 테이블 사용
 - email 컬럼 UNIQUE 제약조건 적용
 
 ## 테스트 내용
