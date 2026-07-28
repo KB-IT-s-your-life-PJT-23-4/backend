@@ -20,16 +20,20 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     private static final String BEARER_PREFIX = "Bearer ";
 
     private final JwtProvider jwtProvider;
+    private final TokenRevocationStore tokenRevocationStore;
 
-    public JwtAuthFilter(JwtProvider jwtProvider) {
+    public JwtAuthFilter(JwtProvider jwtProvider, TokenRevocationStore tokenRevocationStore) {
         this.jwtProvider = jwtProvider;
+        this.tokenRevocationStore = tokenRevocationStore;
     }
 
     @Override
     protected void doFilterInternal(HttpServletRequest req, HttpServletResponse res, FilterChain filterChain) throws ServletException, IOException {
         String token = resolveToken(req);
 
-        if (token != null && jwtProvider.isValid(token)) {
+        if (token != null
+                && !tokenRevocationStore.isRevoked(token)
+                && jwtProvider.isValidAccessToken(token)) {
             Claims claims = jwtProvider.parse(token);
             String userId = claims.getSubject();
             Object role = claims.get("role");
@@ -45,7 +49,6 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
         filterChain.doFilter(req, res);
     }
-
 
     private String resolveToken(HttpServletRequest req) {
         String header = req.getHeader(AUTH_HEADER);
