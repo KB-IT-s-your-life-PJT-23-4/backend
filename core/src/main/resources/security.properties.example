@@ -1,2 +1,0 @@
-# Copy this file to security.properties and adjust it locally.
-security.password.encoder.strength=10

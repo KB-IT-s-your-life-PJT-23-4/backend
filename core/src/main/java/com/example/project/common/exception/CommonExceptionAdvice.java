@@ -6,13 +6,17 @@ import com.example.project.common.api.ResponseCode;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.ui.Model;
+import org.springframework.web.bind.MissingServletRequestParameterException;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.servlet.NoHandlerFoundException;
 
 import javax.servlet.http.HttpServletRequest;
+import javax.validation.ConstraintViolationException;
 
 @ControllerAdvice
 @Log4j2
@@ -43,6 +47,23 @@ public class CommonExceptionAdvice {
                 .body(res);
     }
 
+    @ExceptionHandler({
+            MethodArgumentNotValidException.class,
+            ConstraintViolationException.class,
+            MissingServletRequestParameterException.class,
+            HttpMessageNotReadableException.class
+    })
+    public ResponseEntity<ApiResponse<Void>> handleValidationException(
+            Exception exception,
+            HttpServletRequest request
+    ) {
+        log.warn("Validation failed for {}", request.getRequestURI());
+
+        return ResponseEntity
+                .badRequest()
+                .body(ApiResponse.error(ResponseCode.VALIDATION_FAILED, request.getRequestURI()));
+    }
+
     private HttpStatus resolveHttpStatus(ResponseCode responseCode){
         int code = responseCode.getCode();
 
@@ -56,7 +77,7 @@ public class CommonExceptionAdvice {
             case 404, 410, 411, 412, 415 -> HttpStatus.NOT_FOUND;
             case 405 -> HttpStatus.METHOD_NOT_ALLOWED;
             case 408 -> HttpStatus.REQUEST_TIMEOUT;
-            case 409 -> HttpStatus.CONFLICT;
+            case 406, 409 -> HttpStatus.CONFLICT;
             default -> HttpStatus.BAD_REQUEST;
         };
     }
