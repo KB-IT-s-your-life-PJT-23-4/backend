@@ -2,6 +2,7 @@ package com.example.project.user.dto.request;
 
 import javax.validation.constraints.Email;
 import javax.validation.constraints.NotBlank;
+import javax.validation.constraints.Pattern;
 import javax.validation.constraints.Size;
 
 public record UserSignupRequest(
@@ -16,6 +17,7 @@ public record UserSignupRequest(
 
         @NotBlank(message = "이름은 필수입니다")
         @Size(min = 2, max = 50, message = "이름은 2자 이상 50자 이하여야 합니다")
+        @Pattern(regexp = "^\\S(?:.*\\S)?$", message = "이름의 앞뒤에 공백을 입력할 수 없습니다")
         String name
 ) {
 }

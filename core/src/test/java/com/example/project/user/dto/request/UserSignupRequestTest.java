@@ -53,4 +53,19 @@ class UserSignupRequestTest {
 
         assertEquals(Set.of("email", "password", "name"), invalidFields);
     }
+
+    @Test
+    @DisplayName("앞뒤에 공백이 있는 이름은 검증에 실패한다")
+    void nameWithLeadingOrTrailingWhitespace() {
+        UserSignupRequest request = new UserSignupRequest(
+                "user@example.com",
+                "password123!",
+                " 홍 "
+        );
+
+        Set<ConstraintViolation<UserSignupRequest>> violations = validator.validate(request);
+
+        assertTrue(violations.stream()
+                .anyMatch(violation -> violation.getPropertyPath().toString().equals("name")));
+    }
 }
