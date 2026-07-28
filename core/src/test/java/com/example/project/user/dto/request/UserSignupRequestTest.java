@@ -1,0 +1,56 @@
+package com.example.project.user.dto.request;
+
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
+import javax.validation.ConstraintViolation;
+import javax.validation.Validation;
+import javax.validation.Validator;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+class UserSignupRequestTest {
+
+    private static Validator validator;
+
+    @BeforeAll
+    static void setUpValidator() {
+        validator = Validation.buildDefaultValidatorFactory().getValidator();
+    }
+
+    @Test
+    @DisplayName("올바른 회원가입 입력값은 검증을 통과한다")
+    void validRequest() {
+        UserSignupRequest request = new UserSignupRequest(
+                "user@example.com",
+                "password123!",
+                "홍길동"
+        );
+
+        Set<ConstraintViolation<UserSignupRequest>> violations = validator.validate(request);
+
+        assertTrue(violations.isEmpty());
+    }
+
+    @Test
+    @DisplayName("잘못된 이메일과 짧은 비밀번호 및 빈 이름은 검증에 실패한다")
+    void invalidRequest() {
+        UserSignupRequest request = new UserSignupRequest(
+                "invalid-email",
+                "short",
+                " "
+        );
+
+        Set<ConstraintViolation<UserSignupRequest>> violations = validator.validate(request);
+
+        Set<String> invalidFields = violations.stream()
+                .map(violation -> violation.getPropertyPath().toString())
+                .collect(Collectors.toSet());
+
+        assertEquals(Set.of("email", "password", "name"), invalidFields);
+    }
+}
