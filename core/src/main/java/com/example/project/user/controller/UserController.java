@@ -12,6 +12,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -75,6 +76,15 @@ public class UserController {
     ) {
         UserDTO data = userService.updateProfile(resolveUserId(authentication), request);
         return ApiResponse.success(ResponseCode.UPDATED, httpRequest.getRequestURI(), data);
+    }
+
+    @DeleteMapping("/users/me")
+    public ApiResponse<Void> deleteMyAccount(
+            Authentication authentication,
+            HttpServletRequest httpRequest
+    ) {
+        userService.deleteUser(resolveUserId(authentication));
+        return ApiResponse.success(ResponseCode.DELETED, httpRequest.getRequestURI(), null);
     }
 
     private Long resolveUserId(Authentication authentication) {

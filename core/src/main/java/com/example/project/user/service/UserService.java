@@ -91,6 +91,14 @@ public class UserService {
         return UserDTO.from(updatedUser);
     }
 
+    public void deleteUser(Long userId) {
+        findUser(userId);
+
+        if (userMapper.deleteById(userId) != 1) {
+            throw new ServiceException(ResponseCode.DATABASE_ERROR);
+        }
+    }
+
     private UserVO findUser(Long userId) {
         UserVO user = userMapper.findById(userId);
         if (user == null) {

@@ -18,6 +18,7 @@ import java.time.LocalDateTime;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -146,6 +147,44 @@ class UserServiceTest {
         assertEquals(0, userMapper.updateCount);
     }
 
+    @Test
+    @DisplayName("회원 탈퇴 시 인증된 회원 정보를 삭제한다")
+    void deleteUser() {
+        userMapper.savedUser = createUser("user@example.com");
+
+        userService.deleteUser(1L);
+
+        assertEquals(1, userMapper.deleteCount);
+        assertNull(userMapper.savedUser);
+    }
+
+    @Test
+    @DisplayName("존재하지 않는 회원이 탈퇴를 요청하면 실패한다")
+    void deleteMissingUser() {
+        ServiceException exception = assertThrows(
+                ServiceException.class,
+                () -> userService.deleteUser(1L)
+        );
+
+        assertEquals(ResponseCode.MEMBER_NOT_FOUND, exception.getResponseCode());
+        assertEquals(0, userMapper.deleteCount);
+    }
+
+    @Test
+    @DisplayName("회원 삭제 건수가 1건이 아니면 데이터베이스 오류로 처리한다")
+    void deleteUserWithDatabaseError() {
+        userMapper.savedUser = createUser("user@example.com");
+        userMapper.deleteResult = 0;
+
+        ServiceException exception = assertThrows(
+                ServiceException.class,
+                () -> userService.deleteUser(1L)
+        );
+
+        assertEquals(ResponseCode.DATABASE_ERROR, exception.getResponseCode());
+        assertEquals(1, userMapper.deleteCount);
+    }
+
     private UserVO createUser(String email) {
         return new UserVO(
                 1L,
@@ -163,6 +202,8 @@ class UserServiceTest {
         private UserVO userWithDuplicateEmail;
         private int insertCount;
         private int updateCount;
+        private int deleteCount;
+        private int deleteResult = 1;
 
         @Override
         public UserVO findById(Long userId) {
@@ -205,6 +246,15 @@ class UserServiceTest {
 
         @Override
         public int deleteById(Long userId) {
+            deleteCount++;
+
+            if (deleteResult == 1
+                    && savedUser != null
+                    && savedUser.getUserId().equals(userId)) {
+                savedUser = null;
+                return 1;
+            }
+
             return 0;
         }
     }
