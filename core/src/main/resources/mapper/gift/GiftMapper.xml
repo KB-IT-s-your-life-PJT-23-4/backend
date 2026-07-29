@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.example.project.gift.mapper.GiftMapper">
+    <resultMap id="giftResultMap" type="com.example.project.gift.domain.GiftVO">
+        <id property="giftId" column="gift_id"/>
+        <result property="familyId" column="family_id"/>
+        <result property="amount" column="amount"/>
+        <result property="giftDate" column="gift_date"/>
+        <result property="status" column="status"/>
+        <result property="memo" column="memo"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <sql id="giftColumns">
+        g.gift_id,
+        g.family_id,
+        g.amount,
+        g.gift_date,
+        g.status,
+        g.memo,
+        g.created_at,
+        g.updated_at
+    </sql>
+
+    <insert id="insertGift" parameterType="com.example.project.gift.domain.GiftVO"
+            useGeneratedKeys="true" keyProperty="giftId">
+        INSERT INTO gift (
+        family_id, amount, gift_date, status, memo
+        ) VALUES (
+        #{familyId}, #{amount}, #{giftDate}, #{status}, #{memo}
+        )
+    </insert>
+
+    <!-- family조인해서 증여자가 맞는 지 확인 -->
+    <select id="selectGift" resultMap="giftResultMap">
+        SELECT
+        <include refid="giftColumns"/>
+        FROM gift g
+        JOIN family f on g.family_id = f.family_id
+        WHERE g.gift_id = #{giftId}
+        AND f.user_id = #{userId}
+    </select>
+
+    <select id="selectAllGift" resultMap="giftResultMap">
+        SELECT
+        <include refid="giftColumns"/>
+        FROM gift g
+        JOIN family f on f.family_id = g.family_id
+        WHERE f.user_id = #{userId}
+        <if test="familyId != null">
+            AND g.family_id = #{familyId}
+        </if>
+        <if test="status != null">
+            AND g.status = #{status}
+        </if>
+        ORDER BY g.gift_date DESC, g.gift_id DESC
+    </select>
+
+    <!-- selectGift로 먼저 확인 -->
+    <update id="updateGiftStatus">
+        UPDATE gift
+        SET status = #{status}
+        WHERE gift_id = #{giftId}
+    </update>
+
+    <delete id="deleteGift">
+        DELETE FROM gift
+        WHERE gift_id = #{giftId}
+    </delete>
+
+    <select id="countGiftByFamily" resultType="int">
+        SELECT COUNT(*)
+        FROM gift
+        WHERE family_id = #{familyId}
+    </select>
+</mapper>
