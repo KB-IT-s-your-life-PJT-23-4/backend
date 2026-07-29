@@ -61,8 +61,8 @@
             parameterType="com.example.project.user.domain.UserVO">
         UPDATE users
         SET email = #{email},
-            password = #{password},
-            name = #{name}
+            name = #{name},
+            updated_at = CURRENT_TIMESTAMP
         WHERE user_id = #{userId}
     </update>
 

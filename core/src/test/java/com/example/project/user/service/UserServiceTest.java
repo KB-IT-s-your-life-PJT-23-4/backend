@@ -5,6 +5,7 @@ import com.example.project.common.exception.ServiceException;
 import com.example.project.user.domain.UserVO;
 import com.example.project.user.dto.UserDTO;
 import com.example.project.user.dto.request.UserSignupRequest;
+import com.example.project.user.dto.request.UserUpdateRequest;
 import com.example.project.user.mapper.UserMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -17,6 +18,7 @@ import java.time.LocalDateTime;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -80,6 +82,109 @@ class UserServiceTest {
         assertFalse(userService.checkEmailAvailability("USER@example.com").available());
     }
 
+    @Test
+    @DisplayName("인증된 회원의 정보를 조회한다")
+    void getProfile() {
+        userMapper.savedUser = createUser("user@example.com");
+
+        UserDTO result = userService.getProfile(1L);
+
+        assertEquals(1L, result.userId());
+        assertEquals("user@example.com", result.email());
+        assertEquals("홍길동", result.name());
+    }
+
+    @Test
+    @DisplayName("존재하지 않는 회원의 정보를 조회하면 실패한다")
+    void getProfileWithMissingUser() {
+        ServiceException exception = assertThrows(
+                ServiceException.class,
+                () -> userService.getProfile(1L)
+        );
+
+        assertEquals(ResponseCode.MEMBER_NOT_FOUND, exception.getResponseCode());
+    }
+
+    @Test
+    @DisplayName("회원 정보를 수정할 때 이메일을 정규화하고 이름을 반영한다")
+    void updateProfile() {
+        userMapper.savedUser = createUser("user@example.com");
+        UserUpdateRequest request = new UserUpdateRequest(
+                " New@Example.com ",
+                "김길동"
+        );
+
+        UserDTO result = userService.updateProfile(1L, request);
+
+        assertEquals("new@example.com", result.email());
+        assertEquals("김길동", result.name());
+        assertEquals(1, userMapper.updateCount);
+    }
+
+    @Test
+    @DisplayName("다른 회원이 사용 중인 이메일로 수정하면 실패한다")
+    void updateProfileWithDuplicateEmail() {
+        userMapper.savedUser = createUser("user@example.com");
+        userMapper.userWithDuplicateEmail = new UserVO(
+                2L,
+                "duplicate@example.com",
+                passwordEncoder.encode("password123!"),
+                "김길동",
+                LocalDateTime.now(),
+                LocalDateTime.now()
+        );
+        UserUpdateRequest request = new UserUpdateRequest(
+                "DUPLICATE@example.com",
+                "홍길동"
+        );
+
+        ServiceException exception = assertThrows(
+                ServiceException.class,
+                () -> userService.updateProfile(1L, request)
+        );
+
+        assertEquals(ResponseCode.DUPLICATE_DATA, exception.getResponseCode());
+        assertEquals(0, userMapper.updateCount);
+    }
+
+    @Test
+    @DisplayName("회원 탈퇴 시 인증된 회원 정보를 삭제한다")
+    void deleteUser() {
+        userMapper.savedUser = createUser("user@example.com");
+
+        userService.deleteUser(1L);
+
+        assertEquals(1, userMapper.deleteCount);
+        assertNull(userMapper.savedUser);
+    }
+
+    @Test
+    @DisplayName("존재하지 않는 회원이 탈퇴를 요청하면 실패한다")
+    void deleteMissingUser() {
+        ServiceException exception = assertThrows(
+                ServiceException.class,
+                () -> userService.deleteUser(1L)
+        );
+
+        assertEquals(ResponseCode.MEMBER_NOT_FOUND, exception.getResponseCode());
+        assertEquals(0, userMapper.deleteCount);
+    }
+
+    @Test
+    @DisplayName("회원 삭제 건수가 1건이 아니면 데이터베이스 오류로 처리한다")
+    void deleteUserWithDatabaseError() {
+        userMapper.savedUser = createUser("user@example.com");
+        userMapper.deleteResult = 0;
+
+        ServiceException exception = assertThrows(
+                ServiceException.class,
+                () -> userService.deleteUser(1L)
+        );
+
+        assertEquals(ResponseCode.DATABASE_ERROR, exception.getResponseCode());
+        assertEquals(1, userMapper.deleteCount);
+    }
+
     private UserVO createUser(String email) {
         return new UserVO(
                 1L,
@@ -94,7 +199,11 @@ class UserServiceTest {
     private static class FakeUserMapper implements UserMapper {
 
         private UserVO savedUser;
+        private UserVO userWithDuplicateEmail;
         private int insertCount;
+        private int updateCount;
+        private int deleteCount;
+        private int deleteResult = 1;
 
         @Override
         public UserVO findById(Long userId) {
@@ -106,10 +215,15 @@ class UserServiceTest {
 
         @Override
         public UserVO findByEmail(String email) {
-            if (savedUser == null || !savedUser.getEmail().equals(email)) {
-                return null;
+            if (savedUser != null && savedUser.getEmail().equals(email)) {
+                return savedUser;
             }
-            return savedUser;
+
+            if (userWithDuplicateEmail != null && userWithDuplicateEmail.getEmail().equals(email)) {
+                return userWithDuplicateEmail;
+            }
+
+            return null;
         }
 
         @Override
@@ -124,11 +238,23 @@ class UserServiceTest {
 
         @Override
         public int update(UserVO user) {
-            return 0;
+            updateCount++;
+            user.setUpdatedAt(LocalDateTime.now());
+            savedUser = user;
+            return 1;
         }
 
         @Override
         public int deleteById(Long userId) {
+            deleteCount++;
+
+            if (deleteResult == 1
+                    && savedUser != null
+                    && savedUser.getUserId().equals(userId)) {
+                savedUser = null;
+                return 1;
+            }
+
             return 0;
         }
     }
