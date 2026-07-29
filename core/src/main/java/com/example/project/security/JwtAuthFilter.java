@@ -17,7 +17,6 @@ import java.util.List;
 public class JwtAuthFilter extends OncePerRequestFilter {
 
     private static final String AUTH_HEADER = "Authorization";
-    private static final String BEARER_PREFIX = "Bearer ";
 
     private final JwtProvider jwtProvider;
     private final TokenRevocationStore tokenRevocationStore;
@@ -29,14 +28,14 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
     @Override
     protected void doFilterInternal(HttpServletRequest req, HttpServletResponse res, FilterChain filterChain) throws ServletException, IOException {
-        String token = resolveToken(req);
+        String token = JwtUtil.resolveAccessToken(req.getHeader(AUTH_HEADER));
 
         if (token != null
                 && !tokenRevocationStore.isRevoked(token)
                 && jwtProvider.isValidAccessToken(token)) {
             Claims claims = jwtProvider.parse(token);
-            String userId = claims.getSubject();
-            Object role = claims.get("role");
+            String userId = JwtUtil.getUserId(claims);
+            String role = JwtUtil.getRole(claims);
 
             List<SimpleGrantedAuthority> authorities = role == null ?
                     List.of() : List.of(new SimpleGrantedAuthority("ROLE_" + role));
@@ -48,15 +47,5 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         }
 
         filterChain.doFilter(req, res);
-    }
-
-    private String resolveToken(HttpServletRequest req) {
-        String header = req.getHeader(AUTH_HEADER);
-
-        if (header != null && header.startsWith(BEARER_PREFIX)) {
-            return header.substring(BEARER_PREFIX.length());
-        }
-
-        return null;
     }
 }

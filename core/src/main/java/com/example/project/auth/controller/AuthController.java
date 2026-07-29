@@ -7,7 +7,7 @@ import com.example.project.auth.dto.response.AuthTokenResponse;
 import com.example.project.auth.service.AuthService;
 import com.example.project.common.api.ApiResponse;
 import com.example.project.common.api.ResponseCode;
-import com.example.project.common.exception.ServiceException;
+import com.example.project.security.JwtUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -22,8 +22,6 @@ import javax.validation.Valid;
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
 public class AuthController {
-
-    private static final String BEARER_PREFIX = "Bearer ";
 
     private final AuthService authService;
 
@@ -51,24 +49,7 @@ public class AuthController {
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
             HttpServletRequest httpRequest
     ) {
-        authService.logout(request, resolveAccessToken(authorizationHeader));
+        authService.logout(request, JwtUtil.resolveRequiredAccessToken(authorizationHeader));
         return ApiResponse.success(ResponseCode.LOGOUT_SUCCESS, httpRequest.getRequestURI(), null);
-    }
-
-    private String resolveAccessToken(String authorizationHeader) {
-        if (authorizationHeader == null) {
-            throw new ServiceException(ResponseCode.UNAUTHORIZED);
-        }
-
-        if (!authorizationHeader.startsWith(BEARER_PREFIX)) {
-            throw new ServiceException(ResponseCode.UNAUTHORIZED);
-        }
-
-        String token = authorizationHeader.substring(BEARER_PREFIX.length()).trim();
-        if (token.isEmpty()) {
-            throw new ServiceException(ResponseCode.UNAUTHORIZED);
-        }
-
-        return token;
     }
 }
