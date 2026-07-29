@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.example.project.recipient.mapper.RecipientMapper">
+    <resultMap id="recipientResultMap"
+               type="com.example.project.recipient.domain.RecipientVO">
+        <id property="familyId" column="family_id"/>
+        <result property="userId" column="user_id"/>
+        <result property="familyName" column="family_name"/>
+        <result property="relation" column="relation"/>
+        <result property="birthDate" column="birth_date"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+        <result property="familyImg" column="family_img"/>
+    </resultMap>
+
+    <sql id="recipientColumns">
+        family_id,
+        user_id,
+        family_name,
+        relation,
+        birth_date,
+        created_at,
+        updated_at,
+        family_img
+    </sql>
+
+    <insert id="insertRecipient" parameterType="com.example.project.recipient.domain.RecipientVO"
+            useGeneratedKeys="true" keyProperty="familyId">
+        INSERT INTO family (
+        user_id, family_name, relation, birth_date, family_img
+        ) VALUES (
+        #{userId}, #{familyName}, #{relation}, #{birthDate}, #{familyImg}
+        )
+    </insert>
+
+    <!-- 사용자 가족이 수증자인지 확인 -->
+    <update id="updateRecipient" parameterType="com.example.project.recipient.domain.RecipientVO">
+        UPDATE family
+        SET family_name = #{familyName},
+        relation = #{relation},
+        birth_date = #{birthDate},
+        family_img = #{familyImg}
+        WHERE family_id = #{familyId}
+        AND user_id = #{userId}
+    </update>
+
+    <delete id="deleteRecipient">
+        DELETE FROM family
+        WHERE family_id = #{familyId}
+        AND user_id = #{userId}
+    </delete>
+
+    <select id="selectAllRecipient" resultMap="recipientResultMap">
+        SELECT
+        <include refid="recipientColumns"/>
+        FROM family
+        WHERE user_id = #{userId}
+        ORDER BY family_id
+    </select>
+
+    <select id="selectRecipient" resultMap="recipientResultMap">
+        SELECT
+        <include refid="recipientColumns"/>
+        FROM family
+        WHERE family_id = #{familyId} AND user_id = #{userId}
+    </select>
+</mapper>
