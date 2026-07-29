@@ -15,9 +15,11 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 public class SecurityConfig {
 
     private final JwtProvider jwtProvider;
+    private final TokenRevocationStore tokenRevocationStore;
 
-    public SecurityConfig(JwtProvider jwtProvider) {
+    public SecurityConfig(JwtProvider jwtProvider, TokenRevocationStore tokenRevocationStore) {
         this.jwtProvider = jwtProvider;
+        this.tokenRevocationStore = tokenRevocationStore;
     }
 
     @Bean
@@ -28,7 +30,10 @@ public class SecurityConfig {
                 .httpBasic(basic -> basic.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth.anyRequest().permitAll())
-                .addFilterBefore(new JwtAuthFilter(jwtProvider), UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(
+                        new JwtAuthFilter(jwtProvider, tokenRevocationStore),
+                        UsernamePasswordAuthenticationFilter.class
+                );
 
         return http.build();
     }

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="DataSourceManagerImpl" format="xml" multifile-model="true">
-    <data-source source="LOCAL" name="miriZoom@localhost" uuid="764d754c-2abd-4bd7-9bcf-3df1de7ae26e">
+    <data-source source="LOCAL" name="miriZoom@localhost" uuid="07c4c26a-3947-4f74-8e71-7c893edcfb99">
       <driver-ref>mysql.8</driver-ref>
       <synchronize>true</synchronize>
       <jdbc-driver>com.mysql.cj.jdbc.Driver</jdbc-driver>
