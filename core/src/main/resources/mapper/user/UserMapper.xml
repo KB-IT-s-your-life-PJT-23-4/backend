@@ -24,7 +24,7 @@
                name,
                created_at,
                updated_at
-        FROM users
+        FROM user
         WHERE user_id = #{userId}
     </select>
 
@@ -37,7 +37,7 @@
                name,
                created_at,
                updated_at
-        FROM users
+        FROM user
         WHERE email = #{email}
     </select>
 
@@ -45,7 +45,7 @@
             parameterType="com.example.project.user.domain.UserVO"
             useGeneratedKeys="true"
             keyProperty="userId">
-        INSERT INTO users (
+        INSERT INTO user (
             email,
             password,
             name
@@ -59,7 +59,7 @@
 
     <update id="update"
             parameterType="com.example.project.user.domain.UserVO">
-        UPDATE users
+        UPDATE user
         SET email = #{email},
             name = #{name},
             updated_at = CURRENT_TIMESTAMP
@@ -69,7 +69,7 @@
     <delete id="deleteById"
             parameterType="long">
         DELETE
-        FROM users
+        FROM user
         WHERE user_id = #{userId}
     </delete>
 
