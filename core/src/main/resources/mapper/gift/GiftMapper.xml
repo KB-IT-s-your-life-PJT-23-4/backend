@@ -60,6 +60,17 @@
         ORDER BY g.gift_date DESC, g.gift_id DESC
     </select>
 
+    <!-- selectGift로 먼저 확인. status는 updateGiftStatus에서만 바꾼다 -->
+    <update id="updateGift">
+        UPDATE gift
+        <set>
+            <if test="amount != null">amount = #{amount},</if>
+            <if test="giftDate != null">gift_date = #{giftDate},</if>
+            <if test="memo != null">memo = #{memo},</if>
+        </set>
+        WHERE gift_id = #{giftId}
+    </update>
+
     <!-- selectGift로 먼저 확인 -->
     <update id="updateGiftStatus">
         UPDATE gift
@@ -71,6 +82,62 @@
         DELETE FROM gift
         WHERE gift_id = #{giftId}
     </delete>
+
+    <resultMap id="deductionResultMap" type="com.example.project.gift.domain.DeductionVO">
+        <id property="familyId" column="family_id"/>
+        <result property="familyName" column="family_name"/>
+        <result property="relation" column="relation"/>
+        <result property="birthDate" column="birth_date"/>
+        <result property="minor" column="is_minor"/>
+        <result property="deductionLimit" column="deduction_limit"/>
+        <result property="usedAmount" column="used_amount"/>
+        <result property="plannedAmount" column="planned_amount"/>
+        <result property="aggregatedCount" column="aggregated_count"/>
+        <result property="oldestGiftDate" column="oldest_gift_date"/>
+    </resultMap>
+
+    <!--
+      증여가 하나도 없는 수증자도 한도 전액이 남은 상태로 나와야 하므로 family 를 기준으로 LEFT JOIN 한다.
+      미성년 판정은 baseDate 기준 만 나이이고, 직계비속이 아닌 관계는 is_minor=0 행만 있으므로 0 으로 고정한다.
+      한도 행이 없는 관계(배우자)는 deduction_limit 이 null 로 내려가고 서비스가 그대로 통과시킨다.
+    -->
+    <select id="selectDeduction" resultMap="deductionResultMap">
+        SELECT
+        f.family_id,
+        f.family_name,
+        f.relation,
+        f.birth_date,
+        CASE
+        WHEN f.relation = 'LINEAL_DESCENDANT'
+        AND TIMESTAMPDIFF(YEAR, f.birth_date, #{baseDate}) &lt; 19
+        THEN 1 ELSE 0
+        END AS is_minor,
+        l.deduction_limit,
+        COALESCE(SUM(CASE WHEN g.status = 'COMPLETED' THEN g.amount END), 0) AS used_amount,
+        COALESCE(SUM(CASE WHEN g.status = 'PLANNED' THEN g.amount END), 0) AS planned_amount,
+        COUNT(CASE WHEN g.status = 'COMPLETED' THEN 1 END) AS aggregated_count,
+        MIN(CASE WHEN g.status = 'COMPLETED' THEN g.gift_date END) AS oldest_gift_date
+        FROM family f
+        LEFT JOIN gift g
+        ON g.family_id = f.family_id
+        AND g.gift_date &gt;= #{windowStartDate}
+        AND g.gift_date &lt;= #{baseDate}
+        LEFT JOIN gift_deduction_limit l
+        ON l.relation = f.relation
+        AND l.is_minor = CASE
+        WHEN f.relation = 'LINEAL_DESCENDANT'
+        AND TIMESTAMPDIFF(YEAR, f.birth_date, #{baseDate}) &lt; 19
+        THEN 1 ELSE 0
+        END
+        AND l.effective_from &lt;= #{baseDate}
+        AND (l.effective_to IS NULL OR l.effective_to &gt; #{baseDate})
+        WHERE f.user_id = #{userId}
+        <if test="familyId != null">
+            AND f.family_id = #{familyId}
+        </if>
+        GROUP BY f.family_id, f.family_name, f.relation, f.birth_date, l.deduction_limit
+        ORDER BY f.family_id
+    </select>
 
     <select id="countGiftByFamily" resultType="int">
         SELECT COUNT(*)

@@ -1,10 +1,9 @@
-package com.example.project.recipient.dto;
+package com.example.project.recipient.dto.request;
 
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 
 @Data
 @RequiredArgsConstructor

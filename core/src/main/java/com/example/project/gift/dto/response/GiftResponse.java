@@ -1,4 +1,4 @@
-package com.example.project.gift.dto;
+package com.example.project.gift.dto.response;
 
 import com.example.project.gift.domain.GiftVO;
 import com.example.project.gift.domain.Status;
