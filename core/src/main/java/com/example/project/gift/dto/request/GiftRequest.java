@@ -1,4 +1,4 @@
-package com.example.project.gift.dto;
+package com.example.project.gift.dto.request;
 
 import com.example.project.gift.domain.Status;
 import com.fasterxml.jackson.annotation.JsonFormat;

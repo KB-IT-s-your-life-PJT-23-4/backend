@@ -1,4 +1,4 @@
-package com.example.project.recipient.dto;
+package com.example.project.recipient.dto.response;
 
 import com.example.project.recipient.domain.RecipientVO;
 import com.fasterxml.jackson.annotation.JsonFormat;

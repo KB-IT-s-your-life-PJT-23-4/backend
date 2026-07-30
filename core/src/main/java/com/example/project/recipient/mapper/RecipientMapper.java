@@ -1,7 +1,6 @@
 package com.example.project.recipient.mapper;
 
 import com.example.project.recipient.domain.RecipientVO;
-import com.example.project.recipient.dto.RecipientRequest;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 

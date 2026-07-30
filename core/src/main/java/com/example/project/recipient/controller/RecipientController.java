@@ -3,8 +3,8 @@ package com.example.project.recipient.controller;
 import com.example.project.common.api.ApiResponse;
 import com.example.project.common.api.ResponseCode;
 import com.example.project.common.web.CurrentUser;
-import com.example.project.recipient.dto.RecipientRequest;
-import com.example.project.recipient.dto.RecipientResponse;
+import com.example.project.recipient.dto.request.RecipientRequest;
+import com.example.project.recipient.dto.response.RecipientResponse;
 import com.example.project.recipient.service.RecipientService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
@@ -15,7 +15,7 @@ import javax.servlet.http.HttpServletRequest;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/gm/families")
+@RequestMapping("/api/fm/familygit")
 @Log4j2
 @RequiredArgsConstructor
 public class RecipientController {

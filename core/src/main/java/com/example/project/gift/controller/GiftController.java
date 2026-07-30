@@ -4,9 +4,10 @@ import com.example.project.common.api.ApiResponse;
 import com.example.project.common.api.ResponseCode;
 import com.example.project.common.web.CurrentUser;
 import com.example.project.gift.domain.Status;
-import com.example.project.gift.dto.GiftRequest;
-import com.example.project.gift.dto.GiftResponse;
-import com.example.project.gift.dto.GiftStatusRequest;
+import com.example.project.gift.dto.request.GiftRequest;
+import com.example.project.gift.dto.response.DeductionResponse;
+import com.example.project.gift.dto.response.GiftResponse;
+import com.example.project.gift.dto.request.GiftStatusRequest;
 import com.example.project.gift.service.GiftService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
@@ -24,14 +25,14 @@ public class GiftController {
 
     private final GiftService giftService;
 
-    @PostMapping
+    @PostMapping("/gift")
     public ApiResponse<GiftResponse> createGift(@RequestBody GiftRequest giftRequest, @AuthenticationPrincipal String principal, HttpServletRequest request) {
         GiftResponse data = giftService.createGift(giftRequest, CurrentUser.id(principal));
 
         return ApiResponse.success(ResponseCode.CREATED, request.getRequestURI(), data);
     }
 
-    @GetMapping
+    @GetMapping("/gift")
     public ApiResponse<List<GiftResponse>> getAllGift(
             @RequestParam(required = false) Long familyId,
             @RequestParam(required = false) Status status,
@@ -43,7 +44,18 @@ public class GiftController {
         return ApiResponse.success(ResponseCode.SUCCESS, request.getRequestURI(), data);
     }
 
-    @GetMapping("/{giftId}")
+    @GetMapping("/deduction")
+    public ApiResponse<List<DeductionResponse>> getDeduction(
+            @RequestParam(required = false) Long familyId,
+            @AuthenticationPrincipal String principal,
+            HttpServletRequest request
+    ) {
+        List<DeductionResponse> data = giftService.selectDeduction(familyId, CurrentUser.id(principal));
+
+        return ApiResponse.success(ResponseCode.SUCCESS, request.getRequestURI(), data);
+    }
+
+    @GetMapping("/gift/{giftId}")
     public ApiResponse<GiftResponse> getGift(
             @PathVariable Long giftId,
             @AuthenticationPrincipal String principal,
@@ -54,7 +66,19 @@ public class GiftController {
         return ApiResponse.success(ResponseCode.SUCCESS, request.getRequestURI(), data);
     }
 
-    @PatchMapping("/{giftId}/status")
+    @PatchMapping("/gift/{giftId}")
+    public ApiResponse<GiftResponse> updateGift(
+            @PathVariable Long giftId,
+            @RequestBody GiftRequest giftRequest,
+            @AuthenticationPrincipal String principal,
+            HttpServletRequest request
+    ) {
+        GiftResponse data = giftService.updateGift(giftId, giftRequest, CurrentUser.id(principal));
+
+        return ApiResponse.success(ResponseCode.UPDATED, request.getRequestURI(), data);
+    }
+
+    @PatchMapping("/gift/{giftId}/status")
     public ApiResponse<GiftResponse> updateGiftStatus(
             @PathVariable Long giftId,
             @RequestBody GiftStatusRequest giftStatusRequest,
@@ -66,7 +90,7 @@ public class GiftController {
         return ApiResponse.success(ResponseCode.UPDATED, request.getRequestURI(), data);
     }
 
-    @DeleteMapping("/{giftId}")
+    @DeleteMapping("/gift/{giftId}")
     public ApiResponse<Void> deleteGift(
             @PathVariable Long giftId,
             @AuthenticationPrincipal String principal,
