@@ -15,7 +15,7 @@ import javax.servlet.http.HttpServletRequest;
 import java.util.List;
 
 @RestController
-@RequestMapping("/gm/families")
+@RequestMapping("/api/gm/families")
 @Log4j2
 @RequiredArgsConstructor
 public class RecipientController {

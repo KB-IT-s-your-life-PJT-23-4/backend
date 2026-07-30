@@ -18,7 +18,7 @@ import java.util.List;
 
 @Log4j2
 @RestController
-@RequestMapping("/gm")
+@RequestMapping("/api/gm")
 @RequiredArgsConstructor
 public class GiftController {
 
