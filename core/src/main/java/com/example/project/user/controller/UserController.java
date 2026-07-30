@@ -9,6 +9,7 @@ import com.example.project.user.dto.request.UserUpdateRequest;
 import com.example.project.user.dto.response.EmailAvailabilityResponse;
 import com.example.project.user.service.UserService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.log4j.Log4j2;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.validation.annotation.Validated;
@@ -32,6 +33,7 @@ import javax.validation.constraints.Size;
 @RequestMapping("/api")
 @RequiredArgsConstructor
 @Validated
+@Log4j2
 public class UserController {
 
     private final UserService userService;
@@ -39,11 +41,13 @@ public class UserController {
     @PostMapping("/auth/signup")
     @ResponseStatus(HttpStatus.CREATED)
     public ApiResponse<UserDTO> signup(
-            @Valid @RequestBody UserSignupRequest request,
+            @Valid @RequestBody UserSignupRequest signupRequest,
             HttpServletRequest httpRequest
     ) {
-        UserDTO data = userService.signup(request);
-        return ApiResponse.success(ResponseCode.CREATED, httpRequest.getRequestURI(), data);
+        UserDTO createdUser = userService.signup(signupRequest);
+        log.info("User signup completed: userId={}", createdUser.getUserId());
+
+        return ApiResponse.success(ResponseCode.CREATED, httpRequest.getRequestURI(), createdUser);
     }
 
     @GetMapping("/auth/check-email")
@@ -55,8 +59,10 @@ public class UserController {
             String email,
             HttpServletRequest httpRequest
     ) {
-        EmailAvailabilityResponse data = userService.checkEmailAvailability(email);
-        return ApiResponse.success(ResponseCode.SUCCESS, httpRequest.getRequestURI(), data);
+        EmailAvailabilityResponse emailAvailability = userService.checkEmailAvailability(email);
+        log.debug("Email availability checked: available={}", emailAvailability.available());
+
+        return ApiResponse.success(ResponseCode.SUCCESS, httpRequest.getRequestURI(), emailAvailability);
     }
 
     @GetMapping("/users/me")
@@ -64,18 +70,24 @@ public class UserController {
             Authentication authentication,
             HttpServletRequest httpRequest
     ) {
-        UserDTO data = userService.getProfile(resolveUserId(authentication));
-        return ApiResponse.success(ResponseCode.SUCCESS, httpRequest.getRequestURI(), data);
+        Long userId = resolveUserId(authentication);
+        UserDTO userProfile = userService.getProfile(userId);
+        log.debug("User profile retrieved: userId={}", userId);
+
+        return ApiResponse.success(ResponseCode.SUCCESS, httpRequest.getRequestURI(), userProfile);
     }
 
     @PutMapping("/users/me")
     public ApiResponse<UserDTO> updateMyProfile(
             Authentication authentication,
-            @Valid @RequestBody UserUpdateRequest request,
+            @Valid @RequestBody UserUpdateRequest updateRequest,
             HttpServletRequest httpRequest
     ) {
-        UserDTO data = userService.updateProfile(resolveUserId(authentication), request);
-        return ApiResponse.success(ResponseCode.UPDATED, httpRequest.getRequestURI(), data);
+        Long userId = resolveUserId(authentication);
+        UserDTO updatedUser = userService.updateProfile(userId, updateRequest);
+        log.info("User profile updated: userId={}", userId);
+
+        return ApiResponse.success(ResponseCode.UPDATED, httpRequest.getRequestURI(), updatedUser);
     }
 
     @DeleteMapping("/users/me")
@@ -83,7 +95,10 @@ public class UserController {
             Authentication authentication,
             HttpServletRequest httpRequest
     ) {
-        userService.deleteUser(resolveUserId(authentication));
+        Long userId = resolveUserId(authentication);
+        userService.deleteUser(userId);
+        log.info("User account deleted: userId={}", userId);
+
         return ApiResponse.success(ResponseCode.DELETED, httpRequest.getRequestURI(), null);
     }
 
@@ -94,7 +109,7 @@ public class UserController {
 
         try {
             return Long.valueOf(authentication.getName());
-        } catch (NumberFormatException e) {
+        } catch (NumberFormatException exception) {
             throw new ServiceException(ResponseCode.UNAUTHORIZED);
         }
     }

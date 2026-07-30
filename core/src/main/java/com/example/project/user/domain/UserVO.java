@@ -1,14 +1,10 @@
 package com.example.project.user.domain;
 
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
 
 import java.time.LocalDateTime;
 
-@Getter
-@Setter
+@Data
 @NoArgsConstructor
 @AllArgsConstructor
 public class UserVO {
@@ -16,7 +12,7 @@ public class UserVO {
     private Long userId;
     private String email;
     private String password;
-    private String name;
+    private String userName;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }
