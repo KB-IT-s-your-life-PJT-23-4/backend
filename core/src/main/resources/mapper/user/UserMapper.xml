@@ -10,7 +10,7 @@
         <id property="userId" column="user_id"/>
         <result property="email" column="email"/>
         <result property="password" column="password"/>
-        <result property="name" column="name"/>
+        <result property="userName" column="user_name"/>
         <result property="createdAt" column="created_at"/>
         <result property="updatedAt" column="updated_at"/>
     </resultMap>
@@ -21,7 +21,7 @@
         SELECT user_id,
                email,
                password,
-               name,
+               user_name,
                created_at,
                updated_at
         FROM user
@@ -34,7 +34,7 @@
         SELECT user_id,
                email,
                password,
-               name,
+               user_name,
                created_at,
                updated_at
         FROM user
@@ -48,12 +48,12 @@
         INSERT INTO user (
             email,
             password,
-            name
+            user_name
         )
         VALUES (
             #{email},
             #{password},
-            #{name}
+            #{userName}
         )
     </insert>
 
@@ -61,7 +61,7 @@
             parameterType="com.example.project.user.domain.UserVO">
         UPDATE user
         SET email = #{email},
-            name = #{name},
+            user_name = #{userName},
             updated_at = CURRENT_TIMESTAMP
         WHERE user_id = #{userId}
     </update>

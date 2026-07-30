@@ -10,9 +10,9 @@ public interface UserMapper {
 
     UserVO findByEmail(String email);
 
-    int insert(UserVO user);
+    int insert(UserVO userVO);
 
-    int update(UserVO user);
+    int update(UserVO userVO);
 
     int deleteById(Long userId);
 }

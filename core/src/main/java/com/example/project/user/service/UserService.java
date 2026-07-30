@@ -22,31 +22,31 @@ public class UserService {
     private final UserMapper userMapper;
     private final PasswordEncoder passwordEncoder;
 
-    public UserDTO signup(UserSignupRequest request) {
-        String email = normalizeEmail(request.email());
+    public UserDTO signup(UserSignupRequest signupRequest) {
+        String normalizedEmail = normalizeEmail(signupRequest.email());
 
-        if (userMapper.findByEmail(email) != null) {
+        if (userMapper.findByEmail(normalizedEmail) != null) {
             throw new ServiceException(ResponseCode.DUPLICATE_DATA);
         }
 
-        UserVO user = new UserVO(
+        UserVO newUser = new UserVO(
                 null,
-                email,
-                passwordEncoder.encode(request.password()),
-                request.name().trim(),
+                normalizedEmail,
+                passwordEncoder.encode(signupRequest.password()),
+                signupRequest.name().trim(),
                 null,
                 null
         );
 
         try {
-            if (userMapper.insert(user) != 1) {
+            if (userMapper.insert(newUser) != 1) {
                 throw new ServiceException(ResponseCode.DATABASE_ERROR);
             }
-        } catch (DuplicateKeyException e) {
+        } catch (DuplicateKeyException exception) {
             throw new ServiceException(ResponseCode.DUPLICATE_DATA);
         }
 
-        UserVO savedUser = userMapper.findById(user.getUserId());
+        UserVO savedUser = userMapper.findById(newUser.getUserId());
         if (savedUser == null) {
             throw new ServiceException(ResponseCode.DATABASE_ERROR);
         }
@@ -63,23 +63,23 @@ public class UserService {
         return UserDTO.from(findUser(userId));
     }
 
-    public UserDTO updateProfile(Long userId, UserUpdateRequest request) {
-        UserVO user = findUser(userId);
-        String email = normalizeEmail(request.email());
-        UserVO userWithEmail = userMapper.findByEmail(email);
+    public UserDTO updateProfile(Long userId, UserUpdateRequest updateRequest) {
+        UserVO existingUser = findUser(userId);
+        String normalizedEmail = normalizeEmail(updateRequest.email());
+        UserVO userWithSameEmail = userMapper.findByEmail(normalizedEmail);
 
-        if (userWithEmail != null && !userWithEmail.getUserId().equals(userId)) {
+        if (userWithSameEmail != null && !userWithSameEmail.getUserId().equals(userId)) {
             throw new ServiceException(ResponseCode.DUPLICATE_DATA);
         }
 
-        user.setEmail(email);
-        user.setName(request.name().trim());
+        existingUser.setEmail(normalizedEmail);
+        existingUser.setUserName(updateRequest.name().trim());
 
         try {
-            if (userMapper.update(user) != 1) {
+            if (userMapper.update(existingUser) != 1) {
                 throw new ServiceException(ResponseCode.DATABASE_ERROR);
             }
-        } catch (DuplicateKeyException e) {
+        } catch (DuplicateKeyException exception) {
             throw new ServiceException(ResponseCode.DUPLICATE_DATA);
         }
 
@@ -100,12 +100,12 @@ public class UserService {
     }
 
     private UserVO findUser(Long userId) {
-        UserVO user = userMapper.findById(userId);
-        if (user == null) {
+        UserVO foundUser = userMapper.findById(userId);
+        if (foundUser == null) {
             throw new ServiceException(ResponseCode.MEMBER_NOT_FOUND);
         }
 
-        return user;
+        return foundUser;
     }
 
     private String normalizeEmail(String email) {
