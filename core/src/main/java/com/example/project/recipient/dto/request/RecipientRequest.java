@@ -15,5 +15,4 @@ public class RecipientRequest {
     private LocalDate birthDate;
     private String familyImg;
 
-
 }
