@@ -1,0 +1,17 @@
+package com.example.project.simulation.domain;
+
+import lombok.Data;
+
+import java.time.LocalDate;
+
+@Data
+public class SimulationTrancheRecord {
+    private Long trancheId;
+    private Long resultId;
+    private Integer sequenceNo;
+    private LocalDate giftDate;
+    private Long giftAmount;
+    private Long estimatedGiftTax;
+    private Long donorRequiredAmount;
+    private Long investmentAmount;
+}
