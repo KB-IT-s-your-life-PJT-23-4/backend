@@ -1,5 +1,17 @@
 package com.example.project.consultation.dto.request;
 
-public record ConsultRequest(
-        String question
-) {}
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import lombok.RequiredArgsConstructor;
+
+@Data
+@RequiredArgsConstructor
+@NoArgsConstructor(force = true)
+public final class ConsultRequest {
+
+    private final String question;
+
+    public String question() {
+        return question;
+    }
+}

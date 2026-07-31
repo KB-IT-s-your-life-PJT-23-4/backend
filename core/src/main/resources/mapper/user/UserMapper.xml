@@ -11,19 +11,32 @@
         <result property="email" column="email"/>
         <result property="password" column="password"/>
         <result property="userName" column="user_name"/>
+        <result property="birthDate" column="birth_date"/>
+        <result property="phone" column="phone"/>
+        <result property="role" column="role"/>
         <result property="createdAt" column="created_at"/>
         <result property="updatedAt" column="updated_at"/>
+        <result property="img" column="img"/>
     </resultMap>
+
+    <sql id="userColumns">
+        user_id,
+        email,
+        password,
+        user_name,
+        birth_date,
+        phone,
+        role,
+        created_at,
+        updated_at,
+        img
+    </sql>
 
     <select id="findById"
             parameterType="long"
             resultMap="userResultMap">
-        SELECT user_id,
-               email,
-               password,
-               user_name,
-               created_at,
-               updated_at
+        SELECT
+        <include refid="userColumns"/>
         FROM user
         WHERE user_id = #{userId}
     </select>
@@ -31,12 +44,8 @@
     <select id="findByEmail"
             parameterType="string"
             resultMap="userResultMap">
-        SELECT user_id,
-               email,
-               password,
-               user_name,
-               created_at,
-               updated_at
+        SELECT
+        <include refid="userColumns"/>
         FROM user
         WHERE email = #{email}
     </select>
@@ -48,12 +57,18 @@
         INSERT INTO user (
             email,
             password,
-            user_name
+            user_name,
+            birth_date,
+            phone,
+            img
         )
         VALUES (
             #{email},
             #{password},
-            #{userName}
+            #{userName},
+            #{birthDate},
+            #{phone},
+            #{img}
         )
     </insert>
 
@@ -62,6 +77,9 @@
         UPDATE user
         SET email = #{email},
             user_name = #{userName},
+            birth_date = #{birthDate},
+            phone = #{phone},
+            img = #{img},
             updated_at = CURRENT_TIMESTAMP
         WHERE user_id = #{userId}
     </update>

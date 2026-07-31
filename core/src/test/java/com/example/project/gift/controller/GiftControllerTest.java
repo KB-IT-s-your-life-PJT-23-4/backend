@@ -1,6 +1,7 @@
 package com.example.project.gift.controller;
 
 import com.example.project.common.exception.CommonExceptionAdvice;
+import com.example.project.gift.domain.DeductionVO;
 import com.example.project.gift.domain.GiftVO;
 import com.example.project.gift.domain.Status;
 import com.example.project.gift.mapper.GiftMapper;
@@ -78,11 +79,11 @@ class GiftControllerTest {
     }
 
     @Test
-    @DisplayName("GET /api/gm?familyId는 해당 가족의 Gift만 조회한다")
+    @DisplayName("GET /api/gm/gift?familyId는 해당 가족의 Gift만 조회한다")
     void getGiftsByFamilyId() throws Exception {
         authenticate(OWNER_ID);
 
-        MvcResult result = mockMvc.perform(get("/api/gm").param("familyId", "10"))
+        MvcResult result = mockMvc.perform(get("/api/gm/gift").param("familyId", "10"))
                 .andExpect(status().isOk())
                 .andReturn();
 
@@ -93,11 +94,11 @@ class GiftControllerTest {
     }
 
     @Test
-    @DisplayName("GET /api/gm은 로그인 사용자가 소유한 Gift만 반환한다")
+    @DisplayName("GET /api/gm/gift는 로그인 사용자가 소유한 Gift만 반환한다")
     void getOnlyCurrentUsersGifts() throws Exception {
         authenticate(OWNER_ID);
 
-        MvcResult result = mockMvc.perform(get("/api/gm"))
+        MvcResult result = mockMvc.perform(get("/api/gm/gift"))
                 .andExpect(status().isOk())
                 .andReturn();
 
@@ -109,11 +110,11 @@ class GiftControllerTest {
     }
 
     @Test
-    @DisplayName("GET /api/gm의 status 조건은 상태가 일치하는 Gift만 반환한다")
+    @DisplayName("GET /api/gm/gift의 status 조건은 상태가 일치하는 Gift만 반환한다")
     void filterGiftsByStatus() throws Exception {
         authenticate(OWNER_ID);
 
-        MvcResult result = mockMvc.perform(get("/api/gm")
+        MvcResult result = mockMvc.perform(get("/api/gm/gift")
                         .param("familyId", "10")
                         .param("status", "COMPLETED"))
                 .andExpect(status().isOk())
@@ -130,7 +131,7 @@ class GiftControllerTest {
     void rejectOtherUsersGiftDetail() throws Exception {
         authenticate(OWNER_ID);
 
-        MvcResult result = mockMvc.perform(get("/api/gm/{giftId}", 201L))
+        MvcResult result = mockMvc.perform(get("/api/gm/gift/{giftId}", 201L))
                 .andExpect(status().isNotFound())
                 .andReturn();
 
@@ -142,7 +143,7 @@ class GiftControllerTest {
     void missingFamilyIdReturnsEmptyGiftList() throws Exception {
         authenticate(OWNER_ID);
 
-        MvcResult result = mockMvc.perform(get("/api/gm").param("familyId", "999"))
+        MvcResult result = mockMvc.perform(get("/api/gm/gift").param("familyId", "999"))
                 .andExpect(status().isOk())
                 .andReturn();
 
@@ -156,7 +157,7 @@ class GiftControllerTest {
     void createGiftForOwnedFamily() throws Exception {
         authenticate(OWNER_ID);
 
-        MvcResult result = mockMvc.perform(post("/api/gm")
+        MvcResult result = mockMvc.perform(post("/api/gm/gift")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -181,7 +182,7 @@ class GiftControllerTest {
     void rejectCreateGiftForOtherUsersFamily() throws Exception {
         authenticate(OWNER_ID);
 
-        MvcResult result = mockMvc.perform(post("/api/gm")
+        MvcResult result = mockMvc.perform(post("/api/gm/gift")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -199,7 +200,7 @@ class GiftControllerTest {
     @Test
     @DisplayName("인증 사용자가 없으면 Gift API는 401을 반환한다")
     void rejectUnauthenticatedGiftRequest() throws Exception {
-        MvcResult result = mockMvc.perform(get("/api/gm"))
+        MvcResult result = mockMvc.perform(get("/api/gm/gift"))
                 .andExpect(status().isUnauthorized())
                 .andReturn();
 
@@ -338,6 +339,24 @@ class GiftControllerTest {
         }
 
         @Override
+        public int updateGift(Long giftId, Long amount, LocalDate giftDate, String memo) {
+            GiftVO gift = gifts.get(giftId);
+            if (gift == null) {
+                return 0;
+            }
+            if (amount != null) {
+                gift.setAmount(amount);
+            }
+            if (giftDate != null) {
+                gift.setGiftDate(giftDate);
+            }
+            if (memo != null) {
+                gift.setMemo(memo);
+            }
+            return 1;
+        }
+
+        @Override
         public int updateGiftStatus(Long giftId, Status status) {
             GiftVO gift = gifts.get(giftId);
             if (gift == null) {
@@ -350,6 +369,16 @@ class GiftControllerTest {
         @Override
         public int deleteGift(Long giftId) {
             return gifts.remove(giftId) == null ? 0 : 1;
+        }
+
+        @Override
+        public List<DeductionVO> selectDeduction(
+                Long familyId,
+                Long userId,
+                LocalDate windowStartDate,
+                LocalDate baseDate
+        ) {
+            return List.of();
         }
 
         @Override

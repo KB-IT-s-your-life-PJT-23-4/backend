@@ -2,12 +2,13 @@ package com.example.project.recipient.service;
 
 import com.example.project.common.api.ResponseCode;
 import com.example.project.common.exception.ServiceException;
+import com.example.project.gift.domain.DeductionVO;
 import com.example.project.gift.domain.GiftVO;
 import com.example.project.gift.domain.Status;
 import com.example.project.gift.mapper.GiftMapper;
 import com.example.project.recipient.domain.RecipientVO;
-import com.example.project.recipient.dto.RecipientRequest;
-import com.example.project.recipient.dto.RecipientResponse;
+import com.example.project.recipient.dto.request.RecipientRequest;
+import com.example.project.recipient.dto.response.RecipientResponse;
 import com.example.project.recipient.mapper.RecipientMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -303,6 +304,11 @@ class RecipientServiceTest {
         }
 
         @Override
+        public int updateGift(Long giftId, Long amount, LocalDate giftDate, String memo) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
         public int updateGiftStatus(Long giftId, Status status) {
             throw new UnsupportedOperationException();
         }
@@ -310,6 +316,16 @@ class RecipientServiceTest {
         @Override
         public int deleteGift(Long giftId) {
             throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public List<DeductionVO> selectDeduction(
+                Long familyId,
+                Long userId,
+                LocalDate windowStartDate,
+                LocalDate baseDate
+        ) {
+            return List.of();
         }
 
         @Override

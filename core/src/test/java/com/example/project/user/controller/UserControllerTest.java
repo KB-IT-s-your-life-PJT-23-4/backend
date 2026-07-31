@@ -21,6 +21,7 @@ import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
@@ -78,7 +79,10 @@ class UserControllerTest {
                                 {
                                   "email": "New@Example.com",
                                   "password": "password123!",
-                                  "name": "김철수"
+                                  "name": "김철수",
+                                  "birthDate": "1995-03-15",
+                                  "phone": "010-2222-3333",
+                                  "img": "new-profile.png"
                                 }
                                 """))
                 .andExpect(status().isCreated())
@@ -89,6 +93,10 @@ class UserControllerTest {
         assertEquals("/api/auth/signup", body.get("path").asText());
         assertEquals("new@example.com", body.at("/data/email").asText());
         assertEquals("김철수", body.at("/data/name").asText());
+        assertEquals("1995-03-15", body.at("/data/birthDate").asText());
+        assertEquals("010-2222-3333", body.at("/data/phone").asText());
+        assertEquals("USER", body.at("/data/role").asText());
+        assertEquals("new-profile.png", body.at("/data/img").asText());
         assertTrue(body.has("timestamp"));
         assertTrue(body.has("message"));
         assertFalse(body.has("error"));
@@ -103,7 +111,8 @@ class UserControllerTest {
                                 {
                                   "email": "invalid-email",
                                   "password": "short",
-                                  "name": " "
+                                  "name": " ",
+                                  "phone": " "
                                 }
                                 """))
                 .andExpect(status().isBadRequest())
@@ -125,7 +134,8 @@ class UserControllerTest {
                                 {
                                   "email": "USER@example.com",
                                   "password": "password123!",
-                                  "name": "김철수"
+                                  "name": "김철수",
+                                  "phone": "010-2222-3333"
                                 }
                                 """))
                 .andExpect(status().isConflict())
@@ -162,6 +172,10 @@ class UserControllerTest {
         assertEquals(200, body.get("statusCode").asInt());
         assertEquals(USER_ID, body.at("/data/userId").asLong());
         assertEquals("user@example.com", body.at("/data/email").asText());
+        assertEquals("1990-01-01", body.at("/data/birthDate").asText());
+        assertEquals("010-1111-2222", body.at("/data/phone").asText());
+        assertEquals("USER", body.at("/data/role").asText());
+        assertEquals("profile.png", body.at("/data/img").asText());
     }
 
     @Test
@@ -173,7 +187,10 @@ class UserControllerTest {
                         .content("""
                                 {
                                   "email": "updated@example.com",
-                                  "name": "수정이름"
+                                  "name": "수정이름",
+                                  "birthDate": "1991-02-02",
+                                  "phone": "010-9999-8888",
+                                  "img": "updated.png"
                                 }
                                 """))
                 .andExpect(status().isOk())
@@ -183,6 +200,9 @@ class UserControllerTest {
         assertEquals(203, body.get("statusCode").asInt());
         assertEquals("updated@example.com", body.at("/data/email").asText());
         assertEquals("수정이름", body.at("/data/name").asText());
+        assertEquals("1991-02-02", body.at("/data/birthDate").asText());
+        assertEquals("010-9999-8888", body.at("/data/phone").asText());
+        assertEquals("updated.png", body.at("/data/img").asText());
     }
 
     @Test
@@ -194,7 +214,8 @@ class UserControllerTest {
                         .content("""
                                 {
                                   "email": "invalid-email",
-                                  "name": " "
+                                  "name": " ",
+                                  "phone": " "
                                 }
                                 """))
                 .andExpect(status().isBadRequest())
@@ -263,8 +284,12 @@ class UserControllerTest {
                 email,
                 password,
                 name,
+                LocalDate.of(1990, 1, 1),
+                "010-1111-2222",
+                "USER",
                 LocalDateTime.of(2026, 1, 1, 10, 0),
-                LocalDateTime.of(2026, 1, 1, 10, 0)
+                LocalDateTime.of(2026, 1, 1, 10, 0),
+                "profile.png"
         );
     }
 
@@ -293,6 +318,9 @@ class UserControllerTest {
         @Override
         public int insert(UserVO user) {
             user.setUserId(++sequence);
+            if (user.getRole() == null) {
+                user.setRole("USER");
+            }
             user.setCreatedAt(LocalDateTime.of(2026, 1, 1, 10, 0));
             user.setUpdatedAt(LocalDateTime.of(2026, 1, 1, 10, 0));
             users.put(user.getUserId(), user);
