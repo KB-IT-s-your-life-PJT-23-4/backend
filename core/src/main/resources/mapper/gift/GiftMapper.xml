@@ -122,6 +122,9 @@
         ON g.family_id = f.family_id
         AND g.gift_date &gt;= #{windowStartDate}
         AND g.gift_date &lt;= #{baseDate}
+        <if test="excludeGiftId != null">
+            AND g.gift_id != #{excludeGiftId}
+        </if>
         LEFT JOIN gift_deduction_limit l
         ON l.relation = f.relation
         AND l.is_minor = CASE
@@ -143,5 +146,15 @@
         SELECT COUNT(*)
         FROM gift
         WHERE family_id = #{familyId}
+    </select>
+
+    <select id="selectTaxBracket" resultType="com.example.project.gift.domain.TaxBracketVO">
+        SELECT bracket_id AS bracketId, tax_rate AS taxRate, progressive_deduction AS progressiveDeduction
+        FROM gift_tax_bracket
+        WHERE effective_from &lt;= #{baseDate}
+        AND (effective_to IS NULL OR effective_to &gt; #{baseDate})
+        AND lower_bound &lt; #{taxableBase}
+        AND (upper_bound IS NULL OR #{taxableBase} &lt;= upper_bound)
+        LIMIT 1
     </select>
 </mapper>

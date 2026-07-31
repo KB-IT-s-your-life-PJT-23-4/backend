@@ -5,15 +5,19 @@ import com.example.project.common.exception.ServiceException;
 import com.example.project.gift.domain.DeductionVO;
 import com.example.project.gift.domain.GiftVO;
 import com.example.project.gift.domain.Status;
+import com.example.project.gift.domain.TaxBracketVO;
 import com.example.project.gift.dto.request.GiftRequest;
 import com.example.project.gift.dto.response.DeductionResponse;
+import com.example.project.gift.dto.response.FilingInfoResponse;
 import com.example.project.gift.dto.response.GiftResponse;
 import com.example.project.gift.mapper.GiftMapper;
 import com.example.project.recipient.service.RecipientService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.temporal.TemporalAdjusters;
 import java.util.List;
 
 @Service
@@ -21,6 +25,8 @@ import java.util.List;
 public class GiftService {
 
     private static final int DEDUCTION_WINDOW_YEARS = 10;
+    private static final int FILING_DUE_MONTH = 3;
+    private static final BigDecimal FILING_CREDIT_RATE = new BigDecimal("0.03");
 
     private final GiftMapper giftMapper;
     private final RecipientService recipientService;
@@ -90,10 +96,94 @@ public class GiftService {
             recipientService.selectRecipient(familyId, userId);
         }
 
-        return giftMapper.selectDeduction(familyId, userId, windowStartDate, baseDate).stream()
+        return giftMapper.selectDeduction(familyId, userId, windowStartDate, baseDate, null).stream()
                 .map(deduction -> DeductionResponse.from(
                         deduction, windowStartDate, baseDate, nextRenewalDate(deduction)))
                 .toList();
+    }
+
+    /**
+     * 증여 1건의 신고 안내. 공제 현황과 달리 기준일이 오늘이 아니라 <b>증여일</b>이다.
+     * 신고는 그 증여가 일어난 시점의 합산 이력과 세율로 판단하기 때문이다.
+     */
+    public FilingInfoResponse getFilingInfo(Long giftId, Long userId) {
+        GiftVO gift = findOwnerGift(giftId, userId);
+
+        if (gift.getStatus() == Status.CANCELLED) {
+            throw new ServiceException(ResponseCode.CONFLICT);
+        }
+
+        LocalDate baseDate = gift.getGiftDate();
+        LocalDate windowStartDate = baseDate.minusYears(DEDUCTION_WINDOW_YEARS);
+
+        // 신고 대상 증여 자신은 기공제된 과거 증여가 아니라 이번 과세 대상이라 합산에서 뺀다.
+        DeductionVO deduction = giftMapper
+                .selectDeduction(gift.getFamilyId(), userId, windowStartDate, baseDate, giftId)
+                .stream()
+                .findFirst()
+                .orElseThrow(() -> new ServiceException(ResponseCode.BENEFICIARY_NOT_FOUND));
+
+        long giftAmount = gift.getAmount();
+        long priorGiftAmount = deduction.getUsedAmount() == null ? 0L : deduction.getUsedAmount();
+        Long deductionLimit = deduction.getDeductionLimit();
+
+        FilingInfoResponse filingInfo = new FilingInfoResponse();
+        filingInfo.setGiftId(gift.getGiftId());
+        filingInfo.setFamilyId(gift.getFamilyId());
+        filingInfo.setFamilyName(deduction.getFamilyName());
+        filingInfo.setGiftDate(baseDate);
+        filingInfo.setStatus(gift.getStatus().name());
+        filingInfo.setEstimated(gift.getStatus() == Status.PLANNED);
+        filingInfo.setGiftAmount(giftAmount);
+        filingInfo.setFilingDueDate(filingDueDate(baseDate));
+        filingInfo.setWindowStartDate(windowStartDate);
+        filingInfo.setBaseDate(baseDate);
+        filingInfo.setPriorGiftAmount(priorGiftAmount);
+        filingInfo.setDeductionLimit(deductionLimit);
+
+        // 한도 행이 없는 관계는 세액을 산출할 근거가 없어 금액 항목을 채우지 않는다.
+        if (deductionLimit == null) {
+            return filingInfo;
+        }
+
+        long appliedDeduction = Math.min(Math.max(0L, deductionLimit - priorGiftAmount), giftAmount);
+        long taxableBase = giftAmount - appliedDeduction;
+
+        BigDecimal taxRate = BigDecimal.ZERO;
+        long calculatedTax = 0L;
+
+        // 과세표준 0 은 최저구간의 lower_bound 초과 조건에 걸려 행이 안 나온다. 조회 자체를 건너뛴다.
+        if (taxableBase > 0) {
+            TaxBracketVO bracket = giftMapper.selectTaxBracket(baseDate, taxableBase);
+
+            if (bracket == null) {
+                throw new ServiceException(ResponseCode.DATABASE_ERROR);
+            }
+
+            taxRate = bracket.getTaxRate();
+            calculatedTax = Math.max(0L, taxRate.multiply(BigDecimal.valueOf(taxableBase)).longValue()
+                    - bracket.getProgressiveDeduction());
+        }
+
+        long filingCredit = FILING_CREDIT_RATE.multiply(BigDecimal.valueOf(calculatedTax)).longValue();
+
+        filingInfo.setAppliedDeduction(appliedDeduction);
+        filingInfo.setTaxableBase(taxableBase);
+        filingInfo.setTaxRate(taxRate);
+        filingInfo.setCalculatedTax(calculatedTax);
+        filingInfo.setFilingCredit(filingCredit);
+        filingInfo.setPayableTax(calculatedTax - filingCredit);
+
+        return filingInfo;
+    }
+
+    /**
+     * 신고기한 = 증여일이 속하는 달의 말일부터 3개월(상증법 제68조).
+     * 초일불산입이라 "말일 + 3개월"이 아니라 3개월 뒤 달의 말일이 된다.
+     * 예) 4/10 증여 -> 7/31 (4/30 에 3개월을 더한 7/30 이 아니다)
+     */
+    private LocalDate filingDueDate(LocalDate giftDate) {
+        return giftDate.plusMonths(FILING_DUE_MONTH).with(TemporalAdjusters.lastDayOfMonth());
     }
 
     public void deleteGift(Long giftId, Long userId) {

@@ -15,7 +15,7 @@ import javax.servlet.http.HttpServletRequest;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/fm/familygit")
+@RequestMapping("/api/fm/family")
 @Log4j2
 @RequiredArgsConstructor
 public class RecipientController {
@@ -76,5 +76,4 @@ public class RecipientController {
 
         return ApiResponse.success(ResponseCode.SUCCESS, request.getRequestURI(), data);
     }
-
 }

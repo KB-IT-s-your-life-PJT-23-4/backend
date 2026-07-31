@@ -6,6 +6,7 @@ import com.example.project.common.web.CurrentUser;
 import com.example.project.gift.domain.Status;
 import com.example.project.gift.dto.request.GiftRequest;
 import com.example.project.gift.dto.response.DeductionResponse;
+import com.example.project.gift.dto.response.FilingInfoResponse;
 import com.example.project.gift.dto.response.GiftResponse;
 import com.example.project.gift.dto.request.GiftStatusRequest;
 import com.example.project.gift.service.GiftService;
@@ -99,5 +100,12 @@ public class GiftController {
         giftService.deleteGift(giftId, CurrentUser.id(principal));
 
         return ApiResponse.success(ResponseCode.DELETED, request.getRequestURI(), null);
+    }
+
+    @GetMapping("/gift/{giftId}/filing-info")
+    public ApiResponse<FilingInfoResponse> getFilingInfo(@PathVariable Long giftId, @AuthenticationPrincipal String principal, HttpServletRequest request) {
+        FilingInfoResponse data = giftService.getFilingInfo(giftId, CurrentUser.id(principal));
+
+        return ApiResponse.success(ResponseCode.SUCCESS, request.getRequestURI(), data);
     }
 }
