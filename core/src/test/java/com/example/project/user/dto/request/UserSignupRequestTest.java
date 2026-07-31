@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import javax.validation.ConstraintViolation;
 import javax.validation.Validation;
 import javax.validation.Validator;
+import java.time.LocalDate;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -28,7 +29,10 @@ class UserSignupRequestTest {
         UserSignupRequest request = new UserSignupRequest(
                 "user@example.com",
                 "password123!",
-                "홍길동"
+                "홍길동",
+                LocalDate.of(1990, 1, 1),
+                "010-1234-5678",
+                "profile.png"
         );
 
         Set<ConstraintViolation<UserSignupRequest>> violations = validator.validate(request);
@@ -42,7 +46,10 @@ class UserSignupRequestTest {
         UserSignupRequest request = new UserSignupRequest(
                 "invalid-email",
                 "short",
-                " "
+                " ",
+                null,
+                " ",
+                null
         );
 
         Set<ConstraintViolation<UserSignupRequest>> violations = validator.validate(request);
@@ -51,7 +58,7 @@ class UserSignupRequestTest {
                 .map(violation -> violation.getPropertyPath().toString())
                 .collect(Collectors.toSet());
 
-        assertEquals(Set.of("email", "password", "name"), invalidFields);
+        assertEquals(Set.of("email", "password", "name", "phone"), invalidFields);
     }
 
     @Test
@@ -60,7 +67,10 @@ class UserSignupRequestTest {
         UserSignupRequest request = new UserSignupRequest(
                 "user@example.com",
                 "password123!",
-                " 홍 "
+                " 홍 ",
+                null,
+                "010-1234-5678",
+                null
         );
 
         Set<ConstraintViolation<UserSignupRequest>> violations = validator.validate(request);

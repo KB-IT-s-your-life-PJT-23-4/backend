@@ -77,6 +77,21 @@ class GiftDeductionApiTest {
         jdbc.update("INSERT INTO user (user_id, password, user_name, phone, email) VALUES (?,?,?,?,?)",
                 USER_ID, "x", "테스트부모", "010-9999-0001", "deduction-test@example.com");
 
+        jdbc.update("DELETE FROM gift_deduction_limit WHERE relation = ?",
+                "LINEAL_DESCENDANT");
+        jdbc.update("""
+                        INSERT INTO gift_deduction_limit
+                            (effective_from, effective_to, relation, is_minor, deduction_limit)
+                        VALUES (?, ?, ?, ?, ?)
+                        """,
+                "2000-01-01", null, "LINEAL_DESCENDANT", false, 50_000_000L);
+        jdbc.update("""
+                        INSERT INTO gift_deduction_limit
+                            (effective_from, effective_to, relation, is_minor, deduction_limit)
+                        VALUES (?, ?, ?, ?, ?)
+                        """,
+                "2000-01-01", null, "LINEAL_DESCENDANT", true, 20_000_000L);
+
         jdbc.update("INSERT INTO family (family_id, user_id, family_name, relation, birth_date) VALUES (?,?,?,?,?)",
                 ADULT_FAMILY_ID, USER_ID, "성년자녀", "LINEAL_DESCENDANT", "1998-03-02");
         jdbc.update("INSERT INTO family (family_id, user_id, family_name, relation, birth_date) VALUES (?,?,?,?,?)",

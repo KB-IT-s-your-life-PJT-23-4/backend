@@ -34,8 +34,12 @@ public class UserService {
                 normalizedEmail,
                 passwordEncoder.encode(signupRequest.password()),
                 signupRequest.name().trim(),
+                signupRequest.birthDate(),
+                signupRequest.phone().trim(),
                 null,
-                null
+                null,
+                null,
+                normalizeNullable(signupRequest.img())
         );
 
         try {
@@ -74,6 +78,9 @@ public class UserService {
 
         existingUser.setEmail(normalizedEmail);
         existingUser.setUserName(updateRequest.name().trim());
+        existingUser.setBirthDate(updateRequest.birthDate());
+        existingUser.setPhone(updateRequest.phone().trim());
+        existingUser.setImg(normalizeNullable(updateRequest.img()));
 
         try {
             if (userMapper.update(existingUser) != 1) {
@@ -110,5 +117,13 @@ public class UserService {
 
     private String normalizeEmail(String email) {
         return email.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private String normalizeNullable(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+
+        return value.trim();
     }
 }
