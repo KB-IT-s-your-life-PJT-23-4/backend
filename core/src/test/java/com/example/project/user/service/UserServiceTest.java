@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -41,7 +42,10 @@ class UserServiceTest {
         UserSignupRequest request = new UserSignupRequest(
                 " User@Example.com ",
                 "password123!",
-                " 홍길동 "
+                " 홍길동 ",
+                LocalDate.of(1990, 1, 1),
+                " 010-1234-5678 ",
+                " profile.png "
         );
 
         UserDTO result = userService.signup(request);
@@ -49,6 +53,9 @@ class UserServiceTest {
         assertEquals(1L, result.userId());
         assertEquals("user@example.com", result.email());
         assertEquals("홍길동", result.name());
+        assertEquals(LocalDate.of(1990, 1, 1), result.birthDate());
+        assertEquals("010-1234-5678", result.phone());
+        assertEquals("profile.png", result.img());
         assertNotEquals(request.password(), userMapper.savedUser.getPassword());
         assertTrue(passwordEncoder.matches(request.password(), userMapper.savedUser.getPassword()));
     }
@@ -60,7 +67,10 @@ class UserServiceTest {
         UserSignupRequest request = new UserSignupRequest(
                 "USER@example.com",
                 "password123!",
-                "홍길동"
+                "홍길동",
+                LocalDate.of(1990, 1, 1),
+                "010-1234-5678",
+                null
         );
 
         ServiceException exception = assertThrows(
@@ -92,6 +102,8 @@ class UserServiceTest {
         assertEquals(1L, result.userId());
         assertEquals("user@example.com", result.email());
         assertEquals("홍길동", result.name());
+        assertEquals("010-1111-2222", result.phone());
+        assertEquals("USER", result.role());
     }
 
     @Test
@@ -111,13 +123,19 @@ class UserServiceTest {
         userMapper.savedUser = createUser("user@example.com");
         UserUpdateRequest request = new UserUpdateRequest(
                 " New@Example.com ",
-                "김길동"
+                "김길동",
+                LocalDate.of(1991, 2, 2),
+                " 010-9999-8888 ",
+                " updated.png "
         );
 
         UserDTO result = userService.updateProfile(1L, request);
 
         assertEquals("new@example.com", result.email());
         assertEquals("김길동", result.name());
+        assertEquals(LocalDate.of(1991, 2, 2), result.birthDate());
+        assertEquals("010-9999-8888", result.phone());
+        assertEquals("updated.png", result.img());
         assertEquals(1, userMapper.updateCount);
     }
 
@@ -135,7 +153,10 @@ class UserServiceTest {
         );
         UserUpdateRequest request = new UserUpdateRequest(
                 "DUPLICATE@example.com",
-                "홍길동"
+                "홍길동",
+                LocalDate.of(1990, 1, 1),
+                "010-1234-5678",
+                null
         );
 
         ServiceException exception = assertThrows(
@@ -191,8 +212,12 @@ class UserServiceTest {
                 email,
                 passwordEncoder.encode("password123!"),
                 "홍길동",
+                LocalDate.of(1990, 1, 1),
+                "010-1111-2222",
+                "USER",
                 LocalDateTime.now(),
-                LocalDateTime.now()
+                LocalDateTime.now(),
+                "profile.png"
         );
     }
 
@@ -230,6 +255,9 @@ class UserServiceTest {
         public int insert(UserVO user) {
             insertCount++;
             user.setUserId(1L);
+            if (user.getRole() == null) {
+                user.setRole("USER");
+            }
             user.setCreatedAt(LocalDateTime.now());
             user.setUpdatedAt(LocalDateTime.now());
             savedUser = user;

@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import javax.validation.ConstraintViolation;
 import javax.validation.Validation;
 import javax.validation.Validator;
+import java.time.LocalDate;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -27,7 +28,10 @@ class UserUpdateRequestTest {
     void validRequest() {
         UserUpdateRequest request = new UserUpdateRequest(
                 "user@example.com",
-                "홍길동"
+                "홍길동",
+                LocalDate.of(1990, 1, 1),
+                "010-1234-5678",
+                "profile.png"
         );
 
         Set<ConstraintViolation<UserUpdateRequest>> violations = validator.validate(request);
@@ -40,7 +44,10 @@ class UserUpdateRequestTest {
     void invalidRequest() {
         UserUpdateRequest request = new UserUpdateRequest(
                 "invalid-email",
-                " "
+                " ",
+                null,
+                " ",
+                null
         );
 
         Set<ConstraintViolation<UserUpdateRequest>> violations = validator.validate(request);
@@ -49,6 +56,6 @@ class UserUpdateRequestTest {
                 .map(violation -> violation.getPropertyPath().toString())
                 .collect(Collectors.toSet());
 
-        assertEquals(Set.of("email", "name"), invalidFields);
+        assertEquals(Set.of("email", "name", "phone"), invalidFields);
     }
 }
