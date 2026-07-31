@@ -1,9 +1,20 @@
 package com.example.project.auth.dto.request;
 
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import lombok.RequiredArgsConstructor;
+
 import javax.validation.constraints.NotBlank;
 
-public record TokenRefreshRequest(
-        @NotBlank(message = "Refresh Token은 필수입니다")
-        String refreshToken
-) {
+@Data
+@RequiredArgsConstructor
+@NoArgsConstructor(force = true)
+public final class TokenRefreshRequest {
+
+    @NotBlank(message = "Refresh Token은 필수입니다")
+    private final String refreshToken;
+
+    public String refreshToken() {
+        return refreshToken;
+    }
 }
