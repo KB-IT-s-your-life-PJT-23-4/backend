@@ -3,6 +3,8 @@ package com.example.project.common.exception;
 
 import com.example.project.common.api.ApiResponse;
 import com.example.project.common.api.ResponseCode;
+import com.example.project.simulation.exception.SimulationError;
+import com.example.project.simulation.exception.SimulationException;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -21,6 +23,24 @@ import javax.validation.ConstraintViolationException;
 @ControllerAdvice
 @Log4j2
 public class CommonExceptionAdvice {
+    @ExceptionHandler(SimulationException.class)
+    public ResponseEntity<ApiResponse<Void>> handleSimulationException(
+            SimulationException exception,
+            HttpServletRequest request
+    ) {
+        SimulationError error = exception.getError();
+        log.warn("Simulation request failed. path={}, error={}", request.getRequestURI(), error.getCode());
+
+        return ResponseEntity
+                .status(error.getHttpStatus())
+                .body(ApiResponse.error(
+                        error.getHttpStatus().value(),
+                        request.getRequestURI(),
+                        error.getMessage(),
+                        error.getCode()
+                ));
+    }
+
     @ExceptionHandler(Exception.class)
     public String handleException(Exception exception, Model model) {
         log.error("Unhandled exception", exception);
@@ -58,6 +78,20 @@ public class CommonExceptionAdvice {
             HttpServletRequest request
     ) {
         log.warn("Validation failed for {}", request.getRequestURI());
+
+        if (request.getRequestURI().startsWith("/api/gs")) {
+            SimulationError error = "PUT".equalsIgnoreCase(request.getMethod())
+                    ? SimulationError.INVALID_SAVE_REQUEST
+                    : SimulationError.INVALID_REQUEST;
+            return ResponseEntity
+                    .status(error.getHttpStatus())
+                    .body(ApiResponse.error(
+                            error.getHttpStatus().value(),
+                            request.getRequestURI(),
+                            error.getMessage(),
+                            error.getCode()
+                    ));
+        }
 
         return ResponseEntity
                 .badRequest()

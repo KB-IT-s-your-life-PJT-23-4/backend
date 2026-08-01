@@ -32,11 +32,44 @@ public class ApiResponse<T> {
         }
     }
 
+    private ApiResponse(
+            int statusCode,
+            String path,
+            T data,
+            String message,
+            String error
+    ) {
+        this.statusCode = statusCode;
+        this.timestamp = LocalDateTime.now();
+        this.path = path;
+        this.data = data;
+        this.message = message;
+        this.error = error;
+    }
+
     public static <T> ApiResponse<T> success(ResponseCode responseCode, String path, T data) {
         return new ApiResponse<>(responseCode, path, data, true);
     }
 
     public static ApiResponse<Void> error(ResponseCode responseCode, String path) {
         return new ApiResponse<>(responseCode, path, null, false);
+    }
+
+    public static <T> ApiResponse<T> success(
+            int statusCode,
+            String path,
+            T data,
+            String message
+    ) {
+        return new ApiResponse<>(statusCode, path, data, message, null);
+    }
+
+    public static ApiResponse<Void> error(
+            int statusCode,
+            String path,
+            String message,
+            String error
+    ) {
+        return new ApiResponse<>(statusCode, path, null, message, error);
     }
 }
