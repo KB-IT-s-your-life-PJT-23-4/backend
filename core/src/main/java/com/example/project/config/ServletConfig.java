@@ -1,5 +1,6 @@
 package com.example.project.config;
 
+import com.example.project.common.logging.RequestLoggingAspect;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
@@ -43,5 +44,10 @@ public class ServletConfig implements WebMvcConfigurer {
     @Bean
     public static MethodValidationPostProcessor methodValidationPostProcessor() {
         return new MethodValidationPostProcessor();
+    }
+
+    @Bean
+    public RequestLoggingAspect requestLoggingAspect() {
+        return new RequestLoggingAspect();
     }
 }

@@ -7,6 +7,7 @@ import com.example.project.auth.dto.response.AuthTokenResponse;
 import com.example.project.auth.service.AuthService;
 import com.example.project.common.api.ApiResponse;
 import com.example.project.common.api.ResponseCode;
+import com.example.project.common.logging.ApiLog;
 import com.example.project.security.JwtUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -18,6 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 import javax.servlet.http.HttpServletRequest;
 import javax.validation.Valid;
 
+@ApiLog
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
