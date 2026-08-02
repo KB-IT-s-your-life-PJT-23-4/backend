@@ -8,6 +8,9 @@ import com.example.project.auth.service.AuthService;
 import com.example.project.common.api.ApiResponse;
 import com.example.project.common.api.ResponseCode;
 import com.example.project.security.JwtUtil;
+import io.swagger.annotations.Api;
+import io.swagger.annotations.ApiOperation;
+import io.swagger.annotations.ApiResponses;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -18,6 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
 import javax.servlet.http.HttpServletRequest;
 import javax.validation.Valid;
 
+@Api(tags = "인증 API")
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
@@ -25,6 +29,31 @@ public class AuthController {
 
     private final AuthService authService;
 
+    @ApiOperation(
+            value = "로그인",
+            notes = "이메일과 비밀번호를 검증하고 Access Token과 Refresh Token을 발급합니다."
+    )
+    @ApiResponses({
+            @io.swagger.annotations.ApiResponse(
+                    code = 200,
+                    message = "로그인 성공"
+            ),
+            @io.swagger.annotations.ApiResponse(
+                    code = 400,
+                    message = "요청값 검증 실패",
+                    response = ApiResponse.class
+            ),
+            @io.swagger.annotations.ApiResponse(
+                    code = 401,
+                    message = "이메일 또는 비밀번호 불일치",
+                    response = ApiResponse.class
+            ),
+            @io.swagger.annotations.ApiResponse(
+                    code = 500,
+                    message = "서버 내부 오류",
+                    response = ApiResponse.class
+            )
+    })
     @PostMapping("/login")
     public ApiResponse<AuthTokenResponse> login(
             @Valid @RequestBody LoginRequest request,
