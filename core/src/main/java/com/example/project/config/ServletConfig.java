@@ -1,9 +1,6 @@
 package com.example.project.config;
 
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.ComponentScan;
-import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.FilterType;
+import org.springframework.context.annotation.*;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.multipart.MultipartResolver;
@@ -17,6 +14,7 @@ import org.springframework.web.servlet.view.JstlView;
 
 @Configuration
 @EnableWebMvc
+@Import(SwaggerConfig.class)
 @ComponentScan(
         basePackages = "com.example.project",
         useDefaultFilters = false,
@@ -33,6 +31,12 @@ public class ServletConfig implements WebMvcConfigurer {
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
         registry.addResourceHandler("/resources/**").addResourceLocations("/resources/");
+
+        registry.addResourceHandler("/swagger-ui.html")
+                .addResourceLocations("classpath:/META-INF/resources/");
+
+        registry.addResourceHandler("/webjars/**")
+                .addResourceLocations("classpath:/META-INF/resources/webjars/");
     }
 
     @Bean
@@ -44,4 +48,5 @@ public class ServletConfig implements WebMvcConfigurer {
     public static MethodValidationPostProcessor methodValidationPostProcessor() {
         return new MethodValidationPostProcessor();
     }
+
 }
