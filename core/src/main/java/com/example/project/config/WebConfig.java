@@ -1,5 +1,6 @@
 package com.example.project.config;
 
+import com.example.project.consultation.config.RestTemplateConfig;
 import com.example.project.security.SecurityConfig;
 import org.springframework.web.filter.CharacterEncodingFilter;
 import org.springframework.web.servlet.support.AbstractAnnotationConfigDispatcherServletInitializer;
@@ -16,7 +17,7 @@ public class WebConfig extends AbstractAnnotationConfigDispatcherServletInitiali
 
     @Override
     protected Class<?>[] getRootConfigClasses() {
-        return new Class<?>[]{RootConfig.class, SecurityConfig.class};
+        return new Class<?>[]{RootConfig.class, SecurityConfig.class, RestTemplateConfig.class};
     }
 
     @Override
