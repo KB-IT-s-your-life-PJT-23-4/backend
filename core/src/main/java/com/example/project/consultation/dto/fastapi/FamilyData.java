@@ -23,7 +23,7 @@ public class FamilyData {
     private final Boolean hasPreviousGifts;
     private final Long previousGiftAmount;
     private final LocalDate previousGiftDate;
-    private final Boolean previousGftSameDonor;
+    private final Boolean previousGiftSameDonor;
     private final Long previouslyUsedDeduction;
     private final LocalDate deductionRenewalDate;
 }
