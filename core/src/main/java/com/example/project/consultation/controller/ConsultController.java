@@ -2,11 +2,16 @@ package com.example.project.consultation.controller;
 
 import com.example.project.common.api.ApiResponse;
 import com.example.project.common.api.ResponseCode;
+import com.example.project.common.logging.ApiLog;
+import com.example.project.common.web.CurrentUser;
 import com.example.project.consultation.dto.request.ConsultClarificationRequest;
 import com.example.project.consultation.dto.request.ConsultRequest;
 import com.example.project.consultation.dto.response.ConsultResponse;
 import com.example.project.consultation.service.ConsultService;
+import io.swagger.annotations.Api;
+import io.swagger.annotations.ApiOperation;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -14,6 +19,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 import javax.servlet.http.HttpServletRequest;
 
+@Api(tags = "AI 상담 API")
+@ApiLog
 @RestController
 @RequestMapping("/api/ai")
 @RequiredArgsConstructor
@@ -21,24 +28,33 @@ public class ConsultController {
 
     private final ConsultService consultService;
 
+    @ApiOperation(
+            value = "첫 질문 시작",
+            notes = "사용자의 첫 질문을 받아 FastAPI 서버에 질문을 전송한다."
+    )
     @PostMapping("/consult")
     public ApiResponse<ConsultResponse> consult(
             @RequestBody ConsultRequest request,
-            HttpServletRequest httpRequest
-            // TODO 인증 사용자 정보 주입 방식 확정 후 userId 파라미터 교체
+            HttpServletRequest httpRequest,
+            @AuthenticationPrincipal String principal
+
     ) {
-        Long userId = null; // TODO 인증 확정 후 실제 값으로 교체
+        Long userId = CurrentUser.id(principal);
         ConsultResponse data = consultService.consult(request.question(), userId);
         return ApiResponse.success(ResponseCode.AI_RESPONSE_SUCCESS, httpRequest.getRequestURI(), data);
     }
 
+    @ApiOperation(
+            value = "추가 질문",
+            notes = "추가 질문 내용을 답변하여 FastAPI 서버에 전달"
+    )
     @PostMapping("/consult/clarification")
     public ApiResponse<ConsultResponse> answerClarification(
             @RequestBody ConsultClarificationRequest request,
-            HttpServletRequest httpRequest
-            // TODO 인증 사용자 정보 주입 방식 확정 후 userId 파라미터 교체
+            HttpServletRequest httpRequest,
+            @AuthenticationPrincipal String principal
     ) {
-        Long userId = null; // TODO 인증 확정 후 실제 값으로 교체
+        Long userId = CurrentUser.id(principal);
         ConsultResponse data = consultService.answerClarification(request, userId);
         return ApiResponse.success(ResponseCode.AI_RESPONSE_SUCCESS, httpRequest.getRequestURI(), data);
     }
