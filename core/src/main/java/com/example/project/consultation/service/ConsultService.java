@@ -27,6 +27,10 @@ public class ConsultService {
     private static final int MINOR_AGE_STANDARD = 19;
     private static final String PARENT_TO_MINOR_CHILD = "parent_to_minor_child";
     private static final String PARENT_TO_ADULT_CHILD = "parent_to_adult_child";
+    private static final Map<String, Object> INITIAL_FACTS = Map.of(
+            "residency", "국내 거주자",
+            "use_latest_tax_rate", true
+    );
 
     private final FastApiClient fastApiClient;
     private final ConsultationMapper consultationMapper;
@@ -38,9 +42,9 @@ public class ConsultService {
         ChatRequest request = new ChatRequest(
                 null, // 최초 요청은 conversation_id가 null
                 question,
-                fetchFamilies(userId),      // TODO family 도메인 연동 필요, 현재 빈 리스트
+                fetchFamilies(userId),
                 fetchProduct(userId),       // TODO product 도메인 연동 필요, 현재 null
-                Map.of()                    // TODO 초기 facts 정책 확정 필요, 현재 빈 맵
+                INITIAL_FACTS               // 초기 facts
         );
 
         ChatResponse response = fastApiClient.startChat(request);
@@ -60,7 +64,7 @@ public class ConsultService {
                 req.requiresCalculation(),
                 req.facts(),
                 req.answers(),
-                fetchFamilies(userId),      // TODO family 도메인 연동 필요
+                fetchFamilies(userId),
                 fetchProduct(userId)        // TODO product 도메인 연동 필요
         );
 
