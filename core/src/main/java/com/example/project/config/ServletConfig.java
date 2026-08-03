@@ -1,5 +1,6 @@
 package com.example.project.config;
 
+import com.example.project.common.logging.RequestLoggingAspect;
 import org.springframework.context.annotation.*;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.ControllerAdvice;
@@ -15,6 +16,7 @@ import org.springframework.web.servlet.view.JstlView;
 @Configuration
 @EnableWebMvc
 @Import(SwaggerConfig.class)
+@EnableAspectJAutoProxy
 @ComponentScan(
         basePackages = "com.example.project",
         useDefaultFilters = false,
@@ -49,4 +51,8 @@ public class ServletConfig implements WebMvcConfigurer {
         return new MethodValidationPostProcessor();
     }
 
+    @Bean
+    public RequestLoggingAspect requestLoggingAspect() {
+        return new RequestLoggingAspect();
+    }
 }

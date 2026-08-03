@@ -7,6 +7,7 @@ import com.example.project.auth.dto.response.AuthTokenResponse;
 import com.example.project.auth.service.AuthService;
 import com.example.project.common.api.ApiResponse;
 import com.example.project.common.api.ResponseCode;
+import com.example.project.common.logging.ApiLog;
 import com.example.project.security.JwtUtil;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
@@ -22,6 +23,7 @@ import javax.servlet.http.HttpServletRequest;
 import javax.validation.Valid;
 
 @Api(tags = "인증 API")
+@ApiLog
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
