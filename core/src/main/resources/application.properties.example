@@ -1,6 +1,7 @@
 # Copy this file to application.properties and adjust it locally.
 application.name=project-core
 upload.location=${java.io.tmpdir}
+fastapi.base-url=http://localhost:8000
 
 jwt.secret=${JWT_SECRET}
 jwt.expiration=${JWT_ACCESS_EXPIRATION:3600000}

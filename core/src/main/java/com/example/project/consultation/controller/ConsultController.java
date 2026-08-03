@@ -6,6 +6,7 @@ import com.example.project.consultation.dto.request.ConsultClarificationRequest;
 import com.example.project.consultation.dto.request.ConsultRequest;
 import com.example.project.consultation.dto.response.ConsultResponse;
 import com.example.project.consultation.service.ConsultService;
+import com.example.project.security.JwtProvider;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -20,6 +21,7 @@ import javax.servlet.http.HttpServletRequest;
 public class ConsultController {
 
     private final ConsultService consultService;
+    private final JwtProvider jwtProvider;
 
     @PostMapping("/consult")
     public ApiResponse<ConsultResponse> consult(
