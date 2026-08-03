@@ -88,7 +88,6 @@ public class ConsultService {
         }
     }
 
-    // TODO family 도메인 완성 후 실제 조회 로직으로 교체
     private List<FamilyData> fetchFamilies(Long userId) {
         if(userId == null){
             throw new ServiceException(ResponseCode.UNAUTHORIZED);

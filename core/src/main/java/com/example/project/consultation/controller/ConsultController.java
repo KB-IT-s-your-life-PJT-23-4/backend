@@ -8,7 +8,6 @@ import com.example.project.consultation.dto.request.ConsultClarificationRequest;
 import com.example.project.consultation.dto.request.ConsultRequest;
 import com.example.project.consultation.dto.response.ConsultResponse;
 import com.example.project.consultation.service.ConsultService;
-import com.example.project.security.JwtProvider;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import lombok.RequiredArgsConstructor;
@@ -45,6 +44,10 @@ public class ConsultController {
         return ApiResponse.success(ResponseCode.AI_RESPONSE_SUCCESS, httpRequest.getRequestURI(), data);
     }
 
+    @ApiOperation(
+            value = "추가 질문",
+            notes = "추가 질문 내용을 답변하여 FastAPI 서버에 전달"
+    )
     @PostMapping("/consult/clarification")
     public ApiResponse<ConsultResponse> answerClarification(
             @RequestBody ConsultClarificationRequest request,
