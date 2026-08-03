@@ -1,4 +1,7 @@
 package com.example.project.consultation.dto.fastapi;
 
-public class ChatStatus {
+public enum ChatStatus {
+    COMPLETED,
+    CLARIFICATION_REQUIRED,
+    REJECTED
 }

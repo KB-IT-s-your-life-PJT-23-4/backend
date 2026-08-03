@@ -1,4 +1,18 @@
 package com.example.project.consultation.dto.fastapi;
 
-public class ClarificationDataType {
+import com.fasterxml.jackson.annotation.JsonProperty;
+
+public enum ClarificationDataType {
+
+    @JsonProperty("string")
+    STRING,
+
+    @JsonProperty("integer")
+    INTEGER,
+
+    @JsonProperty("boolean")
+    BOOLEAN,
+
+    @JsonProperty("date")
+    DATE
 }
