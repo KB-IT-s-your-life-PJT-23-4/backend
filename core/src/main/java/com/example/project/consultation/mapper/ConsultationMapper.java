@@ -10,8 +10,12 @@ import java.util.List;
 @Mapper
 public interface ConsultationMapper {
 
-    List<FamilyPreviousGiftVO> selectFamilyPreviousGifts(
+    List<FamilyPreviousGiftVO> selectAllByUserId(
             @Param("userId") Long userId
     );
 
+    FamilyPreviousGiftVO selectByFamilyId(
+            @Param("familyId") Long familyId,
+            @Param("userId") Long userId
+    );
 }

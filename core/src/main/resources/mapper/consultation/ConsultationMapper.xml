@@ -27,4 +27,49 @@
 
         <result property="deductionRenewalDate" column="deduction_renewal_date" javaType="java.time.LocalDate"/>
     </resultMap>
+
+    <!--
+        인증된 사용자가 등록한 모든 가족의 과거 증여 정보를 조회한다.
+        가족별로 한 행씩 반환한다.
+    -->
+    <select id="selectAllByUserId"
+            parameterType="long"
+            resultMap="familyPreviousGiftResultMap">
+
+        SELECT
+            user_id,
+            family_id,
+            name,
+            recipient_age,
+            has_previous_gifts,
+            previous_gift_amount,
+            previous_gift_date,
+            deduction_renewal_date
+        FROM vw_family_previous_gift
+        WHERE user_id = #{userId}
+        ORDER BY family_id
+
+    </select>
+
+    <!--
+        특정 가족 한 명의 과거 증여 정보를 조회한다.
+        family_id와 user_id를 함께 검사하여 다른 사용자의 가족정보 접근을 방지한다.
+    -->
+    <select id="selectByFamilyId"
+            resultMap="familyPreviousGiftResultMap">
+
+        SELECT
+            user_id,
+            family_id,
+            name,
+            recipient_age,
+            has_previous_gifts,
+            previous_gift_amount,
+            previous_gift_date,
+            deduction_renewal_date
+        FROM vw_family_previous_gift
+        WHERE family_id = #{familyId}
+        AND user_id = #{userId}
+
+    </select>
 </mapper>
