@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.example.project.consultation.mapper.ConsultationMapper">
+    <!--
+        vw_family_previous_gift 조회 결과 매핑
+
+        user_id는 인증된 사용자의 데이터만 조회하기 위한 내부 필드이며,
+        외부 API 요청 데이터에는 포함하지 않는다.
+    -->
+    <resultMap id="familyPreviousGiftResultMap" type="com.example.project.consultation.domain.FamilyPreviousGiftVO">
+        <id property="familyId" column="family_id"/>
+        <result property="userId" column="user_id"/>
+
+        <result property="name" column="name"/>
+
+        <result property="recipientAge" column="recipient_age"/>
+
+        <result property="hasPreviousGifts" column="has_previous_gifts" javaType="boolean"/>
+
+        <result property="previousGiftAmount" column="previous_gift_amount"/>
+
+        <result property="previousGiftDate" column="previous_gift_date" javaType="java.time.LocalDate"/>
+
+        <result property="deductionRenewalDate" column="deduction_renewal_date" javaType="java.time.LocalDate"/>
+    </resultMap>
+
+    <!--
+        인증된 사용자가 등록한 모든 가족의 과거 증여 정보를 조회한다.
+        가족별로 한 행씩 반환한다.
+    -->
+    <select id="selectAllByUserId"
+            parameterType="long"
+            resultMap="familyPreviousGiftResultMap">
+
+        SELECT
+            user_id,
+            family_id,
+            name,
+            recipient_age,
+            has_previous_gifts,
+            previous_gift_amount,
+            previous_gift_date,
+            deduction_renewal_date
+        FROM vw_family_previous_gift
+        WHERE user_id = #{userId}
+        ORDER BY family_id
+
+    </select>
+
+    <!--
+        특정 가족 한 명의 과거 증여 정보를 조회한다.
+        family_id와 user_id를 함께 검사하여 다른 사용자의 가족정보 접근을 방지한다.
+    -->
+    <select id="selectByFamilyId"
+            resultMap="familyPreviousGiftResultMap">
+
+        SELECT
+            user_id,
+            family_id,
+            name,
+            recipient_age,
+            has_previous_gifts,
+            previous_gift_amount,
+            previous_gift_date,
+            deduction_renewal_date
+        FROM vw_family_previous_gift
+        WHERE family_id = #{familyId}
+        AND user_id = #{userId}
+
+    </select>
+</mapper>
