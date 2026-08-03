@@ -1,6 +1,7 @@
 package com.example.project.consultation.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -17,14 +18,16 @@ public class RestTemplateConfig {
     public ObjectMapper fastApiObjectMapper() {
         ObjectMapper mapper = new ObjectMapper();
         mapper.registerModule(new JavaTimeModule()); // LocalDate <-> "YYYY-MM-DD"
+        mapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+
         return mapper;
     }
 
     @Bean
     public RestTemplate fastApiRestTemplate(ObjectMapper fastApiObjectMapper) {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
-        factory.setConnectTimeout(3000);
-        factory.setReadTimeout(15000);
+        factory.setConnectTimeout(5000);
+        factory.setReadTimeout(25000);
 
         RestTemplate restTemplate = new RestTemplate(factory);
 
