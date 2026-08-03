@@ -1,43 +1,25 @@
 package com.example.project.consultation.dto.response;
 
 import com.example.project.consultation.domain.Faq;
-import lombok.Data;
+import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 
-@Data
+@Getter
 @RequiredArgsConstructor
-public final class FaqAnswerResponse {
+public class FaqItemResponse {
 
     private final Long faqId;
     private final String question;
+    private final String prompt;
     private final String answer;
     private final boolean showBranchButton;
     private final boolean showTaxOfficeButton;
 
-    public Long faqId() {
-        return faqId;
-    }
-
-    public String question() {
-        return question;
-    }
-
-    public String answer() {
-        return answer;
-    }
-
-    public boolean showBranchButton() {
-        return showBranchButton;
-    }
-
-    public boolean showTaxOfficeButton() {
-        return showTaxOfficeButton;
-    }
-
-    public static FaqAnswerResponse from(Faq faq) {
-        return new FaqAnswerResponse(
+    public static FaqItemResponse from(Faq faq) {
+        return new FaqItemResponse(
                 faq.getId(),
                 faq.getQuestion(),
+                faq.getPrompt(),
                 faq.getAnswer(),
                 faq.isShowBranchButton(),
                 faq.isShowTaxOfficeButton()
