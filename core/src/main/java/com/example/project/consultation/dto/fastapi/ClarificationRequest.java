@@ -15,5 +15,5 @@ public record ClarificationRequest(
         Map<String, Object> facts,
         Map<String, Object> answers,
         List<FamilyData> families,
-        Object product
+        ProductData product
 ) {}

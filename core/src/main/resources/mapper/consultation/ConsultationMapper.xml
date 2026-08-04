@@ -72,4 +72,38 @@
         AND user_id = #{userId}
 
     </select>
+
+    <!-- 특정 상품의 이름, 최단 기간 기본금리, 우대조건(여러 개면 콤마로 연결)을 조회한다 -->
+    <select id="selectProductById" parameterType="long" resultType="com.example.project.consultation.domain.ProductVO">
+        SELECT
+            p.product_id AS productId,
+            pv.product_name AS productName,
+            p.product_type AS productType,
+            bir.base_rate_percent AS baseRatePercent,
+            pref.preferential_condition AS preferentialCondition
+        FROM kb_product p
+        JOIN kb_product_version pv
+            ON pv.product_id = p.product_id
+            AND pv.sales_status = 'ON_SALE'
+        LEFT JOIN (
+            SELECT
+                kb_product_version_id,
+                base_rate_percent,
+                ROW_NUMBER() OVER (
+                    PARTITION BY kb_product_version_id
+                    ORDER BY min_month ASC
+                ) AS rn
+        FROM base_interest_rate
+        ) bir ON bir.kb_product_version_id = pv.kb_product_version_id AND bir.rn = 1
+        LEFT JOIN (
+            SELECT
+                kb_product_version_id,
+                GROUP_CONCAT(preferential_condition SEPARATOR ', ') AS preferential_condition
+            FROM preferential_interest_rate
+            GROUP BY kb_product_version_id
+        ) pref ON pref.kb_product_version_id = pv.kb_product_version_id
+        WHERE p.product_id = #{productId}
+        ORDER BY pv.kb_product_version_id DESC
+        LIMIT 1
+    </select>
 </mapper>

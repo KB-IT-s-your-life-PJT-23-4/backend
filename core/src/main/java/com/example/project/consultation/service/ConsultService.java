@@ -4,14 +4,13 @@ import com.example.project.common.api.ResponseCode;
 import com.example.project.common.exception.ServiceException;
 import com.example.project.consultation.client.FastApiClient;
 import com.example.project.consultation.domain.FamilyPreviousGiftVO;
-import com.example.project.consultation.dto.fastapi.ChatRequest;
-import com.example.project.consultation.dto.fastapi.ChatResponse;
-import com.example.project.consultation.dto.fastapi.ClarificationRequest;
-import com.example.project.consultation.dto.fastapi.FamilyData;
+import com.example.project.consultation.domain.ProductVO;
+import com.example.project.consultation.dto.fastapi.*;
 import com.example.project.consultation.dto.request.ConsultClarificationRequest;
 import com.example.project.consultation.dto.response.ConsultResponse;
 import com.example.project.consultation.mapper.ConsultationMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
@@ -19,7 +18,7 @@ import reactor.core.scheduler.Schedulers;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
-
+@Log4j2
 @Service
 @RequiredArgsConstructor
 public class ConsultService {
@@ -39,14 +38,14 @@ public class ConsultService {
 
     // 최초 질문
     //public ConsultResponse consult(String question, Long userId) { // 동기 처리
-    public Mono<ConsultResponse> consult(String question, Long userId) {
+    public Mono<ConsultResponse> consult(String question, Long userId, Long productId) {
         validateQuestion(question);
         /* 동기처리
         ChatRequest request = new ChatRequest(
                 null, // 최초 요청은 conversation_id가 null
                 question,
                 fetchFamilies(userId),
-                fetchProduct(userId),       // TODO product 도메인 연동 필요, 현재 null
+                fetchProduct(userId),
                 INITIAL_FACTS               // 초기 facts
         );
 
@@ -58,7 +57,7 @@ public class ConsultService {
                             null, // 최초 요청은 conversation_id가 null
                             question,
                             families,
-                            fetchProduct(userId), // TODO product 도메인 연동 필요, 현재 null
+                            fetchProduct(productId),
                             INITIAL_FACTS
                     );
                     return fastApiClient.startChat(request);
@@ -68,7 +67,7 @@ public class ConsultService {
 
     // 추가 답변 제출
     //public ConsultResponse answerClarification(ConsultClarificationRequest req, Long userId) { // 동가 처리
-    public Mono<ConsultResponse> answerClarification(ConsultClarificationRequest req, Long userId) {
+    public Mono<ConsultResponse> answerClarification(ConsultClarificationRequest req, Long userId, long productId) {
         if (req.answers() == null || req.answers().isEmpty()) {
             throw new ServiceException(ResponseCode.BAD_REQUEST);
         }
@@ -81,7 +80,7 @@ public class ConsultService {
                 req.facts(),
                 req.answers(),
                 fetchFamilies(userId),
-                fetchProduct(userId)        // TODO product 도메인 연동 필요
+                fetchProduct(userId)
         );
 
         ChatResponse response = fastApiClient.submitClarification(request);
@@ -96,7 +95,7 @@ public class ConsultService {
                             req.facts(),
                             req.answers(),
                             families,
-                            fetchProduct(userId) // TODO product 도메인 연동 필요
+                            fetchProduct(productId)
                     );
                     return fastApiClient.submitClarification(request);
                 })
@@ -104,6 +103,7 @@ public class ConsultService {
     }
 
     private void validateQuestion(String question) {
+        log.info("검증할 질문: [{}], 길이: {}", question, question == null ? -1 : question.length()); // 확인용
         if (question == null || question.isBlank()) {
             throw new ServiceException(ResponseCode.BAD_REQUEST);
         }
@@ -193,8 +193,22 @@ public class ConsultService {
 
         return previousGiftAmount;
     }
-    // TODO product 도메인 완성 후 실제 조회 로직으로 교체
-    private Object fetchProduct(Long userId) {
-        return null;
+
+    private ProductData fetchProduct(Long productId) {
+        if (productId == null) {
+            return null;
+        }
+
+        ProductVO product = consultationMapper.selectProductById(productId);
+
+        if (product == null) {
+            throw new ServiceException(ResponseCode.PRODUCT_NOT_FOUND);
+        }
+
+        return ProductData.builder()
+                .productName(product.getProductName())
+                .interestRate(product.getBaseRatePercent())
+                .preferentialCondition(product.getPreferentialCondition())
+                .build();
     }
 }

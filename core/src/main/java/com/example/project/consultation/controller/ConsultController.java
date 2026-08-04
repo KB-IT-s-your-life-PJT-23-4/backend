@@ -44,7 +44,7 @@ public class ConsultController {
         DeferredResult<ApiResponse<ConsultResponse>> deferredResult = new DeferredResult<>(TIMEOUT_MS);
         Long userId = CurrentUser.id(principal);
 
-        consultService.consult(request.question(), userId)
+        consultService.consult(request.question(), userId, request.productId())
                 .subscribe(
                         data -> deferredResult.setResult(
                                 ApiResponse.success(ResponseCode.AI_RESPONSE_SUCCESS, httpRequest.getRequestURI(), data)
@@ -68,7 +68,7 @@ public class ConsultController {
         DeferredResult<ApiResponse<ConsultResponse>> deferredResult = new DeferredResult<>(TIMEOUT_MS);
         Long userId = CurrentUser.id(principal);
 
-        consultService.answerClarification(request, userId)
+        consultService.answerClarification(request, userId, request.productId())
                 .subscribe(
                         data -> deferredResult.setResult(
                                 ApiResponse.success(ResponseCode.AI_RESPONSE_SUCCESS, httpRequest.getRequestURI(), data)

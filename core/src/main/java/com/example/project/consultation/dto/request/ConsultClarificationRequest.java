@@ -8,5 +8,6 @@ public record ConsultClarificationRequest(
         String intent,
         boolean requiresCalculation,
         Map<String, Object> facts,
-        Map<String, Object> answers
+        Map<String, Object> answers,
+        Long productId
 ) {}

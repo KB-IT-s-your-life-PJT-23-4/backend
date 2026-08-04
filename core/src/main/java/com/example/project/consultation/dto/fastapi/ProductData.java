@@ -2,15 +2,14 @@ package com.example.project.consultation.dto.fastapi;
 
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.annotation.JsonNaming;
+import lombok.Builder;
 
-import java.util.List;
-import java.util.Map;
+import java.math.BigDecimal;
 
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
-public record ChatRequest(
-        String conversationId,
-        String question,
-        List<FamilyData> families,
-        ProductData product,
-        Map<String, Object> facts
+@Builder
+public record ProductData(
+        String productName,
+        BigDecimal interestRate,
+        String preferentialCondition
 ) {}
