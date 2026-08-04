@@ -4,6 +4,7 @@ import com.example.project.common.exception.CommonExceptionAdvice;
 import com.example.project.gift.domain.DeductionVO;
 import com.example.project.gift.domain.GiftVO;
 import com.example.project.gift.domain.Status;
+import com.example.project.gift.domain.TaxBracketVO;
 import com.example.project.gift.mapper.GiftMapper;
 import com.example.project.gift.service.GiftService;
 import com.example.project.recipient.domain.RecipientVO;
@@ -376,9 +377,34 @@ class GiftControllerTest {
                 Long familyId,
                 Long userId,
                 LocalDate windowStartDate,
-                LocalDate baseDate
+                LocalDate baseDate,
+                Long excludeGiftId
         ) {
             return List.of();
+        }
+
+        @Override
+        public List<GiftVO> selectWindowGifts(
+                Long familyId,
+                Long userId,
+                LocalDate windowStartDate,
+                LocalDate baseDate
+        ) {
+            return gifts.values().stream()
+                    .filter(gift -> userId.equals(
+                            recipientMapper.ownerId(gift.getFamilyId())))
+                    .filter(gift -> familyId.equals(gift.getFamilyId()))
+                    .filter(gift -> gift.getStatus() == Status.COMPLETED)
+                    .filter(gift -> !gift.getGiftDate().isBefore(windowStartDate))
+                    .filter(gift -> gift.getGiftDate().isBefore(baseDate))
+                    .sorted(Comparator.comparing(GiftVO::getGiftDate)
+                            .thenComparing(GiftVO::getGiftId))
+                    .toList();
+        }
+
+        @Override
+        public TaxBracketVO selectTaxBracket(LocalDate baseDate, Long taxableBase) {
+            return null;
         }
 
         @Override
