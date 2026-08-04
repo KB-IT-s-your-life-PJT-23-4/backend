@@ -12,6 +12,8 @@ import org.springframework.web.reactive.function.client.WebClient;
 import reactor.netty.http.client.HttpClient;
 import org.springframework.beans.factory.annotation.Value;
 import java.time.Duration;
+import com.fasterxml.jackson.databind.SerializationFeature;
+
 
 @Configuration
 public class WebClientConfig {
@@ -23,14 +25,16 @@ public class WebClientConfig {
     public ObjectMapper fastApiObjectMapper() {
         ObjectMapper mapper = new ObjectMapper();
         mapper.registerModule(new JavaTimeModule()); // LocalDate <-> "YYYY-MM-DD"
+        mapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+
         return mapper;
     }
 
     @Bean
     public WebClient fastApiWebClient(ObjectMapper fastApiObjectMapper) {
         HttpClient httpClient = HttpClient.create()
-                .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 3000)  // 연결 타임아웃
-                .responseTimeout(Duration.ofSeconds(15));            // 응답 타임아웃
+                .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 5000)  // 연결 타임아웃
+                .responseTimeout(Duration.ofSeconds(25));            // 응답 타임아웃
 
         return WebClient.builder()
                 .baseUrl(fastApiBaseUrl)

@@ -31,7 +31,7 @@ public class FastApiClient {
                 .bodyValue(request)
                 .retrieve()
                 .bodyToMono(ChatResponse.class)
-                .timeout(Duration.ofSeconds(15))
+                .timeout(Duration.ofSeconds(25))
                 .onErrorMap(this::mapError);
     }
 
@@ -41,7 +41,7 @@ public class FastApiClient {
                 .bodyValue(request)
                 .retrieve()
                 .bodyToMono(ChatResponse.class)
-                .timeout(Duration.ofSeconds(15))
+                .timeout(Duration.ofSeconds(25))
                 .onErrorMap(this::mapError);
     }
 
