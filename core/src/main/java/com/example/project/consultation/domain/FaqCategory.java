@@ -7,13 +7,8 @@ import lombok.NoArgsConstructor;
 @Getter
 @AllArgsConstructor
 @NoArgsConstructor
-public class Faq {
+public class FaqCategory {
 
     private Long id;
-    private Long categoryId;
-    private String question;
-    private String prompt;
-    private String answer;
-    private boolean showBranchButton;
-    private boolean showTaxOfficeButton;
+    private String categoryName;
 }

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.project.consultation.mapper.FaqMapper">
+
+    <resultMap id="faqResultMap" type="com.example.project.consultation.domain.Faq">
+        <id property="id" column="faq_id"/>
+        <result property="categoryId" column="faq_category_id2"/>
+        <result property="question" column="question"/>
+        <result property="prompt" column="prompt"/>
+        <result property="answer" column="answer"/>
+        <result property="showBranchButton" column="show_branch_button"/>
+        <result property="showTaxOfficeButton" column="show_tax_office_button"/>
+    </resultMap>
+
+    <select id="findAll" resultMap="faqResultMap">
+        SELECT faq_id, faq_category_id2, question, prompt, answer,
+               show_branch_button, show_tax_office_button
+        FROM faq
+        ORDER BY faq_category_id2 ASC, faq_id ASC
+    </select>
+
+    <select id="findById" parameterType="java.lang.Long" resultMap="faqResultMap">
+        SELECT faq_id, faq_category_id2, question, prompt, answer,
+               show_branch_button, show_tax_office_button
+        FROM faq
+        WHERE faq_id = #{faqId}
+    </select>
+
+</mapper>

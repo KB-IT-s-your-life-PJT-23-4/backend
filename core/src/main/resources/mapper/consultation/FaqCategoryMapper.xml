@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.project.consultation.mapper.FaqCategoryMapper">
+
+    <resultMap id="faqCategoryResultMap" type="com.example.project.consultation.domain.FaqCategory">
+        <id property="id" column="faq_category_id"/>
+        <result property="categoryName" column="category_name"/>
+    </resultMap>
+
+    <select id="findAll" resultMap="faqCategoryResultMap">
+        SELECT faq_category_id, category_name
+        FROM faq_category
+        ORDER BY faq_category_id ASC
+    </select>
+
+</mapper>
