@@ -5,6 +5,7 @@ import com.example.project.common.exception.ServiceException;
 import com.example.project.gift.domain.DeductionVO;
 import com.example.project.gift.domain.GiftVO;
 import com.example.project.gift.domain.Status;
+import com.example.project.gift.domain.TaxBracketVO;
 import com.example.project.gift.mapper.GiftMapper;
 import com.example.project.recipient.domain.RecipientVO;
 import com.example.project.recipient.dto.request.RecipientRequest;
@@ -323,9 +324,25 @@ class RecipientServiceTest {
                 Long familyId,
                 Long userId,
                 LocalDate windowStartDate,
+                LocalDate baseDate,
+                Long excludeGiftId
+        ) {
+            return List.of();
+        }
+
+        @Override
+        public List<GiftVO> selectWindowGifts(
+                Long familyId,
+                Long userId,
+                LocalDate windowStartDate,
                 LocalDate baseDate
         ) {
             return List.of();
+        }
+
+        @Override
+        public TaxBracketVO selectTaxBracket(LocalDate baseDate, Long taxableBase) {
+            return null;
         }
 
         @Override
