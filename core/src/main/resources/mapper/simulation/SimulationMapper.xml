@@ -186,17 +186,13 @@
             kb_product_data_version_id, family_id, requested_amount, status,
             tax_payment_method, investment_period_months, as_of_date,
             investment_end_date, calculation_version, formula_version, version,
-            selected_portfolio_id, age_at_simulation, minor_at_simulation,
-            lookback_start_date, previous_gift_amount, deduction_limit,
-            used_deduction_amount, remaining_deduction_amount,
+            selected_portfolio_id, previous_gift_amount, deduction_limit,
             deduction_renewal_date, created_at, updated_at, saved_at, expired_at
         ) VALUES (
             #{productDataVersionId}, #{familyId}, #{requestedAmount}, #{status},
             #{taxPaymentMethod}, #{investmentPeriodMonths}, #{asOfDate},
             #{investmentEndDate}, #{calculationVersion}, #{formulaVersion}, #{version},
-            NULL, #{ageAtSimulation}, #{minorAtSimulation},
-            #{lookbackStartDate}, #{previousGiftAmount}, #{deductionLimit},
-            #{usedDeductionAmount}, #{remainingDeductionAmount},
+            NULL, #{previousGiftAmount}, #{deductionLimit},
             #{deductionRenewalDate}, #{createdAt}, #{updatedAt}, NULL, #{expiredAt}
         )
     </insert>
@@ -288,13 +284,8 @@
         s.formula_version,
         s.version,
         s.selected_portfolio_id,
-        s.age_at_simulation,
-        s.minor_at_simulation,
-        s.lookback_start_date,
         s.previous_gift_amount,
         s.deduction_limit,
-        s.used_deduction_amount,
-        s.remaining_deduction_amount,
         s.deduction_renewal_date,
         s.created_at,
         s.updated_at,
