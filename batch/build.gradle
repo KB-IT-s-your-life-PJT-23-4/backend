@@ -13,6 +13,9 @@ dependencies {
     implementation "org.springframework:spring-jdbc:${springVersion}"
     implementation "org.springframework.batch:spring-batch-core:${springBatchVersion}"
 
+    // 법령 API 응답(JSON) 파싱. HTTP 는 Java 17 내장 HttpClient 사용
+    implementation "com.fasterxml.jackson.core:jackson-databind:${jacksonVersion}"
+
     implementation "org.mybatis:mybatis:${mybatisVersion}"
     implementation "org.mybatis:mybatis-spring:${mybatisSpringVersion}"
     implementation "com.zaxxer:HikariCP:${hikariVersion}"
@@ -30,4 +33,17 @@ dependencies {
 
 application {
     mainClass = 'com.example.project.batch.BatchApplication'
+}
+
+// cron 이 부르는 래퍼를 배포본 루트에 함께 넣는다. 스크립트가 자기 위치로 APP_HOME 을 잡기 때문에
+// bin/ 과 같은 레벨에 있어야 한다. git 의 실행 권한에 기대지 않도록 여기서 직접 지정한다.
+distributions {
+    main {
+        contents {
+            from('scripts') {
+                include '*.sh'
+                fileMode 0755
+            }
+        }
+    }
 }
