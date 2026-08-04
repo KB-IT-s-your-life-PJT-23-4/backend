@@ -84,11 +84,8 @@ public record ProductDetailResponse(
 
     public record PreferentialCondition(
             String conditionCode,
-            String conditionName,
             String description,
-            BigDecimal additionalRatePercent,
-            Integer minimumMonths,
-            Integer maximumMonths
+            BigDecimal additionalRatePercent
     ) {
     }
 

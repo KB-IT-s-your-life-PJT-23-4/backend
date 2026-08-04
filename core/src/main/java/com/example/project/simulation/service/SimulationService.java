@@ -355,7 +355,6 @@ public class SimulationService {
                 SimulationProductRecord product = productPlan.product();
                 BigDecimal appliedRate = finalAppliedRate(
                         product,
-                        target.getInvestmentPeriodMonths(),
                         productPlan.preferentialRates()
                 );
                 product.setAppliedAnnualRatePercent(appliedRate);
@@ -1001,12 +1000,7 @@ public class SimulationService {
                     product.getProductVersionId(),
                     conditionCodes
             ));
-            if (rates.size() != conditionCodes.size()
-                    || rates.stream().anyMatch(rate -> !termMatches(
-                    simulation.getInvestmentPeriodMonths(),
-                    rate.getMinimumMonths(),
-                    rate.getMaximumMonths()
-            ))) {
+            if (rates.size() != conditionCodes.size()) {
                 throw new SimulationException(
                         SimulationError.INVALID_PREFERENTIAL_CONDITION);
             }
@@ -1088,7 +1082,6 @@ public class SimulationService {
 
     private BigDecimal finalAppliedRate(
             SimulationProductRecord product,
-            int months,
             List<PreferentialRateRecord> rates
     ) {
         if (product.getProductType() == ProductType.ETF) {
@@ -1314,15 +1307,33 @@ public class SimulationService {
                     SimulationError.SIMULATION_RESULT_INCOMPLETE);
         }
         for (SimulationResultRecord result : results) {
-            long profileCount = portfolios.stream()
+            List<SimulationPortfolioRecord> resultPortfolios = portfolios.stream()
                     .filter(item -> Objects.equals(
                             item.getResultId(),
                             result.getResultId()
                     ))
+                    .toList();
+            long profileCount = resultPortfolios.stream()
                     .map(SimulationPortfolioRecord::getPortfolioType)
                     .distinct()
                     .count();
-            if (profileCount != RiskProfile.values().length) {
+            boolean allocationMismatch = resultPortfolios.stream()
+                    .anyMatch(item -> item.getDepositAmount()
+                            + item.getSavingsAmount()
+                            + item.getEtfAmount()
+                            != result.getInvestmentPrincipal());
+            if (profileCount != RiskProfile.values().length
+                    || allocationMismatch) {
+                throw new SimulationException(
+                        SimulationError.SIMULATION_RESULT_INCOMPLETE);
+            }
+        }
+        for (RiskProfile profile : RiskProfile.values()) {
+            long recommendedCount = portfolios.stream()
+                    .filter(item -> item.getPortfolioType() == profile)
+                    .filter(SimulationPortfolioRecord::isRecommended)
+                    .count();
+            if (recommendedCount != 1) {
                 throw new SimulationException(
                         SimulationError.SIMULATION_RESULT_INCOMPLETE);
             }

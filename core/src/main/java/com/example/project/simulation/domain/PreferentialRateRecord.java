@@ -8,10 +8,7 @@ import java.math.BigDecimal;
 public class PreferentialRateRecord {
     private Long preferentialInterestRateId;
     private Long productVersionId;
-    private Integer minimumMonths;
-    private Integer maximumMonths;
     private BigDecimal additionalRatePercent;
     private String conditionCode;
-    private String conditionName;
     private String description;
 }

@@ -285,11 +285,8 @@ public class SimulationProductService {
                 preferentialRates.stream()
                         .map(item -> new ProductDetailResponse.PreferentialCondition(
                                 item.getConditionCode(),
-                                item.getConditionName(),
                                 item.getDescription(),
-                                item.getAdditionalRatePercent(),
-                                item.getMinimumMonths(),
-                                item.getMaximumMonths()
+                                item.getAdditionalRatePercent()
                         ))
                         .toList()
         );
