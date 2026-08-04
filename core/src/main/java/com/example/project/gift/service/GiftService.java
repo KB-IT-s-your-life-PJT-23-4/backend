@@ -19,6 +19,8 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.temporal.TemporalAdjusters;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -96,9 +98,15 @@ public class GiftService {
             recipientService.selectRecipient(familyId, userId);
         }
 
+        // 갱신일은 창 안 증여를 낱개로 봐야 나온다. 수증자 수와 무관하게 한 번만 조회해 묶는다.
+        Map<Long, List<GiftVO>> windowGiftsByFamily = giftMapper
+                .selectWindowGifts(familyId, userId, windowStartDate, baseDate).stream()
+                .collect(Collectors.groupingBy(GiftVO::getFamilyId));
+
         return giftMapper.selectDeduction(familyId, userId, windowStartDate, baseDate, null).stream()
                 .map(deduction -> DeductionResponse.from(
-                        deduction, windowStartDate, baseDate, nextRenewalDate(deduction)))
+                        deduction, windowStartDate, baseDate,
+                        nextRenewalDate(deduction, windowGiftsByFamily)))
                 .toList();
     }
 
@@ -197,13 +205,39 @@ public class GiftService {
     }
 
     /**
-     * 한도 갱신일 = 창 안에서 가장 오래된 확정 증여일 + 10년.
-     * 그 증여가 창을 벗어나면서 쓴 만큼의 한도가 되살아난다. 확정 증여가 없으면 갱신할 것도 없다.
+     * 한도 갱신일 = 공제 여력이 실제로 생기는 첫 날.
+     *
+     * <p>가장 오래된 증여가 창을 벗어나는 날(= 그 증여일 + 10년)을 그대로 쓰면 안 된다.
+     * 합산액이 한도를 크게 넘긴 상태면 한 건이 빠져도 여전히 초과라 여력이 0 그대로다.
+     * 예) 한도 5,000만 / 창 안 8,250만(3,000 + 1,500 + 3,000 + 750)
+     * → 3,000만이 빠져도 5,250만으로 여전히 초과. 1,500만까지 빠져 3,750만이 되는 날이 갱신일이다.
+     *
+     * <p>그래서 오래된 순으로 하나씩 걷어내며 남은 합이 한도 밑으로 내려가는 첫 증여를 찾고,
+     * 그 증여일 + 10년을 돌려준다. 이미 여력이 있는 경우에는 첫 증여에서 바로 조건이 성립해
+     * "가장 오래된 증여가 빠지는 날"이 그대로 나온다.
+     *
+     * <p>확정 증여가 없거나 한도 행이 없는 관계면 갱신할 것도 없어 null.
      */
-    private LocalDate nextRenewalDate(DeductionVO deduction) {
-        LocalDate oldest = deduction.getOldestGiftDate();
+    private LocalDate nextRenewalDate(DeductionVO deduction, Map<Long, List<GiftVO>> windowGiftsByFamily) {
+        Long deductionLimit = deduction.getDeductionLimit();
+        List<GiftVO> windowGifts = windowGiftsByFamily.getOrDefault(deduction.getFamilyId(), List.of());
 
-        return oldest == null ? null : oldest.plusYears(DEDUCTION_WINDOW_YEARS);
+        if (deductionLimit == null || windowGifts.isEmpty()) {
+            return null;
+        }
+
+        long remaining = windowGifts.stream().mapToLong(GiftVO::getAmount).sum();
+
+        for (GiftVO gift : windowGifts) {
+            remaining -= gift.getAmount();
+
+            if (remaining < deductionLimit) {
+                return gift.getGiftDate().plusYears(DEDUCTION_WINDOW_YEARS);
+            }
+        }
+
+        // 전부 걷어내면 remaining 이 0 이라 한도가 0 이 아닌 한 위에서 반환된다.
+        return null;
     }
 
     private void validate(GiftRequest giftRequest) {

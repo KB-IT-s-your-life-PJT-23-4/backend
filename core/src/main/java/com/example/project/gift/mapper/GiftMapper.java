@@ -46,6 +46,15 @@ public interface GiftMapper {
                                       @Param("baseDate") LocalDate baseDate,
                                       @Param("excludeGiftId") Long excludeGiftId);
 
+    /**
+     * 합산 창 안의 확정 증여를 낱개로, 오래된 순으로. 한도 갱신일 계산용이다.
+     * 집계만으로는 "가장 오래된 증여가 빠지는 날"까지밖에 못 구한다.
+     */
+    List<GiftVO> selectWindowGifts(@Param("familyId") Long familyId,
+                                   @Param("userId") Long userId,
+                                   @Param("windowStartDate") LocalDate windowStartDate,
+                                   @Param("baseDate") LocalDate baseDate);
+
     TaxBracketVO selectTaxBracket(@Param("baseDate") LocalDate baseDate,
                                   @Param("taxableBase") Long taxableBase);
 
