@@ -142,6 +142,26 @@
         ORDER BY f.family_id
     </select>
 
+    <!--
+      한도 갱신일 계산용. selectDeduction 의 집계로는 가장 오래된 증여가 창을 벗어나는 날까지만
+      알 수 있는데, 그 날 한도가 실제로 되살아나는지는 뒤에 남는 증여들의 합을 봐야 판단할 수 있다.
+      그래서 창 안 확정 증여를 낱개로, 오래된 순으로 내려준다.
+    -->
+    <select id="selectWindowGifts" resultMap="giftResultMap">
+        SELECT
+        <include refid="giftColumns"/>
+        FROM gift g
+        JOIN family f on f.family_id = g.family_id
+        WHERE f.user_id = #{userId}
+        AND g.status = 'COMPLETED'
+        AND g.gift_date &gt;= #{windowStartDate}
+        AND g.gift_date &lt;= #{baseDate}
+        <if test="familyId != null">
+            AND g.family_id = #{familyId}
+        </if>
+        ORDER BY g.family_id, g.gift_date, g.gift_id
+    </select>
+
     <select id="countGiftByFamily" resultType="int">
         SELECT COUNT(*)
         FROM gift

@@ -28,6 +28,10 @@ public class DeductionVO {
     /** 합산에 들어간 COMPLETED 증여 건수. */
     private int aggregatedCount;
 
-    /** 창 안에서 가장 오래된 COMPLETED 증여일. 이 날짜 + 10년이 한도 갱신일이다. 이력이 없으면 null. */
+    /**
+     * 창 안에서 가장 오래된 COMPLETED 증여일. 이력이 없으면 null.
+     * 한도 갱신일은 여기서 바로 나오지 않는다. 한 건이 빠져도 여전히 한도 초과일 수 있어
+     * 서비스가 창 안 증여를 낱개로 훑어 계산한다.
+     */
     private LocalDate oldestGiftDate;
 }

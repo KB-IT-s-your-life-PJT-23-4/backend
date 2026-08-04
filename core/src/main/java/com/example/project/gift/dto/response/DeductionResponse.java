@@ -45,7 +45,9 @@ public class DeductionResponse {
     private int aggregatedCount;
 
     /**
-     * 가장 오래된 증여가 10년 창을 벗어나 한도가 되살아나는 날. 확정 증여가 없으면 null.
+     * 공제 여력이 실제로 생기는 첫 날. 합산액이 한도를 크게 넘긴 상태면 가장 오래된 증여가
+     * 창을 벗어나도 여전히 초과라 여력이 0 그대로일 수 있어, 남는 합이 한도 밑으로 내려가는
+     * 시점을 잡는다. 확정 증여가 없거나 한도 행이 없는 관계면 null.
      * 라벨("7년 6개월")은 화면 표기라 프론트에 맡기고 날짜만 내려준다.
      */
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = DATE_FORMAT)
