@@ -167,10 +167,11 @@
           AND p.product_type = 'ETF'
           AND (
               #{riskProfile} = 'AGGRESSIVE'
-              OR (#{riskProfile} = 'BALANCED' AND e.risk_level IN ('LOW', 'LOW_MEDIUM', 'MEDIUM', 'HIGH'))
+              OR (#{riskProfile} = 'BALANCED'
+                  AND e.risk_level IN ('EX_LOW', 'LOW', 'MEDIUM', 'HIGH'))
               OR (#{riskProfile} = 'CONSERVATIVE'
                   AND e.etf_category = 'BOND_MIXED'
-                  AND e.risk_level IN ('LOW', 'LOW_MEDIUM', 'MEDIUM'))
+                  AND e.risk_level IN ('EX_LOW', 'LOW', 'MEDIUM'))
           )
         ORDER BY e.annual_return_5y DESC, pv.kb_product_version_id
         LIMIT #{limit}
@@ -522,9 +523,8 @@
     <select id="selectPreferentialRates"
             resultType="com.example.project.simulation.domain.PreferentialRateRecord">
         SELECT preferential_interest_rate_id, kb_product_version_id,
-               min_month AS minimum_months, max_month AS maximum_months,
                additional_rate_percent, condition_code,
-               condition_name, preferential_condition AS description
+               preferential_condition AS description
         FROM preferential_interest_rate
         WHERE kb_product_version_id = #{productVersionId}
         ORDER BY condition_code
@@ -533,9 +533,8 @@
     <select id="selectPreferentialRatesByCodes"
             resultType="com.example.project.simulation.domain.PreferentialRateRecord">
         SELECT preferential_interest_rate_id, kb_product_version_id,
-               min_month AS minimum_months, max_month AS maximum_months,
                additional_rate_percent, condition_code,
-               condition_name, preferential_condition AS description
+               preferential_condition AS description
         FROM preferential_interest_rate
         WHERE kb_product_version_id = #{productVersionId}
           AND condition_code IN
@@ -548,9 +547,8 @@
     <select id="selectSelectedPreferentialRates"
             resultType="com.example.project.simulation.domain.PreferentialRateRecord">
         SELECT pir.preferential_interest_rate_id, pir.kb_product_version_id,
-               pir.min_month AS minimum_months, pir.max_month AS maximum_months,
                pir.additional_rate_percent, pir.condition_code,
-               pir.condition_name, pir.preferential_condition AS description
+               pir.preferential_condition AS description
         FROM simulation_product_preferential_condition sppc
         JOIN preferential_interest_rate pir
           ON pir.preferential_interest_rate_id = sppc.preferential_interest_rate_id
@@ -560,7 +558,8 @@
 
     <select id="selectEtfHoldings" resultType="com.example.project.simulation.domain.EtfHoldingRecord">
         SELECT holding_id, kb_product_version_id, holding_rank AS rank,
-               holding_name, holding_code, asset_type, country_code, weight_percent
+               holding_name, holding_code, asset_type,
+               country_code, weight_percent
         FROM etf_holding
         WHERE kb_product_version_id = #{productVersionId}
         ORDER BY holding_rank
