@@ -45,13 +45,13 @@ public final class PortfolioPolicy {
             RiskProfile requestedProfile
     ) {
         if (investmentPrincipal <= 0) {
-            throw new SimulationException(SimulationError.ALLOCATION_SUM_MISMATCH);
+            throw new SimulationException(SimulationError.PORTFOLIO_ALLOCATION_MISMATCH);
         }
 
         Map<RiskProfile, Map<ProductType, BigDecimal>> policies = allocations(months);
         if (requestedProfile != null) {
             if (!matches(allocatedByType, investmentPrincipal, policies.get(requestedProfile))) {
-                throw new SimulationException(SimulationError.ALLOCATION_RATIO_MISMATCH);
+                throw new SimulationException(SimulationError.PORTFOLIO_ALLOCATION_MISMATCH);
             }
             return requestedProfile;
         }
@@ -60,7 +60,8 @@ public final class PortfolioPolicy {
                 .filter(entry -> matches(allocatedByType, investmentPrincipal, entry.getValue()))
                 .map(Map.Entry::getKey)
                 .findFirst()
-                .orElseThrow(() -> new SimulationException(SimulationError.ALLOCATION_RATIO_MISMATCH));
+                .orElseThrow(() -> new SimulationException(
+                        SimulationError.PORTFOLIO_ALLOCATION_MISMATCH));
     }
 
     private static boolean matches(

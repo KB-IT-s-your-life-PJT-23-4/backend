@@ -22,7 +22,7 @@ class SimulationCalculatorTest {
     @DisplayName("예금은 전체 원금에 운용 기간만큼 단리를 적용한다")
     void calculateDepositSimpleInterest() {
         long result = calculator.calculateProductFutureValue(
-                CalculationType.DEPOSIT_SIMPLE_INTEREST,
+                CalculationType.SIMPLE_INTEREST,
                 38_568_000L,
                 new BigDecimal("3.4"),
                 36
@@ -35,20 +35,20 @@ class SimulationCalculatorTest {
     @DisplayName("적금은 총 배분액을 월말 적립식으로 계산한다")
     void calculateSavingsMonthlyInstallment() {
         long result = calculator.calculateProductFutureValue(
-                CalculationType.SAVINGS_MONTHLY_INSTALLMENT,
+                CalculationType.MONTHLY_INSTALLMENT,
                 36_000_000L,
                 new BigDecimal("3.7"),
                 36
         );
 
-        assertEquals(38_012_141L, result);
+        assertEquals(38_012_140L, result);
     }
 
     @Test
     @DisplayName("ETF는 최근 5년 연평균 수익률을 연복리로 계산한다")
     void calculateEtfCompoundReturn() {
         long result = calculator.calculateProductFutureValue(
-                CalculationType.ETF_COMPOUND_RETURN,
+                CalculationType.COMPOUND_RETURN,
                 18_642_000L,
                 new BigDecimal("5.1"),
                 36

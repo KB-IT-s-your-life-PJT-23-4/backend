@@ -19,25 +19,26 @@ public record SimulationResponse(
         Long version,
         Family family,
         Input input,
-        Long previousGiftAmount,
-        Long remainingDeductionAmount,
-        LocalDate deductionResetDate,
-        ScenarioType recommendedScenarioType,
-        ScenarioType selectedScenarioType,
-        SelectedResult selectedResult,
+        GiftHistorySummary giftHistorySummary,
+        ProductDataVersion productDataVersion,
+        List<Recommendation> recommendations,
+        Selection selection,
         List<Result> results,
         FrontendCalculationPolicy frontendCalculationPolicy,
-        String formulaVersion,
         String calculationVersion,
-        LocalDate productDataDate,
+        String formulaVersion,
         LocalDateTime createdAt,
+        LocalDateTime updatedAt,
         LocalDateTime savedAt,
         LocalDateTime expiresAt
 ) {
     public record Family(
             Long familyId,
             String recipientName,
-            String relation
+            String relation,
+            LocalDate birthDate,
+            Integer ageAtSimulation,
+            Boolean minorAtSimulation
     ) {
     }
 
@@ -46,7 +47,32 @@ public record SimulationResponse(
             TaxPaymentMethod taxPaymentMethod,
             Integer investmentPeriodMonths,
             LocalDate asOfDate,
-            LocalDate evaluationDate
+            LocalDate investmentEndDate
+    ) {
+    }
+
+    public record GiftHistorySummary(
+            LocalDate lookbackStartDate,
+            Long previousGiftAmount,
+            Long deductionLimit,
+            Long usedDeductionAmount,
+            Long remainingDeductionAmount,
+            LocalDate deductionRenewalDate
+    ) {
+    }
+
+    public record ProductDataVersion(
+            Long productDataVersionId,
+            String versionCode,
+            LocalDate dataDate
+    ) {
+    }
+
+    public record Recommendation(
+            RiskProfile portfolioType,
+            ScenarioType scenarioType,
+            Long resultId,
+            Long portfolioId
     ) {
     }
 
@@ -55,20 +81,18 @@ public record SimulationResponse(
             ScenarioType scenarioType,
             Long deductionAmount,
             Long taxableAmount,
-            Long estimatedGiftTax,
+            Long giftTax,
             Long donorRequiredAmount,
             Long postTaxAmount,
-            Long currentGiftAmount,
-            Long deferredGiftAmount,
             Long investmentPrincipal,
-            Long defaultExpectedFutureValue,
-            List<Tranche> investmentTranches,
-            List<Product> productRecommendations
+            List<Tranche> tranches,
+            List<Portfolio> portfolios
     ) {
     }
 
     public record Tranche(
-            Integer sequence,
+            Long trancheId,
+            Integer sequenceNo,
             LocalDate giftDate,
             Long giftAmount,
             Long estimatedGiftTax,
@@ -77,42 +101,65 @@ public record SimulationResponse(
     ) {
     }
 
-    public record Product(
-            Long simulationProductId,
-            Long productId,
-            String productName,
-            ProductType productType,
-            ProductType recommendationType,
-            String productCategory,
-            BigDecimal minAnnualRatePercent,
-            BigDecimal maxAnnualRatePercent,
-            BigDecimal appliedAnnualRatePercent,
-            CalculationType calculationType,
-            Long allocatedAmount,
-            BigDecimal allocationRatio,
+    public record Portfolio(
+            Long portfolioId,
+            RiskProfile portfolioType,
+            Allocation allocation,
             Long expectedFutureValue,
             Long expectedProfit,
-            Integer minMonth,
-            Integer maxMonth,
-            Long minAmount,
-            Long maxAmount,
-            Long monthlyMinAmount,
-            Long monthlyMaxAmount,
-            String preferentialConditions,
-            String trackingIndex,
-            String marketCapitalization,
-            BigDecimal dividendYieldPercent,
-            String riskLevel,
-            String productDetailUrl,
-            LocalDate productDataDate
+            boolean recommended,
+            boolean selected,
+            List<Product> productCandidates
     ) {
     }
 
-    public record SelectedResult(
+    public record Allocation(
+            Long depositAmount,
+            Long savingsAmount,
+            Long etfAmount
+    ) {
+    }
+
+    public record Product(
+            Long simulationProductId,
+            Long kbProductVersionId,
+            Long productId,
+            String productName,
+            ProductType productType,
+            Long allocatedAmount,
+            Long monthlyContributionAmount,
+            BigDecimal allocationRatio,
+            BigDecimal appliedAnnualRatePercent,
+            CalculationType calculationMethod,
+            ReturnMetric returnMetric,
+            Long expectedFutureValue,
+            Long expectedProfit,
+            boolean isSelected,
+            List<SelectedPreferentialCondition> selectedPreferentialConditions
+    ) {
+    }
+
+    public record ReturnMetric(
+            String metricType,
+            BigDecimal baseRatePercent,
+            BigDecimal maxRatePercent,
+            BigDecimal annualReturnPercent
+    ) {
+    }
+
+    public record SelectedPreferentialCondition(
+            String conditionCode,
+            BigDecimal additionalRatePercent
+    ) {
+    }
+
+    public record Selection(
+            Long selectedPortfolioId,
+            RiskProfile portfolioType,
             Long resultId,
             ScenarioType scenarioType,
-            RiskProfile riskProfile,
             Long estimatedGiftTax,
+            Long donorRequiredAmount,
             Long investmentPrincipal,
             Long expectedFutureValue,
             Long expectedProfit,
@@ -122,9 +169,9 @@ public record SimulationResponse(
 
     public record FrontendCalculationPolicy(
             String formulaVersion,
-            String depositCalculation,
-            String savingsCalculation,
-            String etfCalculation,
+            String rateUnit,
+            String moneyRoundingMode,
+            Map<ProductType, CalculationType> methods,
             String savingsPaymentTiming,
             String etfReturnBasis,
             Map<RiskProfile, Map<ProductType, BigDecimal>> portfolioAllocations

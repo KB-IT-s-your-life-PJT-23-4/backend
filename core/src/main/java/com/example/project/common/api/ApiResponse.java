@@ -72,4 +72,14 @@ public class ApiResponse<T> {
     ) {
         return new ApiResponse<>(statusCode, path, null, message, error);
     }
+
+    public static <T> ApiResponse<T> error(
+            int statusCode,
+            String path,
+            String message,
+            String error,
+            T data
+    ) {
+        return new ApiResponse<>(statusCode, path, data, message, error);
+    }
 }

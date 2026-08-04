@@ -33,6 +33,12 @@ class SimulationMapperXmlTest {
         assertTrue(configuration.hasStatement(
                 "com.example.project.simulation.mapper.SimulationMapper.selectProductSnapshots"));
         assertTrue(configuration.hasStatement(
+                "com.example.project.simulation.mapper.SimulationMapper.selectSimulationPage"));
+        assertTrue(configuration.hasStatement(
+                "com.example.project.simulation.mapper.SimulationMapper.selectProductVersionDetail"));
+        assertTrue(configuration.hasStatement(
+                "com.example.project.simulation.mapper.SimulationMapper.resetSavedSimulation"));
+        assertTrue(configuration.hasStatement(
                 "com.example.project.simulation.mapper.SimulationMapper.saveSimulation"));
     }
 }

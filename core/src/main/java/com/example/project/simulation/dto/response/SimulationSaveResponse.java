@@ -1,28 +1,37 @@
 package com.example.project.simulation.dto.response;
 
-import com.example.project.simulation.domain.RiskProfile;
-import com.example.project.simulation.domain.ScenarioType;
 import com.example.project.simulation.domain.SimulationStatus;
 
 import java.time.LocalDateTime;
-import java.util.List;
 
 public record SimulationSaveResponse(
         Long simulationId,
         SimulationStatus status,
         Long version,
-        ScenarioType selectedScenarioType,
-        RiskProfile riskProfile,
-        Long resultId,
-        Long estimatedGiftTax,
-        Long investmentPrincipal,
-        List<SimulationResponse.Product> products,
+        Replacement replacement,
+        SimulationResponse.Selection selection,
         ServerCalculation serverCalculation,
         boolean calculationAdjusted,
         ClientServerDifference clientServerDifference,
         LocalDateTime savedAt,
+        LocalDateTime updatedAt,
         LocalDateTime expiresAt
 ) {
+    public record Replacement(
+            boolean replaced,
+            PreviousSimulation previousSimulation
+    ) {
+    }
+
+    public record PreviousSimulation(
+            Long simulationId,
+            SimulationStatus previousStatus,
+            SimulationStatus currentStatus,
+            Long version,
+            LocalDateTime expiresAt
+    ) {
+    }
+
     public record ServerCalculation(
             String formulaVersion,
             Long expectedFutureValue,

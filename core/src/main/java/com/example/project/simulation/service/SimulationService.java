@@ -3,10 +3,14 @@ package com.example.project.simulation.service;
 import com.example.project.simulation.domain.DeductionRule;
 import com.example.project.simulation.domain.FamilySnapshot;
 import com.example.project.simulation.domain.GiftHistoryRecord;
+import com.example.project.simulation.domain.PreferentialRateRecord;
 import com.example.project.simulation.domain.ProductCandidate;
+import com.example.project.simulation.domain.ProductDataVersionRecord;
 import com.example.project.simulation.domain.ProductType;
+import com.example.project.simulation.domain.ProductVersionDetailRecord;
 import com.example.project.simulation.domain.RiskProfile;
 import com.example.project.simulation.domain.ScenarioType;
+import com.example.project.simulation.domain.SimulationPortfolioRecord;
 import com.example.project.simulation.domain.SimulationProductRecord;
 import com.example.project.simulation.domain.SimulationRecord;
 import com.example.project.simulation.domain.SimulationResultRecord;
@@ -34,7 +38,9 @@ import java.time.Period;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumMap;
+import java.util.EnumSet;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -48,15 +54,14 @@ import java.util.stream.Collectors;
 public class SimulationService {
 
     public static final String FORMULA_VERSION = "INVESTMENT_V1";
-    public static final String CALCULATION_VERSION = "GIFT_SIM_V1";
+    public static final String CALCULATION_VERSION = "GIFT_SIM_V2";
 
     private static final int DEDUCTION_WINDOW_YEARS = 10;
     private static final int MAX_PRODUCT_CANDIDATES = 3;
-    private static final int MAX_ETF_CANDIDATES = 9;
     private static final int MAX_INVESTMENT_MONTHS = 240;
     private static final int DRAFT_RETENTION_HOURS = 24;
-    private static final int SAVED_RETENTION_DAYS = 90;
     private static final long CALCULATION_TOLERANCE_WON = 1L;
+    private static final BigDecimal ONE_HUNDRED = BigDecimal.valueOf(100);
 
     private final SimulationMapper simulationMapper;
     private final UserMapper userMapper;
@@ -71,9 +76,8 @@ public class SimulationService {
     ) {
         try {
             validateUser(userId);
-            LocalDate asOfDate = resolveAsOfDate(request.getAsOfDate());
             validateExecuteRequest(request);
-
+            LocalDate asOfDate = LocalDate.now();
             String fingerprint = executeFingerprint(request, asOfDate);
             var cached = idempotencyStore.find(
                     userId,
@@ -86,67 +90,60 @@ public class SimulationService {
                 return cached.get();
             }
 
-            FamilySnapshot family = requireFamily(request.getFamilyId(), userId, false);
-            boolean minor = Period.between(family.getBirthDate(), asOfDate).getYears() < 19;
-            DeductionRule deductionRule = simulationMapper.selectDeductionRule(
+            FamilySnapshot family = requireFamily(request.getFamilyId(), userId);
+            int age = Period.between(family.getBirthDate(), asOfDate).getYears();
+            boolean minor = age < 19;
+            DeductionRule rule = simulationMapper.selectDeductionRule(
                     family.getRelation(),
                     minor,
                     asOfDate
             );
-            if (deductionRule == null || deductionRule.getDeductionLimit() == null) {
+            if (rule == null || rule.getDeductionLimit() == null) {
                 throw new SimulationException(SimulationError.DEDUCTION_RULE_NOT_FOUND);
             }
 
-            List<GiftHistoryRecord> completedGifts = simulationMapper.selectCompletedGifts(
-                    family.getFamilyId(),
-                    asOfDate.minusYears(DEDUCTION_WINDOW_YEARS),
-                    asOfDate
+            LocalDate lookbackStart = asOfDate.minusYears(DEDUCTION_WINDOW_YEARS);
+            List<GiftHistoryRecord> completedGifts = safeList(
+                    simulationMapper.selectCompletedGifts(
+                            family.getFamilyId(),
+                            lookbackStart,
+                            asOfDate
+                    )
             );
-            if (completedGifts == null) {
-                completedGifts = List.of();
-            }
-
             long previousGiftAmount = completedGifts.stream()
                     .mapToLong(gift -> value(gift.getAmount()))
                     .sum();
-            long deductionLimit = deductionRule.getDeductionLimit();
-            long remainingDeduction = Math.max(0, deductionLimit - previousGiftAmount);
-            LocalDate resetDate = resolveDeductionResetDate(
-                    completedGifts.stream()
-                            .map(GiftHistoryRecord::getGiftDate)
-                            .min(LocalDate::compareTo)
-                            .orElse(null),
-                    asOfDate
-            );
+            long deductionLimit = rule.getDeductionLimit();
+            long usedDeduction = Math.min(previousGiftAmount, deductionLimit);
+            long remainingDeduction = Math.max(0, deductionLimit - usedDeduction);
+            LocalDate renewalDate = resolveDeductionRenewalDate(completedGifts, asOfDate);
 
-            List<TaxBracket> taxBrackets = simulationMapper.selectTaxBrackets(asOfDate);
-            if (taxBrackets == null || taxBrackets.isEmpty()) {
+            List<TaxBracket> taxBrackets = safeList(simulationMapper.selectTaxBrackets(asOfDate));
+            if (taxBrackets.isEmpty()) {
                 throw new SimulationException(SimulationError.TAX_BRACKET_NOT_FOUND);
             }
 
-            Map<ProductType, List<ProductCandidate>> candidates = loadProductCandidates(
-                    request.getInvestmentPeriodMonths()
-            );
-            candidates.values().stream()
-                    .flatMap(List::stream)
-                    .filter(candidate -> candidate.getProductDataDate() == null)
-                    .forEach(candidate -> candidate.setProductDataDate(asOfDate));
-            Map<ProductType, ProductCandidate> defaultProducts = candidates.entrySet().stream()
-                    .collect(Collectors.toMap(Map.Entry::getKey, entry -> entry.getValue().get(0)));
-            LocalDate productDataDate = candidates.values().stream()
-                    .flatMap(List::stream)
-                    .map(ProductCandidate::getProductDataDate)
-                    .filter(Objects::nonNull)
-                    .max(LocalDate::compareTo)
-                    .orElse(asOfDate);
+            ProductDataVersionRecord productDataVersion =
+                    simulationMapper.selectLatestCompletedProductDataVersion();
+            if (productDataVersion == null) {
+                throw new SimulationException(SimulationError.PRODUCT_DATA_NOT_READY);
+            }
 
-            LocalDate evaluationDate = asOfDate.plusMonths(request.getInvestmentPeriodMonths());
+            Map<ProductType, List<ProductCandidate>> safeCandidates =
+                    loadSafeAssetCandidates(
+                            productDataVersion.getProductDataVersionId(),
+                            request.getInvestmentPeriodMonths()
+                    );
+            Map<RiskProfile, List<ProductCandidate>> etfCandidates =
+                    loadEtfCandidates(productDataVersion.getProductDataVersionId());
+
+            LocalDate investmentEndDate =
+                    asOfDate.plusMonths(request.getInvestmentPeriodMonths());
             ScenarioAggregate immediate = immediateScenario(
                     request,
                     remainingDeduction,
                     taxBrackets,
-                    asOfDate,
-                    evaluationDate
+                    asOfDate
             );
             ScenarioAggregate optimized = optimizedScenario(
                     request,
@@ -154,52 +151,56 @@ public class SimulationService {
                     deductionLimit,
                     taxBrackets,
                     asOfDate,
-                    resetDate,
-                    evaluationDate,
-                    completedGifts
+                    renewalDate,
+                    completedGifts,
+                    investmentEndDate
             );
 
-            Map<ProductType, BigDecimal> defaultAllocation =
-                    PortfolioPolicy.allocations(request.getInvestmentPeriodMonths())
-                            .get(RiskProfile.BALANCED);
-            setDefaultFutureValue(immediate, evaluationDate, defaultAllocation, defaultProducts);
-            setDefaultFutureValue(optimized, evaluationDate, defaultAllocation, defaultProducts);
-
-            ScenarioType recommendedScenario = recommend(immediate.result(), optimized.result());
-            LocalDateTime createdAt = LocalDateTime.now();
-
+            LocalDateTime now = LocalDateTime.now();
             SimulationRecord simulation = new SimulationRecord();
+            simulation.setProductDataVersionId(productDataVersion.getProductDataVersionId());
             simulation.setFamilyId(family.getFamilyId());
             simulation.setRequestedAmount(request.getRequestedAmount());
             simulation.setStatus(SimulationStatus.DRAFT);
             simulation.setTaxPaymentMethod(request.getTaxPaymentMethod());
             simulation.setInvestmentPeriodMonths(request.getInvestmentPeriodMonths());
             simulation.setAsOfDate(asOfDate);
-            simulation.setInvestmentEndDate(evaluationDate);
-            simulation.setRecommendedScenarioType(recommendedScenario);
-            simulation.setPreviousGiftAmount(previousGiftAmount);
-            simulation.setRemainingDeductionAmount(remainingDeduction);
-            simulation.setDeductionResetDate(resetDate);
+            simulation.setInvestmentEndDate(investmentEndDate);
             simulation.setCalculationVersion(CALCULATION_VERSION);
             simulation.setFormulaVersion(FORMULA_VERSION);
-            simulation.setProductDataDate(productDataDate);
             simulation.setVersion(1L);
-            simulation.setCreatedAt(createdAt);
-            simulation.setExpiredAt(createdAt.plusHours(DRAFT_RETENTION_HOURS));
+            simulation.setAgeAtSimulation(age);
+            simulation.setMinorAtSimulation(minor);
+            simulation.setLookbackStartDate(lookbackStart);
+            simulation.setPreviousGiftAmount(previousGiftAmount);
+            simulation.setDeductionLimit(deductionLimit);
+            simulation.setUsedDeductionAmount(usedDeduction);
+            simulation.setRemainingDeductionAmount(remainingDeduction);
+            simulation.setDeductionRenewalDate(renewalDate);
+            simulation.setCreatedAt(now);
+            simulation.setUpdatedAt(now);
+            simulation.setExpiredAt(now.plusHours(DRAFT_RETENTION_HOURS));
             simulationMapper.insertSimulation(simulation);
 
-            persistScenario(
+            PersistedScenario immediatePersisted = persistScenario(
                     simulation.getSimulationId(),
                     immediate,
-                    candidates,
-                    evaluationDate
+                    safeCandidates,
+                    etfCandidates,
+                    request.getInvestmentPeriodMonths(),
+                    investmentEndDate,
+                    now
             );
-            persistScenario(
+            PersistedScenario optimizedPersisted = persistScenario(
                     simulation.getSimulationId(),
                     optimized,
-                    candidates,
-                    evaluationDate
+                    safeCandidates,
+                    etfCandidates,
+                    request.getInvestmentPeriodMonths(),
+                    investmentEndDate,
+                    now
             );
+            markRecommendations(immediatePersisted, optimizedPersisted);
 
             SimulationResponse response = get(simulation.getSimulationId(), userId);
             idempotencyStore.remember(
@@ -222,21 +223,9 @@ public class SimulationService {
     public SimulationResponse get(Long simulationId, Long userId) {
         try {
             validateUser(userId);
-            if (simulationId == null || simulationId <= 0) {
-                throw new SimulationException(SimulationError.INVALID_SIMULATION_ID);
-            }
-
+            validateSimulationId(simulationId);
             SimulationRecord simulation = requireSimulation(simulationId, userId);
-            List<SimulationResultRecord> results = simulationMapper.selectResults(simulationId);
-            List<SimulationTrancheRecord> tranches = simulationMapper.selectTranches(simulationId);
-            List<SimulationProductRecord> products = simulationMapper.selectProductSnapshots(simulationId);
-
-            if (results == null || results.size() != 2 || tranches == null || tranches.isEmpty()
-                    || products == null || products.isEmpty()) {
-                throw new SimulationException(SimulationError.SIMULATION_RESULT_INCOMPLETE);
-            }
-
-            return toResponse(simulation, results, tranches, products);
+            return buildResponse(simulation);
         } catch (SimulationException exception) {
             throw exception;
         } catch (RuntimeException exception) {
@@ -267,167 +256,184 @@ public class SimulationService {
                 return cached.get();
             }
 
-            SimulationRecord simulation = requireSimulation(simulationId, userId);
-            if (!Objects.equals(simulation.getVersion(), request.getVersion())) {
-                throw new SimulationException(SimulationError.SIMULATION_VERSION_CONFLICT);
-            }
-
-            List<SimulationResultRecord> results = simulationMapper.selectResults(simulationId);
-            SimulationResultRecord selectedResult = results.stream()
-                    .filter(result -> result.getResultId().equals(request.getResultId()))
-                    .filter(result -> result.getScenarioType() == request.getSelectedScenarioType())
-                    .findFirst()
-                    .orElseThrow(() -> new SimulationException(
-                            SimulationError.SIMULATION_RESULT_NOT_FOUND));
-
-            List<SimulationTrancheRecord> selectedTranches = simulationMapper.selectTranches(simulationId)
-                    .stream()
-                    .filter(tranche -> tranche.getResultId().equals(selectedResult.getResultId()))
-                    .toList();
-            if (selectedTranches.isEmpty()) {
-                throw new SimulationException(SimulationError.SIMULATION_RESULT_INCOMPLETE);
-            }
-
-            List<SimulationProductRecord> allSnapshots =
-                    simulationMapper.selectProductSnapshots(simulationId);
-            Map<Long, SimulationProductRecord> candidateByProductId = allSnapshots.stream()
-                    .filter(product -> product.getResultId().equals(selectedResult.getResultId()))
-                    .collect(Collectors.toMap(
-                            SimulationProductRecord::getProductId,
-                            Function.identity(),
-                            (first, ignored) -> first
-                    ));
-
-            validateUniqueProducts(request);
-            long allocationSum = request.getProducts().stream()
-                    .mapToLong(SimulationSaveRequest.SelectedProduct::getAllocatedAmount)
-                    .sum();
-            if (allocationSum != selectedResult.getInvestmentPrincipal()) {
-                throw new SimulationException(SimulationError.ALLOCATION_SUM_MISMATCH);
-            }
-
-            Map<ProductType, Long> allocationByType = new EnumMap<>(ProductType.class);
-            for (SimulationSaveRequest.SelectedProduct selected : request.getProducts()) {
-                SimulationProductRecord snapshot = candidateByProductId.get(selected.getProductId());
-                if (snapshot == null) {
-                    throw new SimulationException(SimulationError.PRODUCT_SNAPSHOT_MISMATCH);
-                }
-                if (snapshot.getProductType() != selected.getRecommendationType()) {
-                    throw new SimulationException(SimulationError.PRODUCT_TYPE_MISMATCH);
-                }
-                validateProductLimit(snapshot, selected.getAllocatedAmount(),
-                        simulation.getInvestmentPeriodMonths());
-                allocationByType.merge(
-                        selected.getRecommendationType(),
-                        selected.getAllocatedAmount(),
-                        Long::sum
+            SimulationRecord target = requireSimulation(simulationId, userId);
+            if (!Objects.equals(target.getVersion(), request.getVersion())) {
+                throw new SimulationException(
+                        SimulationError.SIMULATION_VERSION_CONFLICT,
+                        versionConflictData(request.getVersion(), target.getVersion())
                 );
             }
 
-            RiskProfile riskProfile = PortfolioPolicy.resolveProfile(
-                    allocationByType,
-                    selectedResult.getInvestmentPrincipal(),
-                    simulation.getInvestmentPeriodMonths(),
-                    request.getRiskProfile()
+            FamilySnapshot lockedFamily = simulationMapper.lockFamily(target.getFamilyId());
+            if (lockedFamily == null || !Objects.equals(lockedFamily.getUserId(), userId)) {
+                throw new SimulationException(SimulationError.SIMULATION_ACCESS_DENIED);
+            }
+            SimulationRecord activeSaved =
+                    simulationMapper.selectSavedSimulationByFamily(target.getFamilyId());
+            boolean replacingAnother = activeSaved != null
+                    && !Objects.equals(activeSaved.getSimulationId(), simulationId);
+            validateReplacementIntent(request, activeSaved, replacingAnother);
+
+            SimulationPortfolioRecord selectedPortfolio =
+                    simulationMapper.selectPortfolio(request.getSelectedPortfolioId());
+            if (selectedPortfolio == null) {
+                throw new SimulationException(SimulationError.PORTFOLIO_NOT_FOUND);
+            }
+            if (!Objects.equals(selectedPortfolio.getSimulationId(), simulationId)) {
+                throw new SimulationException(SimulationError.PORTFOLIO_NOT_IN_SIMULATION);
+            }
+            if (!selectedPortfolio.isRecommended()) {
+                throw new SimulationException(SimulationError.PORTFOLIO_NOT_RECOMMENDED);
+            }
+
+            List<SimulationProductRecord> portfolioProducts =
+                    safeList(simulationMapper.selectPortfolioProducts(selectedPortfolio.getPortfolioId()));
+            ProductSelectionPlan selectionPlan = validateProductSelections(
+                    request,
+                    target,
+                    selectedPortfolio,
+                    portfolioProducts
             );
-            validateEtfPolicy(request, candidateByProductId, riskProfile);
 
             if (request.getClientCalculation() != null
-                    && !FORMULA_VERSION.equals(request.getClientCalculation().getFormulaVersion())) {
+                    && !FORMULA_VERSION.equals(
+                    request.getClientCalculation().getFormulaVersion())) {
                 throw new SimulationException(SimulationError.CALCULATION_VERSION_CONFLICT);
             }
 
-            results.forEach(result -> simulationMapper.clearSelectedProducts(result.getResultId()));
-            List<SimulationProductRecord> selectedProducts = new ArrayList<>();
-            long serverFutureValue = 0;
-
-            for (SimulationSaveRequest.SelectedProduct selected : request.getProducts()) {
-                SimulationProductRecord snapshot = candidateByProductId.get(selected.getProductId());
-                long expectedFutureValue = calculator.calculateSelectedProductValue(
-                        snapshot,
-                        selected.getAllocatedAmount(),
-                        selectedTranches,
-                        selectedResult.getInvestmentPrincipal(),
-                        simulation.getInvestmentEndDate()
+            SimulationSaveResponse.PreviousSimulation previousSimulation = null;
+            LocalDateTime now = LocalDateTime.now();
+            if (replacingAnother) {
+                restoreSimulationProducts(activeSaved);
+                simulationMapper.deleteSimulationPreferentialConditions(
+                        activeSaved.getSimulationId()
                 );
-                long expectedProfit = expectedFutureValue - selected.getAllocatedAmount();
-                BigDecimal allocationRatio = BigDecimal.valueOf(selected.getAllocatedAmount())
-                        .multiply(BigDecimal.valueOf(100))
-                        .divide(
-                                BigDecimal.valueOf(selectedResult.getInvestmentPrincipal()),
-                                2,
-                                RoundingMode.HALF_UP
-                        );
-
-                snapshot.setSelected(true);
-                snapshot.setAllocatedAmount(selected.getAllocatedAmount());
-                snapshot.setAllocationRatio(allocationRatio);
-                snapshot.setExpectedFutureValue(expectedFutureValue);
-                snapshot.setExpectedProfit(expectedProfit);
-
-                simulationMapper.selectProduct(
-                        snapshot.getSimulationProductId(),
-                        snapshot.getAllocatedAmount(),
-                        allocationRatio,
-                        snapshot.getAppliedAnnualRatePercent(),
-                        expectedFutureValue,
-                        expectedProfit
+                simulationMapper.clearSimulationSelections(activeSaved.getSimulationId());
+                LocalDateTime previousExpiry = now.plusHours(DRAFT_RETENTION_HOURS);
+                int reset = simulationMapper.resetSavedSimulation(
+                        activeSaved.getSimulationId(),
+                        previousExpiry,
+                        now
                 );
-                selectedProducts.add(snapshot);
-                serverFutureValue += expectedFutureValue;
+                if (reset != 1) {
+                    throw new SimulationException(
+                            SimulationError.PREVIOUS_SIMULATION_RESET_FAILED);
+                }
+                previousSimulation = new SimulationSaveResponse.PreviousSimulation(
+                        activeSaved.getSimulationId(),
+                        SimulationStatus.SAVED,
+                        SimulationStatus.DRAFT,
+                        activeSaved.getVersion() + 1,
+                        previousExpiry
+                );
             }
 
-            simulationMapper.updateResultFutureValue(
-                    selectedResult.getResultId(),
-                    serverFutureValue,
-                    riskProfile
-            );
-            LocalDateTime savedAt = LocalDateTime.now();
-            LocalDateTime expiresAt = savedAt.plusDays(SAVED_RETENTION_DAYS);
+            restoreSimulationProducts(target);
+            simulationMapper.deleteSimulationPreferentialConditions(simulationId);
+            simulationMapper.clearSimulationSelections(simulationId);
+
+            List<SimulationTrancheRecord> selectedTranches =
+                    safeList(simulationMapper.selectTranches(simulationId)).stream()
+                            .filter(item -> Objects.equals(
+                                    item.getResultId(),
+                                    selectedPortfolio.getResultId()
+                            ))
+                            .toList();
+            SimulationResultRecord selectedResult =
+                    safeList(simulationMapper.selectResults(simulationId)).stream()
+                            .filter(item -> Objects.equals(
+                                    item.getResultId(),
+                                    selectedPortfolio.getResultId()
+                            ))
+                            .findFirst()
+                            .orElseThrow(() -> new SimulationException(
+                                    SimulationError.SIMULATION_RESULT_INCOMPLETE));
+
+            long serverFutureValue = 0;
+            List<SimulationProductRecord> selectedProducts = new ArrayList<>();
+            for (SelectedProductPlan productPlan : selectionPlan.products()) {
+                SimulationProductRecord product = productPlan.product();
+                BigDecimal appliedRate = finalAppliedRate(
+                        product,
+                        target.getInvestmentPeriodMonths(),
+                        productPlan.preferentialRates()
+                );
+                product.setAppliedAnnualRatePercent(appliedRate);
+                long futureValue = calculator.calculateSelectedProductValue(
+                        product,
+                        product.getAllocatedAmount(),
+                        selectedTranches,
+                        selectedResult.getInvestmentPrincipal(),
+                        target.getInvestmentEndDate()
+                );
+                product.setSelected(true);
+                product.setExpectedFutureValue(futureValue);
+                product.setSelectedPreferentialConditions(productPlan.preferentialRates());
+                simulationMapper.markSimulationProductSelected(
+                        product.getSimulationProductId(),
+                        appliedRate,
+                        futureValue
+                );
+                for (PreferentialRateRecord rate : productPlan.preferentialRates()) {
+                    simulationMapper.insertSelectedPreferentialCondition(
+                            product.getSimulationProductId(),
+                            rate.getPreferentialInterestRateId()
+                    );
+                }
+                selectedProducts.add(product);
+                serverFutureValue += futureValue;
+            }
+
             int updated = simulationMapper.saveSimulation(
                     simulationId,
                     request.getVersion(),
-                    request.getSelectedScenarioType(),
-                    request.getResultId(),
-                    riskProfile,
-                    savedAt,
-                    expiresAt
+                    selectedPortfolio.getPortfolioId(),
+                    now
             );
             if (updated != 1) {
-                throw new SimulationException(SimulationError.SIMULATION_VERSION_CONFLICT);
+                SimulationRecord current = simulationMapper.selectSimulation(simulationId);
+                throw new SimulationException(
+                        SimulationError.SIMULATION_VERSION_CONFLICT,
+                        versionConflictData(
+                                request.getVersion(),
+                                current == null ? null : current.getVersion()
+                        )
+                );
             }
 
             long serverProfit = serverFutureValue - selectedResult.getInvestmentPrincipal();
-            Long clientFutureValue = request.getClientCalculation() == null
-                    ? null : request.getClientCalculation().getExpectedFutureValue();
-            Long clientProfit = request.getClientCalculation() == null
-                    ? null : request.getClientCalculation().getExpectedProfit();
-            long futureDifference = clientFutureValue == null ? 0 : serverFutureValue - clientFutureValue;
-            long profitDifference = clientProfit == null ? 0 : serverProfit - clientProfit;
-
+            SimulationSaveResponse.ClientServerDifference difference =
+                    clientServerDifference(request, serverFutureValue, serverProfit);
+            boolean adjusted = difference != null && (
+                    Math.abs(difference.futureValueDifference()) > CALCULATION_TOLERANCE_WON
+                            || Math.abs(difference.profitDifference())
+                            > CALCULATION_TOLERANCE_WON
+            );
+            SimulationResponse.Selection selection = toSelection(
+                    selectedPortfolio,
+                    selectedResult,
+                    selectedProducts,
+                    target.getInvestmentPeriodMonths()
+            );
             SimulationSaveResponse response = new SimulationSaveResponse(
                     simulationId,
                     SimulationStatus.SAVED,
                     request.getVersion() + 1,
-                    request.getSelectedScenarioType(),
-                    riskProfile,
-                    selectedResult.getResultId(),
-                    selectedResult.getGiftTax(),
-                    selectedResult.getInvestmentPrincipal(),
-                    selectedProducts.stream().map(this::toProductResponse).toList(),
+                    new SimulationSaveResponse.Replacement(
+                            replacingAnother,
+                            previousSimulation
+                    ),
+                    selection,
                     new SimulationSaveResponse.ServerCalculation(
                             FORMULA_VERSION,
                             serverFutureValue,
                             serverProfit
                     ),
-                    Math.abs(futureDifference) > CALCULATION_TOLERANCE_WON
-                            || Math.abs(profitDifference) > CALCULATION_TOLERANCE_WON,
-                    new SimulationSaveResponse.ClientServerDifference(
-                            futureDifference,
-                            profitDifference
-                    ),
-                    savedAt,
-                    expiresAt
+                    adjusted,
+                    difference,
+                    now,
+                    now,
+                    null
             );
             idempotencyStore.remember(
                     userId,
@@ -445,325 +451,53 @@ public class SimulationService {
         }
     }
 
-    private ScenarioAggregate immediateScenario(
-            SimulationExecuteRequest request,
-            long remainingDeduction,
-            List<TaxBracket> brackets,
-            LocalDate asOfDate,
-            LocalDate evaluationDate
-    ) {
-        SimulationCalculator.TaxOutcome tax = calculator.calculateTax(
-                request.getRequestedAmount(),
-                remainingDeduction,
-                request.getTaxPaymentMethod(),
-                brackets
-        );
-        SimulationResultRecord result = new SimulationResultRecord();
-        result.setScenarioType(ScenarioType.IMMEDIATE);
-        result.setRiskProfile(RiskProfile.BALANCED);
-        result.setDeductionAmount(tax.deductionAmount());
-        result.setTaxableAmount(tax.taxableAmount());
-        result.setGiftTax(tax.giftTax());
-        result.setDonorRequiredAmount(tax.donorRequiredAmount());
-        result.setPostTaxAmount(tax.investmentAmount());
-        result.setCurrentAmount(request.getRequestedAmount());
-        result.setDeferredAmount(0L);
-        result.setInvestmentPrincipal(tax.investmentAmount());
-        result.setCreatedAt(LocalDateTime.now());
-
-        SimulationTrancheRecord tranche = tranche(
-                1,
-                asOfDate,
-                request.getRequestedAmount(),
-                tax,
-                !asOfDate.isAfter(evaluationDate)
-        );
-        return new ScenarioAggregate(result, new ArrayList<>(List.of(tranche)), new EnumMap<>(ProductType.class));
-    }
-
-    private ScenarioAggregate optimizedScenario(
-            SimulationExecuteRequest request,
-            long remainingDeduction,
-            long fullDeductionLimit,
-            List<TaxBracket> brackets,
-            LocalDate asOfDate,
-            LocalDate resetDate,
-            LocalDate evaluationDate,
-            List<GiftHistoryRecord> completedGifts
-    ) {
-        long remainingAmount = request.getRequestedAmount();
-        long currentAmount = Math.min(remainingAmount, remainingDeduction);
-        List<SimulationTrancheRecord> tranches = new ArrayList<>();
-        long totalTax = 0;
-        long totalDonorRequired = 0;
-        long totalInvestmentPrincipal = 0;
-        long totalDeduction = 0;
-        int sequence = 1;
-
-        if (currentAmount > 0) {
-            SimulationCalculator.TaxOutcome tax = calculator.calculateTax(
-                    currentAmount,
-                    remainingDeduction,
-                    request.getTaxPaymentMethod(),
-                    brackets
-            );
-            tranches.add(tranche(sequence++, asOfDate, currentAmount, tax, true));
-            remainingAmount -= currentAmount;
-            totalTax += tax.giftTax();
-            totalDonorRequired += tax.donorRequiredAmount();
-            totalInvestmentPrincipal += tax.investmentAmount();
-            totalDeduction += tax.deductionAmount();
-        }
-
-        List<GiftPoint> deductionHistory = completedGifts.stream()
-                .map(gift -> new GiftPoint(gift.getGiftDate(), value(gift.getAmount())))
-                .collect(Collectors.toCollection(ArrayList::new));
-        if (currentAmount > 0) {
-            deductionHistory.add(new GiftPoint(asOfDate, currentAmount));
-        }
-
-        LocalDate giftDate = resetDate;
-        int safety = 0;
-        while (remainingAmount > 0 && safety++ < 100) {
-            LocalDate calculationDate = giftDate;
-            long usedDeduction = deductionHistory.stream()
-                    .filter(point -> point.date().isAfter(
-                            calculationDate.minusYears(DEDUCTION_WINDOW_YEARS)))
-                    .filter(point -> point.date().isBefore(calculationDate))
-                    .mapToLong(GiftPoint::amount)
-                    .sum();
-            long availableDeduction = Math.max(0, fullDeductionLimit - usedDeduction);
-
-            if (availableDeduction == 0) {
-                giftDate = nextReleaseDate(deductionHistory, giftDate);
-                continue;
-            }
-
-            long trancheAmount = Math.min(remainingAmount, availableDeduction);
-            SimulationCalculator.TaxOutcome tax = calculator.calculateTax(
-                    trancheAmount,
-                    availableDeduction,
-                    request.getTaxPaymentMethod(),
-                    brackets
-            );
-            boolean withinEvaluation = !giftDate.isAfter(evaluationDate);
-            SimulationTrancheRecord tranche = tranche(
-                    sequence++,
-                    giftDate,
-                    trancheAmount,
-                    tax,
-                    withinEvaluation
-            );
-            tranches.add(tranche);
-            deductionHistory.add(new GiftPoint(giftDate, trancheAmount));
-            remainingAmount -= trancheAmount;
-            totalTax += tax.giftTax();
-            totalDonorRequired += tax.donorRequiredAmount();
-            totalDeduction += tax.deductionAmount();
-            if (withinEvaluation) {
-                totalInvestmentPrincipal += tax.investmentAmount();
-            }
-            if (remainingAmount > 0) {
-                giftDate = nextReleaseDate(deductionHistory, giftDate);
-            }
-        }
-
-        SimulationResultRecord result = new SimulationResultRecord();
-        result.setScenarioType(ScenarioType.TAX_OPTIMIZED);
-        result.setRiskProfile(RiskProfile.BALANCED);
-        result.setDeductionAmount(totalDeduction);
-        result.setTaxableAmount(0L);
-        result.setGiftTax(totalTax);
-        result.setDonorRequiredAmount(totalDonorRequired);
-        result.setPostTaxAmount(request.getRequestedAmount() - totalTax);
-        result.setCurrentAmount(currentAmount);
-        result.setDeferredAmount(request.getRequestedAmount() - currentAmount);
-        result.setInvestmentPrincipal(totalInvestmentPrincipal);
-        result.setCreatedAt(LocalDateTime.now());
-        return new ScenarioAggregate(result, tranches, new EnumMap<>(ProductType.class));
-    }
-
-    private SimulationTrancheRecord tranche(
-            int sequence,
-            LocalDate giftDate,
-            long giftAmount,
-            SimulationCalculator.TaxOutcome tax,
-            boolean includedInEvaluation
-    ) {
-        SimulationTrancheRecord tranche = new SimulationTrancheRecord();
-        tranche.setSequenceNo(sequence);
-        tranche.setGiftDate(giftDate);
-        tranche.setGiftAmount(giftAmount);
-        tranche.setEstimatedGiftTax(tax.giftTax());
-        tranche.setDonorRequiredAmount(tax.donorRequiredAmount());
-        tranche.setInvestmentAmount(includedInEvaluation ? tax.investmentAmount() : 0L);
-        return tranche;
-    }
-
-    private void setDefaultFutureValue(
-            ScenarioAggregate aggregate,
-            LocalDate evaluationDate,
-            Map<ProductType, BigDecimal> defaultAllocation,
-            Map<ProductType, ProductCandidate> defaultProducts
-    ) {
-        if (aggregate.result().getInvestmentPrincipal() <= 0) {
-            aggregate.result().setExpectedFutureValue(0L);
-            return;
-        }
-
-        long principal = aggregate.result().getInvestmentPrincipal();
-        long depositAmount = ratioAmount(principal, defaultAllocation.get(ProductType.DEPOSIT));
-        long savingsAmount = ratioAmount(principal, defaultAllocation.get(ProductType.SAVINGS));
-        long etfAmount = principal - depositAmount - savingsAmount;
-
-        ProductCandidate savings = defaultProducts.get(ProductType.SAVINGS);
-        if (savings.getMonthlyMaxAmount() != null) {
-            long savingsCapacity = aggregate.tranches().stream()
-                    .filter(tranche -> tranche.getInvestmentAmount() > 0)
-                    .mapToLong(tranche -> {
-                        int remainingMonths = calculator.remainingMonths(
-                                tranche.getGiftDate(),
-                                evaluationDate
-                        );
-                        return safeMultiply(savings.getMonthlyMaxAmount(), remainingMonths);
-                    })
-                    .sum();
-            if (savingsAmount > savingsCapacity) {
-                depositAmount += savingsAmount - savingsCapacity;
-                savingsAmount = savingsCapacity;
-            }
-        }
-
-        aggregate.defaultAllocationAmounts().put(ProductType.DEPOSIT, depositAmount);
-        aggregate.defaultAllocationAmounts().put(ProductType.SAVINGS, savingsAmount);
-        aggregate.defaultAllocationAmounts().put(ProductType.ETF, etfAmount);
-
-        long expectedFutureValue = 0;
-        for (ProductType type : ProductType.values()) {
-            ProductCandidate candidate = defaultProducts.get(type);
-            SimulationProductRecord product = new SimulationProductRecord();
-            product.setCalculationType(candidate.calculationType());
-            product.setAppliedAnnualRatePercent(candidate.getAppliedAnnualRatePercent());
-            expectedFutureValue += calculator.calculateSelectedProductValue(
-                    product,
-                    aggregate.defaultAllocationAmounts().get(type),
-                    aggregate.tranches(),
-                    principal,
-                    evaluationDate
-            );
-        }
-        aggregate.result().setExpectedFutureValue(expectedFutureValue);
-    }
-
-    private void persistScenario(
-            Long simulationId,
-            ScenarioAggregate aggregate,
-            Map<ProductType, List<ProductCandidate>> candidates,
-            LocalDate evaluationDate
-    ) {
-        SimulationResultRecord result = aggregate.result();
-        result.setSimulationId(simulationId);
-        simulationMapper.insertResult(result);
-
-        for (SimulationTrancheRecord tranche : aggregate.tranches()) {
-            tranche.setResultId(result.getResultId());
-            simulationMapper.insertTranche(tranche);
-        }
-
-        for (Map.Entry<ProductType, List<ProductCandidate>> entry : candidates.entrySet()) {
-            ProductType type = entry.getKey();
-            long categoryAllocation = aggregate.defaultAllocationAmounts()
-                    .getOrDefault(type, 0L);
-            BigDecimal categoryRatio = result.getInvestmentPrincipal() <= 0
-                    ? BigDecimal.ZERO
-                    : BigDecimal.valueOf(categoryAllocation)
-                    .multiply(BigDecimal.valueOf(100))
-                    .divide(
-                            BigDecimal.valueOf(result.getInvestmentPrincipal()),
-                            4,
-                            RoundingMode.HALF_UP
-                    );
-
-            for (ProductCandidate candidate : entry.getValue()) {
-                SimulationProductRecord snapshot = snapshot(
-                        result.getResultId(),
-                        candidate,
-                        categoryAllocation,
-                        categoryRatio,
-                        aggregate.tranches(),
-                        result.getInvestmentPrincipal(),
-                        evaluationDate
+    SimulationResponse buildResponse(SimulationRecord simulation) {
+        Long simulationId = simulation.getSimulationId();
+        List<SimulationResultRecord> results =
+                safeList(simulationMapper.selectResults(simulationId));
+        List<SimulationTrancheRecord> tranches =
+                safeList(simulationMapper.selectTranches(simulationId));
+        List<SimulationPortfolioRecord> portfolios =
+                safeList(simulationMapper.selectPortfolios(simulationId));
+        List<SimulationProductRecord> products =
+                safeList(simulationMapper.selectProductSnapshots(simulationId));
+        ProductDataVersionRecord productDataVersion =
+                simulationMapper.selectProductDataVersion(
+                        simulation.getProductDataVersionId()
                 );
-                simulationMapper.insertProductSnapshot(snapshot);
-            }
-        }
-    }
+        validateSnapshotCompleteness(results, tranches, portfolios, products, productDataVersion);
 
-    private SimulationProductRecord snapshot(
-            Long resultId,
-            ProductCandidate candidate,
-            long allocatedAmount,
-            BigDecimal allocationRatio,
-            List<SimulationTrancheRecord> tranches,
-            long investmentPrincipal,
-            LocalDate evaluationDate
-    ) {
-        SimulationProductRecord snapshot = new SimulationProductRecord();
-        snapshot.setResultId(resultId);
-        snapshot.setProductId(candidate.getProductId());
-        snapshot.setProductName(candidate.getProductName());
-        snapshot.setProductType(candidate.getProductType());
-        snapshot.setProductCategory(candidate.getProductCategory());
-        snapshot.setSelected(false);
-        snapshot.setAllocatedAmount(allocatedAmount);
-        snapshot.setAllocationRatio(allocationRatio);
-        snapshot.setMinAnnualRatePercent(candidate.getMinAnnualRatePercent());
-        snapshot.setMaxAnnualRatePercent(candidate.getMaxAnnualRatePercent());
-        snapshot.setAppliedAnnualRatePercent(candidate.getAppliedAnnualRatePercent());
-        snapshot.setCalculationType(candidate.calculationType());
-        snapshot.setMinMonth(candidate.getMinMonth());
-        snapshot.setMaxMonth(candidate.getMaxMonth());
-        snapshot.setMinAmount(candidate.getMinAmount());
-        snapshot.setMaxAmount(candidate.getMaxAmount());
-        snapshot.setMonthlyMinAmount(candidate.getMonthlyMinAmount());
-        snapshot.setMonthlyMaxAmount(candidate.getMonthlyMaxAmount());
-        snapshot.setPreferentialConditions(candidate.getPreferentialConditions());
-        snapshot.setTrackingIndex(candidate.getTrackingIndex());
-        snapshot.setMarketCapitalization(candidate.getMarketCapitalization());
-        snapshot.setDividendYieldPercent(candidate.getDividendYieldPercent());
-        snapshot.setRiskLevel(candidate.getRiskLevel());
-        snapshot.setProductDetailUrl(candidate.getProductDetailUrl());
-        snapshot.setProductDataDate(candidate.getProductDataDate());
-
-        if (investmentPrincipal > 0) {
-            long futureValue = calculator.calculateSelectedProductValue(
-                    snapshot,
-                    allocatedAmount,
-                    tranches,
-                    investmentPrincipal,
-                    evaluationDate
-            );
-            snapshot.setExpectedFutureValue(futureValue);
-            snapshot.setExpectedProfit(futureValue - allocatedAmount);
-        } else {
-            snapshot.setExpectedFutureValue(0L);
-            snapshot.setExpectedProfit(0L);
-        }
-        return snapshot;
-    }
-
-    private SimulationResponse toResponse(
-            SimulationRecord simulation,
-            List<SimulationResultRecord> results,
-            List<SimulationTrancheRecord> tranches,
-            List<SimulationProductRecord> products
-    ) {
         Map<Long, List<SimulationTrancheRecord>> tranchesByResult = tranches.stream()
                 .collect(Collectors.groupingBy(SimulationTrancheRecord::getResultId));
-        Map<Long, List<SimulationProductRecord>> productsByResult = products.stream()
-                .collect(Collectors.groupingBy(SimulationProductRecord::getResultId));
+        Map<Long, List<SimulationPortfolioRecord>> portfoliosByResult = portfolios.stream()
+                .collect(Collectors.groupingBy(SimulationPortfolioRecord::getResultId));
+        Map<Long, List<SimulationProductRecord>> productsByPortfolio = products.stream()
+                .collect(Collectors.groupingBy(SimulationProductRecord::getPortfolioId));
+        Map<Long, SimulationResultRecord> resultById = results.stream()
+                .collect(Collectors.toMap(
+                        SimulationResultRecord::getResultId,
+                        Function.identity()
+                ));
 
-        List<SimulationResponse.Result> resultResponses = results.stream()
+        List<SimulationResponse.Recommendation> recommendations = portfolios.stream()
+                .filter(SimulationPortfolioRecord::isRecommended)
+                .sorted(Comparator.comparing(item -> item.getPortfolioType().ordinal()))
+                .map(item -> new SimulationResponse.Recommendation(
+                        item.getPortfolioType(),
+                        item.getScenarioType(),
+                        item.getResultId(),
+                        item.getPortfolioId()
+                ))
+                .toList();
+        if (recommendations.size() != RiskProfile.values().length
+                || recommendations.stream()
+                .map(SimulationResponse.Recommendation::portfolioType)
+                .distinct().count() != RiskProfile.values().length) {
+            throw new SimulationException(
+                    SimulationError.SIMULATION_RECOMMENDATION_INCOMPLETE);
+        }
+
+        List<SimulationResponse.Result> responseResults = results.stream()
                 .map(result -> new SimulationResponse.Result(
                         result.getResultId(),
                         result.getScenarioType(),
@@ -772,59 +506,74 @@ public class SimulationService {
                         result.getGiftTax(),
                         result.getDonorRequiredAmount(),
                         result.getPostTaxAmount(),
-                        result.getCurrentAmount(),
-                        result.getDeferredAmount(),
                         result.getInvestmentPrincipal(),
-                        result.getExpectedFutureValue(),
                         tranchesByResult.getOrDefault(result.getResultId(), List.of())
                                 .stream()
                                 .map(this::toTrancheResponse)
                                 .toList(),
-                        productsByResult.getOrDefault(result.getResultId(), List.of())
+                        portfoliosByResult.getOrDefault(result.getResultId(), List.of())
                                 .stream()
-                                .map(this::toProductResponse)
+                                .map(portfolio -> toPortfolioResponse(
+                                        portfolio,
+                                        result,
+                                        productsByPortfolio.getOrDefault(
+                                                portfolio.getPortfolioId(),
+                                                List.of()
+                                        ),
+                                        simulation
+                                ))
                                 .toList()
                 ))
                 .toList();
 
-        SimulationResponse.SelectedResult selectedResult = null;
+        SimulationResponse.Selection selection = null;
         if (simulation.getStatus() == SimulationStatus.SAVED) {
-            SimulationResultRecord selected = results.stream()
-                    .filter(result -> result.getResultId().equals(simulation.getSelectedResultId()))
+            SimulationPortfolioRecord selectedPortfolio = portfolios.stream()
+                    .filter(item -> Objects.equals(
+                            item.getPortfolioId(),
+                            simulation.getSelectedPortfolioId()
+                    ))
                     .findFirst()
                     .orElseThrow(() -> new SimulationException(
-                            SimulationError.SIMULATION_RESULT_INCOMPLETE));
-            List<SimulationProductRecord> selectedProducts = productsByResult
-                    .getOrDefault(selected.getResultId(), List.of())
-                    .stream()
-                    .filter(SimulationProductRecord::isSelected)
-                    .toList();
+                            SimulationError.SIMULATION_HISTORY_INCOMPLETE));
+            SimulationResultRecord selectedResult = resultById.get(
+                    selectedPortfolio.getResultId()
+            );
+            List<SimulationProductRecord> selectedProducts =
+                    productsByPortfolio.getOrDefault(
+                                    selectedPortfolio.getPortfolioId(),
+                                    List.of()
+                            ).stream()
+                            .filter(SimulationProductRecord::isSelected)
+                            .peek(product -> product.setSelectedPreferentialConditions(
+                                    safeList(simulationMapper.selectSelectedPreferentialRates(
+                                            product.getSimulationProductId()
+                                    ))
+                            ))
+                            .toList();
             if (selectedProducts.isEmpty()) {
-                throw new SimulationException(SimulationError.SIMULATION_RESULT_INCOMPLETE);
+                throw new SimulationException(
+                        SimulationError.SIMULATION_HISTORY_INCOMPLETE);
             }
-            long futureValue = selectedProducts.stream()
-                    .mapToLong(product -> value(product.getExpectedFutureValue()))
-                    .sum();
-            selectedResult = new SimulationResponse.SelectedResult(
-                    selected.getResultId(),
-                    selected.getScenarioType(),
-                    simulation.getSelectedRiskProfile(),
-                    selected.getGiftTax(),
-                    selected.getInvestmentPrincipal(),
-                    futureValue,
-                    futureValue - selected.getInvestmentPrincipal(),
-                    selectedProducts.stream().map(this::toProductResponse).toList()
+            selection = toSelection(
+                    selectedPortfolio,
+                    selectedResult,
+                    selectedProducts,
+                    simulation.getInvestmentPeriodMonths()
             );
         }
 
         return new SimulationResponse(
-                simulation.getSimulationId(),
+                simulationId,
                 simulation.getStatus(),
                 simulation.getVersion(),
                 new SimulationResponse.Family(
                         simulation.getFamilyId(),
                         simulation.getFamilyName(),
-                        simulation.getRelation()
+                        simulation.getRelation(),
+                        simulation.getBirthDate(),
+                        simulation.getAgeAtSimulation(),
+                        simulation.getMinorAtSimulation()
                 ),
                 new SimulationResponse.Input(
                         simulation.getRequestedAmount(),
@@ -833,37 +582,690 @@ public class SimulationService {
                         simulation.getAsOfDate(),
                         simulation.getInvestmentEndDate()
                 ),
-                simulation.getPreviousGiftAmount(),
-                simulation.getRemainingDeductionAmount(),
-                simulation.getDeductionResetDate(),
-                simulation.getRecommendedScenarioType(),
-                simulation.getSelectedScenarioType(),
-                selectedResult,
-                resultResponses,
+                new SimulationResponse.GiftHistorySummary(
+                        simulation.getLookbackStartDate(),
+                        simulation.getPreviousGiftAmount(),
+                        simulation.getDeductionLimit(),
+                        simulation.getUsedDeductionAmount(),
+                        simulation.getRemainingDeductionAmount(),
+                        simulation.getDeductionRenewalDate()
+                ),
+                new SimulationResponse.ProductDataVersion(
+                        productDataVersion.getProductDataVersionId(),
+                        productDataVersion.getVersionCode(),
+                        productDataVersion.getDataDate()
+                ),
+                recommendations,
+                selection,
+                responseResults,
                 frontendPolicy(simulation.getInvestmentPeriodMonths()),
-                simulation.getFormulaVersion(),
                 simulation.getCalculationVersion(),
-                simulation.getProductDataDate(),
+                simulation.getFormulaVersion(),
                 simulation.getCreatedAt(),
+                simulation.getUpdatedAt(),
                 simulation.getSavedAt(),
                 simulation.getExpiredAt()
         );
     }
 
-    private SimulationResponse.FrontendCalculationPolicy frontendPolicy(int months) {
-        return new SimulationResponse.FrontendCalculationPolicy(
-                FORMULA_VERSION,
-                "P × (1 + r × months / 12)",
-                "월말 납입 적립식 미래가치",
-                "P × (1 + recent5YearAnnualReturn)^(months / 12)",
-                "END_OF_MONTH",
-                "RECENT_5_YEAR_ANNUALIZED_RETURN",
-                PortfolioPolicy.allocations(months)
+    private PersistedScenario persistScenario(
+            Long simulationId,
+            ScenarioAggregate aggregate,
+            Map<ProductType, List<ProductCandidate>> safeCandidates,
+            Map<RiskProfile, List<ProductCandidate>> etfCandidates,
+            int investmentPeriodMonths,
+            LocalDate investmentEndDate,
+            LocalDateTime now
+    ) {
+        SimulationResultRecord result = aggregate.result();
+        result.setSimulationId(simulationId);
+        result.setCreatedAt(now);
+        simulationMapper.insertResult(result);
+        for (SimulationTrancheRecord tranche : aggregate.tranches()) {
+            tranche.setResultId(result.getResultId());
+            simulationMapper.insertTranche(tranche);
+        }
+
+        Map<RiskProfile, SimulationPortfolioRecord> persisted =
+                new EnumMap<>(RiskProfile.class);
+        for (RiskProfile profile : RiskProfile.values()) {
+            Map<ProductType, BigDecimal> ratios =
+                    PortfolioPolicy.allocations(investmentPeriodMonths).get(profile);
+            Map<ProductType, Long> amounts = allocationAmounts(
+                    result.getInvestmentPrincipal(),
+                    ratios,
+                    aggregate.tranches(),
+                    safeCandidates.get(ProductType.SAVINGS).get(0),
+                    investmentEndDate
+            );
+            Map<ProductType, List<ProductCandidate>> candidates =
+                    new EnumMap<>(ProductType.class);
+            candidates.put(ProductType.DEPOSIT, safeCandidates.get(ProductType.DEPOSIT));
+            candidates.put(ProductType.SAVINGS, safeCandidates.get(ProductType.SAVINGS));
+            candidates.put(ProductType.ETF, etfCandidates.get(profile));
+
+            SimulationPortfolioRecord portfolio = new SimulationPortfolioRecord();
+            portfolio.setResultId(result.getResultId());
+            portfolio.setPortfolioType(profile);
+            portfolio.setDepositAmount(amounts.get(ProductType.DEPOSIT));
+            portfolio.setSavingsAmount(amounts.get(ProductType.SAVINGS));
+            portfolio.setEtfAmount(amounts.get(ProductType.ETF));
+            portfolio.setExpectedFutureValue(0L);
+            portfolio.setRecommended(false);
+            portfolio.setCreatedAt(now);
+            portfolio.setUpdatedAt(now);
+            simulationMapper.insertPortfolio(portfolio);
+
+            long portfolioFutureValue = 0;
+            for (ProductType type : ProductType.values()) {
+                long allocatedAmount = amounts.getOrDefault(type, 0L);
+                List<ProductCandidate> typeCandidates = candidates.get(type);
+                if (allocatedAmount > 0 && (typeCandidates == null || typeCandidates.isEmpty())) {
+                    throw new SimulationException(
+                            SimulationError.PRODUCT_CANDIDATE_NOT_FOUND);
+                }
+                long bestFutureValue = 0;
+                for (ProductCandidate candidate : safeList(typeCandidates)) {
+                    SimulationProductRecord product = toSnapshot(
+                            portfolio.getPortfolioId(),
+                            candidate,
+                            allocatedAmount,
+                            aggregate.tranches(),
+                            result.getInvestmentPrincipal(),
+                            investmentEndDate
+                    );
+                    simulationMapper.insertProductSnapshot(product);
+                    bestFutureValue = Math.max(
+                            bestFutureValue,
+                            product.getExpectedFutureValue()
+                    );
+                }
+                portfolioFutureValue += bestFutureValue;
+            }
+            portfolio.setExpectedFutureValue(portfolioFutureValue);
+            updatePortfolioValue(portfolio);
+            persisted.put(profile, portfolio);
+        }
+        return new PersistedScenario(result, persisted);
+    }
+
+    private void updatePortfolioValue(SimulationPortfolioRecord portfolio) {
+        // MyBatis keeps schema mutations explicit. This helper uses a mapper method
+        // represented by re-inserting only in memory when running mapper fakes.
+        // The real XML update is named updatePortfolioExpectedFutureValue.
+        simulationMapper.updatePortfolioExpectedFutureValue(
+                portfolio.getPortfolioId(),
+                portfolio.getExpectedFutureValue()
         );
     }
 
-    private SimulationResponse.Tranche toTrancheResponse(SimulationTrancheRecord tranche) {
+    private void markRecommendations(
+            PersistedScenario immediate,
+            PersistedScenario optimized
+    ) {
+        for (RiskProfile profile : RiskProfile.values()) {
+            SimulationPortfolioRecord first = immediate.portfolios().get(profile);
+            SimulationPortfolioRecord second = optimized.portfolios().get(profile);
+            SimulationPortfolioRecord selected;
+            int valueCompare = Long.compare(
+                    first.getExpectedFutureValue(),
+                    second.getExpectedFutureValue()
+            );
+            if (valueCompare > 0) {
+                selected = first;
+            } else if (valueCompare < 0) {
+                selected = second;
+            } else {
+                selected = immediate.result().getGiftTax()
+                        <= optimized.result().getGiftTax() ? first : second;
+            }
+            selected.setRecommended(true);
+            simulationMapper.markPortfolioRecommended(selected.getPortfolioId());
+        }
+    }
+
+    private ScenarioAggregate immediateScenario(
+            SimulationExecuteRequest request,
+            long remainingDeduction,
+            List<TaxBracket> brackets,
+            LocalDate asOfDate
+    ) {
+        SimulationCalculator.TaxOutcome tax = calculator.calculateTax(
+                request.getRequestedAmount(),
+                remainingDeduction,
+                request.getTaxPaymentMethod(),
+                brackets
+        );
+        SimulationResultRecord result = result(
+                ScenarioType.IMMEDIATE,
+                tax.deductionAmount(),
+                tax.taxableAmount(),
+                tax.giftTax(),
+                tax.donorRequiredAmount(),
+                tax.investmentAmount(),
+                tax.investmentAmount()
+        );
+        return new ScenarioAggregate(
+                result,
+                new ArrayList<>(List.of(tranche(
+                        1,
+                        asOfDate,
+                        request.getRequestedAmount(),
+                        tax,
+                        true
+                )))
+        );
+    }
+
+    private ScenarioAggregate optimizedScenario(
+            SimulationExecuteRequest request,
+            long remainingDeduction,
+            long fullDeductionLimit,
+            List<TaxBracket> brackets,
+            LocalDate asOfDate,
+            LocalDate renewalDate,
+            List<GiftHistoryRecord> completedGifts,
+            LocalDate investmentEndDate
+    ) {
+        long amountLeft = request.getRequestedAmount();
+        List<SimulationTrancheRecord> tranches = new ArrayList<>();
+        List<GiftPoint> history = completedGifts.stream()
+                .map(gift -> new GiftPoint(gift.getGiftDate(), value(gift.getAmount())))
+                .collect(Collectors.toCollection(ArrayList::new));
+        long totalDeduction = 0;
+        long totalTaxable = 0;
+        long totalTax = 0;
+        long totalDonorRequired = 0;
+        long totalInvestment = 0;
+        int sequence = 1;
+
+        long currentAmount = Math.min(amountLeft, remainingDeduction);
+        if (currentAmount > 0) {
+            SimulationCalculator.TaxOutcome tax = calculator.calculateTax(
+                    currentAmount,
+                    remainingDeduction,
+                    request.getTaxPaymentMethod(),
+                    brackets
+            );
+            tranches.add(tranche(sequence++, asOfDate, currentAmount, tax, true));
+            history.add(new GiftPoint(asOfDate, currentAmount));
+            amountLeft -= currentAmount;
+            totalDeduction += tax.deductionAmount();
+            totalTaxable += tax.taxableAmount();
+            totalTax += tax.giftTax();
+            totalDonorRequired += tax.donorRequiredAmount();
+            totalInvestment += tax.investmentAmount();
+        }
+
+        LocalDate nextDate = renewalDate;
+        int guard = 0;
+        while (amountLeft > 0 && guard++ < 100) {
+            LocalDate calculationDate = nextDate;
+            long used = history.stream()
+                    .filter(point -> point.date().isAfter(
+                            calculationDate.minusYears(DEDUCTION_WINDOW_YEARS)))
+                    .filter(point -> point.date().isBefore(calculationDate))
+                    .mapToLong(GiftPoint::amount)
+                    .sum();
+            long available = Math.max(0, fullDeductionLimit - used);
+            if (available == 0) {
+                nextDate = nextReleaseDate(history, nextDate);
+                continue;
+            }
+            long giftAmount = Math.min(amountLeft, available);
+            SimulationCalculator.TaxOutcome tax = calculator.calculateTax(
+                    giftAmount,
+                    available,
+                    request.getTaxPaymentMethod(),
+                    brackets
+            );
+            boolean included = !nextDate.isAfter(investmentEndDate);
+            tranches.add(tranche(sequence++, nextDate, giftAmount, tax, included));
+            history.add(new GiftPoint(nextDate, giftAmount));
+            amountLeft -= giftAmount;
+            totalDeduction += tax.deductionAmount();
+            totalTaxable += tax.taxableAmount();
+            totalTax += tax.giftTax();
+            totalDonorRequired += tax.donorRequiredAmount();
+            if (included) {
+                totalInvestment += tax.investmentAmount();
+            }
+            if (amountLeft > 0) {
+                nextDate = nextReleaseDate(history, nextDate);
+            }
+        }
+        if (amountLeft > 0) {
+            throw new SimulationException(
+                    SimulationError.SIMULATION_RESULT_INCOMPLETE);
+        }
+
+        SimulationResultRecord result = result(
+                ScenarioType.TAX_OPTIMIZED,
+                totalDeduction,
+                totalTaxable,
+                totalTax,
+                totalDonorRequired,
+                Math.max(0, request.getRequestedAmount() - totalTax),
+                totalInvestment
+        );
+        return new ScenarioAggregate(result, tranches);
+    }
+
+    private SimulationResultRecord result(
+            ScenarioType type,
+            long deduction,
+            long taxable,
+            long tax,
+            long donorRequired,
+            long postTax,
+            long investmentPrincipal
+    ) {
+        SimulationResultRecord result = new SimulationResultRecord();
+        result.setScenarioType(type);
+        result.setDeductionAmount(deduction);
+        result.setTaxableAmount(taxable);
+        result.setGiftTax(tax);
+        result.setDonorRequiredAmount(donorRequired);
+        result.setPostTaxAmount(postTax);
+        result.setInvestmentPrincipal(investmentPrincipal);
+        return result;
+    }
+
+    private SimulationTrancheRecord tranche(
+            int sequence,
+            LocalDate giftDate,
+            long giftAmount,
+            SimulationCalculator.TaxOutcome tax,
+            boolean included
+    ) {
+        SimulationTrancheRecord tranche = new SimulationTrancheRecord();
+        tranche.setSequenceNo(sequence);
+        tranche.setGiftDate(giftDate);
+        tranche.setGiftAmount(giftAmount);
+        tranche.setEstimatedGiftTax(tax.giftTax());
+        tranche.setDonorRequiredAmount(tax.donorRequiredAmount());
+        tranche.setInvestmentAmount(included ? tax.investmentAmount() : 0L);
+        return tranche;
+    }
+
+    private Map<ProductType, Long> allocationAmounts(
+            long principal,
+            Map<ProductType, BigDecimal> ratios,
+            List<SimulationTrancheRecord> tranches,
+            ProductCandidate savingsCandidate,
+            LocalDate investmentEndDate
+    ) {
+        Map<ProductType, Long> amounts = new EnumMap<>(ProductType.class);
+        long deposit = ratioAmount(principal, ratios.get(ProductType.DEPOSIT));
+        long savings = ratioAmount(principal, ratios.get(ProductType.SAVINGS));
+        long etf = Math.max(0, principal - deposit - savings);
+        if (savingsCandidate.getMonthlyMaxAmount() != null) {
+            long capacity = tranches.stream()
+                    .filter(item -> item.getInvestmentAmount() > 0)
+                    .mapToLong(item -> safeMultiply(
+                            savingsCandidate.getMonthlyMaxAmount(),
+                            calculator.remainingMonths(
+                                    item.getGiftDate(),
+                                    investmentEndDate
+                            )
+                    ))
+                    .sum();
+            if (savings > capacity) {
+                deposit += savings - capacity;
+                savings = capacity;
+            }
+        }
+        amounts.put(ProductType.DEPOSIT, deposit);
+        amounts.put(ProductType.SAVINGS, savings);
+        amounts.put(ProductType.ETF, etf);
+        return amounts;
+    }
+
+    private SimulationProductRecord toSnapshot(
+            Long portfolioId,
+            ProductCandidate candidate,
+            long allocatedAmount,
+            List<SimulationTrancheRecord> tranches,
+            long investmentPrincipal,
+            LocalDate investmentEndDate
+    ) {
+        SimulationProductRecord product = new SimulationProductRecord();
+        product.setPortfolioId(portfolioId);
+        product.setProductVersionId(candidate.getProductVersionId());
+        product.setProductId(candidate.getProductId());
+        product.setProductCode(candidate.getProductCode());
+        product.setProductName(candidate.getProductName());
+        product.setProductType(candidate.getProductType());
+        product.setProductCategory(candidate.getProductCategory());
+        product.setSelected(false);
+        product.setAllocatedAmount(allocatedAmount);
+        product.setBaseAnnualRatePercent(candidate.getBaseAnnualRatePercent());
+        product.setMaximumAnnualRatePercent(candidate.getMaximumAnnualRatePercent());
+        product.setAppliedAnnualRatePercent(candidate.getAppliedAnnualRatePercent());
+        long futureValue = investmentPrincipal <= 0 ? 0
+                : calculator.calculateSelectedProductValue(
+                product,
+                allocatedAmount,
+                tranches,
+                investmentPrincipal,
+                investmentEndDate
+        );
+        product.setExpectedFutureValue(futureValue);
+        return product;
+    }
+
+    private ProductSelectionPlan validateProductSelections(
+            SimulationSaveRequest request,
+            SimulationRecord simulation,
+            SimulationPortfolioRecord portfolio,
+            List<SimulationProductRecord> candidates
+    ) {
+        Map<Long, SimulationProductRecord> byId = candidates.stream()
+                .collect(Collectors.toMap(
+                        SimulationProductRecord::getSimulationProductId,
+                        Function.identity()
+                ));
+        Set<Long> ids = new HashSet<>();
+        Set<ProductType> types = EnumSet.noneOf(ProductType.class);
+        List<SelectedProductPlan> plans = new ArrayList<>();
+        for (SimulationSaveRequest.ProductSelection selected :
+                request.getProductSelections()) {
+            if (!ids.add(selected.getSimulationProductId())) {
+                throw new SimulationException(
+                        SimulationError.DUPLICATE_PRODUCT_SELECTION);
+            }
+            SimulationProductRecord product = byId.get(
+                    selected.getSimulationProductId()
+            );
+            if (product == null) {
+                throw new SimulationException(
+                        SimulationError.PRODUCT_NOT_IN_PORTFOLIO);
+            }
+            if (!types.add(product.getProductType())) {
+                throw new SimulationException(SimulationError.DUPLICATE_PRODUCT_TYPE);
+            }
+            List<String> conditionCodes = selected.getPreferentialConditionCodes() == null
+                    ? List.of() : selected.getPreferentialConditionCodes();
+            if (conditionCodes.size() != new HashSet<>(conditionCodes).size()) {
+                throw new SimulationException(
+                        SimulationError.INVALID_PREFERENTIAL_CONDITION);
+            }
+            if (product.getProductType() == ProductType.ETF
+                    && !conditionCodes.isEmpty()) {
+                throw new SimulationException(
+                        SimulationError.ETF_PREFERENTIAL_CONDITION_NOT_ALLOWED);
+            }
+            List<PreferentialRateRecord> rates = conditionCodes.isEmpty()
+                    ? List.of()
+                    : safeList(simulationMapper.selectPreferentialRatesByCodes(
+                    product.getProductVersionId(),
+                    conditionCodes
+            ));
+            if (rates.size() != conditionCodes.size()
+                    || rates.stream().anyMatch(rate -> !termMatches(
+                    simulation.getInvestmentPeriodMonths(),
+                    rate.getMinimumMonths(),
+                    rate.getMaximumMonths()
+            ))) {
+                throw new SimulationException(
+                        SimulationError.INVALID_PREFERENTIAL_CONDITION);
+            }
+            validateProductLimits(product, simulation.getInvestmentPeriodMonths());
+            plans.add(new SelectedProductPlan(product, rates));
+        }
+
+        Set<ProductType> required = EnumSet.noneOf(ProductType.class);
+        if (portfolio.getDepositAmount() > 0) {
+            required.add(ProductType.DEPOSIT);
+        }
+        if (portfolio.getSavingsAmount() > 0) {
+            required.add(ProductType.SAVINGS);
+        }
+        if (portfolio.getEtfAmount() > 0) {
+            required.add(ProductType.ETF);
+        }
+        if (!types.equals(required)) {
+            throw new SimulationException(
+                    SimulationError.PRODUCT_TYPE_SELECTION_INCOMPLETE);
+        }
+        for (SelectedProductPlan plan : plans) {
+            long expected = switch (plan.product().getProductType()) {
+                case DEPOSIT -> portfolio.getDepositAmount();
+                case SAVINGS -> portfolio.getSavingsAmount();
+                case ETF -> portfolio.getEtfAmount();
+            };
+            if (plan.product().getAllocatedAmount() != expected) {
+                throw new SimulationException(
+                        SimulationError.PORTFOLIO_ALLOCATION_MISMATCH);
+            }
+        }
+        return new ProductSelectionPlan(plans);
+    }
+
+    private void validateProductLimits(
+            SimulationProductRecord product,
+            int investmentPeriodMonths
+    ) {
+        ProductVersionDetailRecord detail =
+                simulationMapper.selectProductVersionDetail(product.getProductVersionId());
+        if (detail == null) {
+            throw new SimulationException(
+                    SimulationError.PRODUCT_DATA_VERSION_MISMATCH);
+        }
+        if (!termMatches(
+                investmentPeriodMonths,
+                detail.getMinimumMonths(),
+                detail.getMaximumMonths()
+        )) {
+            throw new SimulationException(SimulationError.PRODUCT_LIMIT_EXCEEDED);
+        }
+        if (product.getProductType() == ProductType.DEPOSIT) {
+            if (detail.getMinimumAmount() != null
+                    && product.getAllocatedAmount() < detail.getMinimumAmount()) {
+                throw new SimulationException(SimulationError.PRODUCT_LIMIT_EXCEEDED);
+            }
+            if (detail.getMaximumAmount() != null
+                    && product.getAllocatedAmount() > detail.getMaximumAmount()) {
+                throw new SimulationException(SimulationError.PRODUCT_LIMIT_EXCEEDED);
+            }
+        }
+        if (product.getProductType() == ProductType.SAVINGS) {
+            long monthly = divideCeiling(
+                    product.getAllocatedAmount(),
+                    investmentPeriodMonths
+            );
+            if (detail.getMonthlyMinimumAmount() != null
+                    && monthly < detail.getMonthlyMinimumAmount()) {
+                throw new SimulationException(SimulationError.PRODUCT_LIMIT_EXCEEDED);
+            }
+            if (detail.getMonthlyMaximumAmount() != null
+                    && monthly > detail.getMonthlyMaximumAmount()) {
+                throw new SimulationException(SimulationError.PRODUCT_LIMIT_EXCEEDED);
+            }
+            product.setMonthlyContributionAmount(monthly);
+        }
+    }
+
+    private BigDecimal finalAppliedRate(
+            SimulationProductRecord product,
+            int months,
+            List<PreferentialRateRecord> rates
+    ) {
+        if (product.getProductType() == ProductType.ETF) {
+            return product.getBaseAnnualRatePercent();
+        }
+        BigDecimal additional = rates.stream()
+                .map(PreferentialRateRecord::getAdditionalRatePercent)
+                .filter(Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal calculated = product.getBaseAnnualRatePercent().add(additional);
+        BigDecimal maximum = product.getMaximumAnnualRatePercent();
+        return maximum == null || calculated.compareTo(maximum) <= 0
+                ? calculated : maximum;
+    }
+
+    private void restoreSimulationProducts(SimulationRecord simulation) {
+        List<SimulationPortfolioRecord> portfolios =
+                safeList(simulationMapper.selectPortfolios(simulation.getSimulationId()));
+        Map<Long, SimulationResultRecord> results =
+                safeList(simulationMapper.selectResults(simulation.getSimulationId())).stream()
+                        .collect(Collectors.toMap(
+                                SimulationResultRecord::getResultId,
+                                Function.identity()
+                        ));
+        Map<Long, List<SimulationTrancheRecord>> tranches =
+                safeList(simulationMapper.selectTranches(simulation.getSimulationId())).stream()
+                        .collect(Collectors.groupingBy(
+                                SimulationTrancheRecord::getResultId
+                        ));
+        for (SimulationPortfolioRecord portfolio : portfolios) {
+            SimulationResultRecord result = results.get(portfolio.getResultId());
+            for (SimulationProductRecord product :
+                    safeList(simulationMapper.selectPortfolioProducts(
+                            portfolio.getPortfolioId()
+                    ))) {
+                BigDecimal baseRate = product.getBaseAnnualRatePercent();
+                product.setAppliedAnnualRatePercent(baseRate);
+                long value = calculator.calculateSelectedProductValue(
+                        product,
+                        product.getAllocatedAmount(),
+                        tranches.getOrDefault(result.getResultId(), List.of()),
+                        result.getInvestmentPrincipal(),
+                        simulation.getInvestmentEndDate()
+                );
+                simulationMapper.restoreSimulationProduct(
+                        product.getSimulationProductId(),
+                        baseRate,
+                        value
+                );
+            }
+        }
+    }
+
+    private SimulationResponse.Portfolio toPortfolioResponse(
+            SimulationPortfolioRecord portfolio,
+            SimulationResultRecord result,
+            List<SimulationProductRecord> products,
+            SimulationRecord simulation
+    ) {
+        return new SimulationResponse.Portfolio(
+                portfolio.getPortfolioId(),
+                portfolio.getPortfolioType(),
+                new SimulationResponse.Allocation(
+                        portfolio.getDepositAmount(),
+                        portfolio.getSavingsAmount(),
+                        portfolio.getEtfAmount()
+                ),
+                portfolio.getExpectedFutureValue(),
+                portfolio.getExpectedFutureValue() - result.getInvestmentPrincipal(),
+                portfolio.isRecommended(),
+                Objects.equals(
+                        portfolio.getPortfolioId(),
+                        simulation.getSelectedPortfolioId()
+                ),
+                products.stream()
+                        .map(product -> toProductResponse(
+                                product,
+                                result.getInvestmentPrincipal(),
+                                simulation.getInvestmentPeriodMonths()
+                        ))
+                        .toList()
+        );
+    }
+
+    private SimulationResponse.Product toProductResponse(
+            SimulationProductRecord product,
+            long investmentPrincipal,
+            int investmentPeriodMonths
+    ) {
+        BigDecimal ratio = investmentPrincipal <= 0
+                ? BigDecimal.ZERO
+                : BigDecimal.valueOf(product.getAllocatedAmount())
+                .multiply(ONE_HUNDRED)
+                .divide(
+                        BigDecimal.valueOf(investmentPrincipal),
+                        2,
+                        RoundingMode.HALF_UP
+                );
+        Long monthlyContribution = product.getProductType() == ProductType.SAVINGS
+                ? divideCeiling(
+                product.getAllocatedAmount(),
+                Math.max(1, investmentPeriodMonths)
+        ) : null;
+        SimulationResponse.ReturnMetric metric =
+                product.getProductType() == ProductType.ETF
+                        ? new SimulationResponse.ReturnMetric(
+                        "ANNUALIZED_RETURN_5Y",
+                        null,
+                        null,
+                        product.getBaseAnnualRatePercent()
+                )
+                        : new SimulationResponse.ReturnMetric(
+                        "INTEREST_RATE_RANGE",
+                        product.getBaseAnnualRatePercent(),
+                        product.getMaximumAnnualRatePercent(),
+                        null
+                );
+        List<SimulationResponse.SelectedPreferentialCondition> conditions =
+                safeList(product.getSelectedPreferentialConditions()).stream()
+                        .map(item -> new SimulationResponse.SelectedPreferentialCondition(
+                                item.getConditionCode(),
+                                item.getAdditionalRatePercent()
+                        ))
+                        .toList();
+        return new SimulationResponse.Product(
+                product.getSimulationProductId(),
+                product.getProductVersionId(),
+                product.getProductId(),
+                product.getProductName(),
+                product.getProductType(),
+                product.getAllocatedAmount(),
+                monthlyContribution,
+                ratio,
+                product.getAppliedAnnualRatePercent(),
+                product.calculationType(),
+                metric,
+                product.getExpectedFutureValue(),
+                product.getExpectedFutureValue() - product.getAllocatedAmount(),
+                product.isSelected(),
+                conditions
+        );
+    }
+
+    private SimulationResponse.Selection toSelection(
+            SimulationPortfolioRecord portfolio,
+            SimulationResultRecord result,
+            List<SimulationProductRecord> selectedProducts,
+            int investmentPeriodMonths
+    ) {
+        long futureValue = selectedProducts.stream()
+                .mapToLong(item -> value(item.getExpectedFutureValue()))
+                .sum();
+        return new SimulationResponse.Selection(
+                portfolio.getPortfolioId(),
+                portfolio.getPortfolioType(),
+                result.getResultId(),
+                result.getScenarioType(),
+                result.getGiftTax(),
+                result.getDonorRequiredAmount(),
+                result.getInvestmentPrincipal(),
+                futureValue,
+                futureValue - result.getInvestmentPrincipal(),
+                selectedProducts.stream()
+                        .map(product -> toProductResponse(
+                                product,
+                                result.getInvestmentPrincipal(),
+                                investmentPeriodMonths
+                        ))
+                        .toList()
+        );
+    }
+
+    private SimulationResponse.Tranche toTrancheResponse(
+            SimulationTrancheRecord tranche
+    ) {
         return new SimulationResponse.Tranche(
+                tranche.getTrancheId(),
                 tranche.getSequenceNo(),
                 tranche.getGiftDate(),
                 tranche.getGiftAmount(),
@@ -873,336 +1275,407 @@ public class SimulationService {
         );
     }
 
-    private SimulationResponse.Product toProductResponse(SimulationProductRecord product) {
-        Long allocatedAmount = product.isSelected()
-                ? product.getAllocatedAmount()
-                : product.getDefaultAllocatedAmount();
-        BigDecimal allocationRatio = product.isSelected()
-                ? product.getAllocationRatio()
-                : product.getDefaultAllocationRatio();
-        Long expectedFutureValue = product.isSelected()
-                ? product.getExpectedFutureValue()
-                : product.getDefaultExpectedFutureValue();
-        Long expectedProfit = product.isSelected()
-                ? product.getExpectedProfit()
-                : product.getDefaultExpectedProfit();
-
-        return new SimulationResponse.Product(
-                product.getSimulationProductId(),
-                product.getProductId(),
-                product.getProductName(),
-                product.getProductType(),
-                product.getProductType(),
-                product.getProductCategory(),
-                product.getMinAnnualRatePercent(),
-                product.getMaxAnnualRatePercent(),
-                product.getAppliedAnnualRatePercent(),
-                product.getCalculationType(),
-                allocatedAmount,
-                allocationRatio,
-                expectedFutureValue,
-                expectedProfit,
-                product.getMinMonth(),
-                product.getMaxMonth(),
-                product.getMinAmount(),
-                product.getMaxAmount(),
-                product.getMonthlyMinAmount(),
-                product.getMonthlyMaxAmount(),
-                product.getPreferentialConditions(),
-                product.getTrackingIndex(),
-                product.getMarketCapitalization(),
-                product.getDividendYieldPercent(),
-                product.getRiskLevel(),
-                product.getProductDetailUrl(),
-                product.getProductDataDate()
-        );
-    }
-
-    private Map<ProductType, List<ProductCandidate>> loadProductCandidates(int months) {
-        Map<ProductType, List<ProductCandidate>> candidates = new EnumMap<>(ProductType.class);
-        candidates.put(
+    private SimulationResponse.FrontendCalculationPolicy frontendPolicy(int months) {
+        Map<ProductType, com.example.project.simulation.domain.CalculationType> methods =
+                new EnumMap<>(ProductType.class);
+        methods.put(
                 ProductType.DEPOSIT,
-                validCandidates(
-                        simulationMapper.selectDepositCandidates(months, MAX_PRODUCT_CANDIDATES),
-                        ProductType.DEPOSIT
-                )
+                com.example.project.simulation.domain.CalculationType.SIMPLE_INTEREST
         );
-        candidates.put(
+        methods.put(
                 ProductType.SAVINGS,
-                validCandidates(
-                        simulationMapper.selectSavingsCandidates(months, MAX_PRODUCT_CANDIDATES),
-                        ProductType.SAVINGS
-                )
+                com.example.project.simulation.domain.CalculationType.MONTHLY_INSTALLMENT
         );
-        candidates.put(
+        methods.put(
                 ProductType.ETF,
-                validCandidates(
-                        simulationMapper.selectEtfCandidates(MAX_ETF_CANDIDATES),
-                        ProductType.ETF
+                com.example.project.simulation.domain.CalculationType.COMPOUND_RETURN
+        );
+        return new SimulationResponse.FrontendCalculationPolicy(
+                FORMULA_VERSION,
+                "PERCENT",
+                "FLOOR_TO_WON",
+                methods,
+                "END_OF_MONTH",
+                "ANNUALIZED_RETURN_5Y",
+                PortfolioPolicy.allocations(months)
+        );
+    }
+
+    private void validateSnapshotCompleteness(
+            List<SimulationResultRecord> results,
+            List<SimulationTrancheRecord> tranches,
+            List<SimulationPortfolioRecord> portfolios,
+            List<SimulationProductRecord> products,
+            ProductDataVersionRecord productDataVersion
+    ) {
+        if (productDataVersion == null || results.size() != 2 || tranches.isEmpty()
+                || portfolios.size() != 6 || products.isEmpty()) {
+            throw new SimulationException(
+                    SimulationError.SIMULATION_RESULT_INCOMPLETE);
+        }
+        for (SimulationResultRecord result : results) {
+            long profileCount = portfolios.stream()
+                    .filter(item -> Objects.equals(
+                            item.getResultId(),
+                            result.getResultId()
+                    ))
+                    .map(SimulationPortfolioRecord::getPortfolioType)
+                    .distinct()
+                    .count();
+            if (profileCount != RiskProfile.values().length) {
+                throw new SimulationException(
+                        SimulationError.SIMULATION_RESULT_INCOMPLETE);
+            }
+        }
+    }
+
+    private Map<ProductType, List<ProductCandidate>> loadSafeAssetCandidates(
+            Long dataVersionId,
+            int months
+    ) {
+        Map<ProductType, List<ProductCandidate>> result =
+                new EnumMap<>(ProductType.class);
+        result.put(
+                ProductType.DEPOSIT,
+                requireCandidates(
+                        simulationMapper.selectDepositCandidates(
+                                dataVersionId,
+                                months,
+                                MAX_PRODUCT_CANDIDATES
+                        )
                 )
         );
-        if (candidates.values().stream().anyMatch(list -> list == null || list.isEmpty())) {
-            throw new SimulationException(SimulationError.PRODUCT_DATA_NOT_READY);
-        }
-        return candidates;
-    }
-
-    private List<ProductCandidate> validCandidates(
-            List<ProductCandidate> candidates,
-            ProductType expectedType
-    ) {
-        if (candidates == null) {
-            return List.of();
-        }
-        return candidates.stream()
-                .filter(candidate -> candidate.getProductId() != null)
-                .filter(candidate -> candidate.getProductName() != null)
-                .filter(candidate -> candidate.getAppliedAnnualRatePercent() != null)
-                .peek(candidate -> {
-                    if (candidate.getProductType() == null) {
-                        candidate.setProductType(expectedType);
-                    }
-                })
-                .filter(candidate -> candidate.getProductType() == expectedType)
-                .toList();
-    }
-
-    private ScenarioType recommend(
-            SimulationResultRecord immediate,
-            SimulationResultRecord optimized
-    ) {
-        int futureValueComparison = Long.compare(
-                immediate.getExpectedFutureValue(),
-                optimized.getExpectedFutureValue()
+        result.put(
+                ProductType.SAVINGS,
+                requireCandidates(
+                        simulationMapper.selectSavingsCandidates(
+                                dataVersionId,
+                                months,
+                                MAX_PRODUCT_CANDIDATES
+                        )
+                )
         );
-        if (futureValueComparison > 0) {
-            return ScenarioType.IMMEDIATE;
-        }
-        if (futureValueComparison < 0) {
-            return ScenarioType.TAX_OPTIMIZED;
-        }
-        return immediate.getGiftTax() <= optimized.getGiftTax()
-                ? ScenarioType.IMMEDIATE
-                : ScenarioType.TAX_OPTIMIZED;
+        return result;
     }
 
-    private FamilySnapshot requireFamily(Long familyId, Long userId, boolean simulationContext) {
+    private Map<RiskProfile, List<ProductCandidate>> loadEtfCandidates(
+            Long dataVersionId
+    ) {
+        Map<RiskProfile, List<ProductCandidate>> result =
+                new EnumMap<>(RiskProfile.class);
+        for (RiskProfile profile : RiskProfile.values()) {
+            result.put(
+                    profile,
+                    requireCandidates(simulationMapper.selectEtfCandidates(
+                            dataVersionId,
+                            profile,
+                            MAX_PRODUCT_CANDIDATES
+                    ))
+            );
+        }
+        return result;
+    }
+
+    private List<ProductCandidate> requireCandidates(List<ProductCandidate> candidates) {
+        List<ProductCandidate> safe = safeList(candidates);
+        if (safe.isEmpty()) {
+            throw new SimulationException(
+                    SimulationError.PRODUCT_CANDIDATE_NOT_FOUND);
+        }
+        if (safe.stream().anyMatch(item -> item.getProductVersionId() == null
+                || item.getProductDataVersionId() == null
+                || item.getProductType() == null
+                || item.getAppliedAnnualRatePercent() == null)) {
+            throw new SimulationException(
+                    SimulationError.PRODUCT_DATA_VERSION_INCOMPLETE);
+        }
+        return safe;
+    }
+
+    private FamilySnapshot requireFamily(Long familyId, Long userId) {
         FamilySnapshot family = simulationMapper.selectFamily(familyId);
         if (family == null) {
             throw new SimulationException(SimulationError.FAMILY_NOT_FOUND);
         }
-        if (!family.getUserId().equals(userId)) {
-            throw new SimulationException(
-                    simulationContext
-                            ? SimulationError.SIMULATION_ACCESS_DENIED
-                            : SimulationError.FAMILY_ACCESS_DENIED
-            );
+        if (!Objects.equals(family.getUserId(), userId)) {
+            throw new SimulationException(SimulationError.FAMILY_ACCESS_DENIED);
         }
         return family;
     }
 
-    private SimulationRecord requireSimulation(Long simulationId, Long userId) {
+    SimulationRecord requireSimulation(Long simulationId, Long userId) {
         SimulationRecord simulation = simulationMapper.selectSimulation(simulationId);
         if (simulation == null) {
             throw new SimulationException(SimulationError.SIMULATION_NOT_FOUND);
         }
-        if (!simulation.getUserId().equals(userId)) {
+        if (!Objects.equals(simulation.getUserId(), userId)) {
             throw new SimulationException(SimulationError.SIMULATION_ACCESS_DENIED);
         }
-        if (simulation.getExpiredAt() == null || !simulation.getExpiredAt().isAfter(LocalDateTime.now())) {
+        if (simulation.getStatus() == SimulationStatus.DRAFT
+                && (simulation.getExpiredAt() == null
+                || !simulation.getExpiredAt().isAfter(LocalDateTime.now()))) {
             throw new SimulationException(SimulationError.SIMULATION_EXPIRED);
+        }
+        if (simulation.getStatus() == SimulationStatus.SAVED
+                && (simulation.getSelectedPortfolioId() == null
+                || simulation.getSavedAt() == null)) {
+            throw new SimulationException(
+                    SimulationError.SIMULATION_HISTORY_INCOMPLETE);
         }
         return simulation;
     }
 
-    private void validateUser(Long userId) {
+    void validateUser(Long userId) {
         if (userId == null || userMapper.findById(userId) == null) {
             throw new SimulationException(SimulationError.USER_NOT_FOUND);
         }
     }
 
     private void validateExecuteRequest(SimulationExecuteRequest request) {
-        if (request == null
-                || request.getFamilyId() == null
+        if (request == null || request.getFamilyId() == null
                 || request.getFamilyId() <= 0
                 || request.getRequestedAmount() == null
-                || request.getRequestedAmount() <= 0
                 || request.getTaxPaymentMethod() == null
-                || request.getInvestmentPeriodMonths() == null
-                || request.getInvestmentPeriodMonths() < 1
+                || request.getInvestmentPeriodMonths() == null) {
+            throw new SimulationException(
+                    SimulationError.INVALID_SIMULATION_REQUEST);
+        }
+        if (request.getRequestedAmount() <= 0) {
+            throw new SimulationException(
+                    SimulationError.INVALID_REQUESTED_AMOUNT);
+        }
+        if (request.getInvestmentPeriodMonths() < 1
                 || request.getInvestmentPeriodMonths() > MAX_INVESTMENT_MONTHS) {
-            throw new SimulationException(SimulationError.INVALID_REQUEST);
+            throw new SimulationException(
+                    SimulationError.INVALID_INVESTMENT_PERIOD);
         }
     }
 
-    private void validateSaveRequest(Long simulationId, SimulationSaveRequest request) {
+    private void validateSimulationId(Long simulationId) {
         if (simulationId == null || simulationId <= 0) {
             throw new SimulationException(SimulationError.INVALID_SIMULATION_ID);
         }
-        if (request == null
-                || request.getVersion() == null
+    }
+
+    private void validateSaveRequest(
+            Long simulationId,
+            SimulationSaveRequest request
+    ) {
+        validateSimulationId(simulationId);
+        if (request == null || request.getVersion() == null
                 || request.getVersion() <= 0
-                || request.getSelectedScenarioType() == null
-                || request.getResultId() == null
-                || request.getResultId() <= 0
-                || request.getProducts() == null
-                || request.getProducts().isEmpty()) {
+                || request.getSelectedPortfolioId() == null
+                || request.getSelectedPortfolioId() <= 0
+                || request.getReplaceExistingSaved() == null
+                || request.getProductSelections() == null
+                || request.getProductSelections().isEmpty()) {
             throw new SimulationException(SimulationError.INVALID_SAVE_REQUEST);
         }
     }
 
-    private void validateUniqueProducts(SimulationSaveRequest request) {
-        Set<Long> ids = new HashSet<>();
-        boolean invalid = request.getProducts().stream().anyMatch(product ->
-                product.getProductId() == null
-                        || product.getProductId() <= 0
-                        || product.getRecommendationType() == null
-                        || product.getAllocatedAmount() == null
-                        || product.getAllocatedAmount() <= 0
-                        || !ids.add(product.getProductId()));
-        if (invalid) {
-            throw new SimulationException(SimulationError.INVALID_SAVE_REQUEST);
-        }
-    }
-
-    private void validateProductLimit(
-            SimulationProductRecord product,
-            long allocatedAmount,
-            int investmentPeriodMonths
-    ) {
-        if (product.getProductType() == ProductType.DEPOSIT) {
-            if ((product.getMinAmount() != null && allocatedAmount < product.getMinAmount())
-                    || (product.getMaxAmount() != null && allocatedAmount > product.getMaxAmount())) {
-                throw new SimulationException(SimulationError.PRODUCT_LIMIT_EXCEEDED);
-            }
-        }
-        if (product.getProductType() == ProductType.SAVINGS) {
-            long monthlyAmount = BigDecimal.valueOf(allocatedAmount)
-                    .divide(
-                            BigDecimal.valueOf(investmentPeriodMonths),
-                            0,
-                            RoundingMode.CEILING
-                    )
-                    .longValue();
-            if ((product.getMonthlyMinAmount() != null
-                    && monthlyAmount < product.getMonthlyMinAmount())
-                    || (product.getMonthlyMaxAmount() != null
-                    && monthlyAmount > product.getMonthlyMaxAmount())) {
-                throw new SimulationException(SimulationError.PRODUCT_LIMIT_EXCEEDED);
-            }
-        }
-    }
-
-    private void validateEtfPolicy(
+    private void validateReplacementIntent(
             SimulationSaveRequest request,
-            Map<Long, SimulationProductRecord> candidates,
-            RiskProfile riskProfile
+            SimulationRecord activeSaved,
+            boolean replacingAnother
     ) {
-        for (SimulationSaveRequest.SelectedProduct selected : request.getProducts()) {
-            if (selected.getRecommendationType() != ProductType.ETF) {
-                continue;
-            }
-            String category = candidates.get(selected.getProductId()).getProductCategory();
-            boolean allowed = switch (riskProfile) {
-                case CONSERVATIVE -> "BOND_MIXED".equals(category);
-                case BALANCED -> Set.of("BOND_MIXED", "DOMESTIC_INDEX", "FOREIGN_INDEX")
-                        .contains(category);
-                case AGGRESSIVE -> Set.of("DOMESTIC_INDEX", "FOREIGN_INDEX").contains(category);
-            };
-            if (!allowed) {
-                throw new SimulationException(SimulationError.INVALID_SAVE_REQUEST);
-            }
+        if (replacingAnother && !Boolean.TRUE.equals(
+                request.getReplaceExistingSaved())) {
+            throw new SimulationException(
+                    SimulationError.ACTIVE_SAVED_SIMULATION_EXISTS,
+                    activeSavedSimulationData(activeSaved)
+            );
+        }
+        if (replacingAnother
+                && request.getExpectedExistingSavedSimulationId() == null) {
+            throw new SimulationException(
+                    SimulationError.EXISTING_SAVED_SIMULATION_ID_REQUIRED);
+        }
+        if (replacingAnother && !Objects.equals(
+                activeSaved.getSimulationId(),
+                request.getExpectedExistingSavedSimulationId()
+        )) {
+            throw new SimulationException(
+                    SimulationError.EXISTING_SAVED_SIMULATION_CHANGED,
+                    existingSavedChangedData(
+                            request.getExpectedExistingSavedSimulationId(),
+                            activeSaved.getSimulationId()
+                    )
+            );
+        }
+        if (!replacingAnother
+                && Boolean.TRUE.equals(request.getReplaceExistingSaved())
+                && request.getExpectedExistingSavedSimulationId() != null) {
+            throw new SimulationException(
+                    SimulationError.EXISTING_SAVED_SIMULATION_CHANGED,
+                    existingSavedChangedData(
+                            request.getExpectedExistingSavedSimulationId(),
+                            activeSaved == null ? null : activeSaved.getSimulationId()
+                    )
+            );
         }
     }
 
-    private LocalDate resolveAsOfDate(LocalDate requestedDate) {
-        LocalDate date = requestedDate == null ? LocalDate.now() : requestedDate;
-        if (date.isAfter(LocalDate.now()) || date.isBefore(LocalDate.of(2000, 1, 1))) {
-            throw new SimulationException(SimulationError.INVALID_AS_OF_DATE);
-        }
-        return date;
+    private Map<String, Object> activeSavedSimulationData(
+            SimulationRecord activeSaved
+    ) {
+        Map<String, Object> saved = new LinkedHashMap<>();
+        saved.put("simulationId", activeSaved.getSimulationId());
+        SimulationPortfolioRecord selected = activeSaved.getSelectedPortfolioId() == null
+                ? null
+                : simulationMapper.selectPortfolio(activeSaved.getSelectedPortfolioId());
+        saved.put("portfolioType", selected == null ? null : selected.getPortfolioType());
+        saved.put("scenarioType", selected == null ? null : selected.getScenarioType());
+        saved.put(
+                "expectedFutureValue",
+                selected == null ? null : selected.getExpectedFutureValue()
+        );
+        saved.put("savedAt", activeSaved.getSavedAt());
+
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("existingSavedSimulation", saved);
+        return data;
     }
 
-    private LocalDate resolveDeductionResetDate(LocalDate oldestGiftDate, LocalDate asOfDate) {
-        LocalDate resetDate = oldestGiftDate == null
-                ? asOfDate.plusYears(DEDUCTION_WINDOW_YEARS)
-                : oldestGiftDate.plusYears(DEDUCTION_WINDOW_YEARS);
-        while (!resetDate.isAfter(asOfDate)) {
-            resetDate = resetDate.plusYears(DEDUCTION_WINDOW_YEARS);
+    private Map<String, Object> existingSavedChangedData(
+            Long expectedSimulationId,
+            Long currentSimulationId
+    ) {
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("expectedExistingSavedSimulationId", expectedSimulationId);
+        data.put("currentSavedSimulationId", currentSimulationId);
+        return data;
+    }
+
+    private Map<String, Object> versionConflictData(
+            Long requestedVersion,
+            Long currentVersion
+    ) {
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("requestedVersion", requestedVersion);
+        data.put("currentVersion", currentVersion);
+        return data;
+    }
+
+    private SimulationSaveResponse.ClientServerDifference clientServerDifference(
+            SimulationSaveRequest request,
+            long serverFutureValue,
+            long serverProfit
+    ) {
+        if (request.getClientCalculation() == null) {
+            return null;
         }
-        return resetDate;
+        return new SimulationSaveResponse.ClientServerDifference(
+                serverFutureValue
+                        - request.getClientCalculation().getExpectedFutureValue(),
+                serverProfit - request.getClientCalculation().getExpectedProfit()
+        );
+    }
+
+    private LocalDate resolveDeductionRenewalDate(
+            List<GiftHistoryRecord> gifts,
+            LocalDate asOfDate
+    ) {
+        return gifts.stream()
+                .map(GiftHistoryRecord::getGiftDate)
+                .filter(Objects::nonNull)
+                .min(LocalDate::compareTo)
+                .map(date -> date.plusYears(DEDUCTION_WINDOW_YEARS).plusDays(1))
+                .orElse(asOfDate);
     }
 
     private LocalDate nextReleaseDate(List<GiftPoint> history, LocalDate afterDate) {
         return history.stream()
-                .map(point -> point.date().plusYears(DEDUCTION_WINDOW_YEARS))
+                .map(point -> point.date().plusYears(DEDUCTION_WINDOW_YEARS).plusDays(1))
                 .filter(date -> date.isAfter(afterDate))
                 .min(LocalDate::compareTo)
-                .orElse(afterDate.plusYears(DEDUCTION_WINDOW_YEARS));
+                .orElse(afterDate.plusYears(DEDUCTION_WINDOW_YEARS).plusDays(1));
     }
 
-    private String executeFingerprint(SimulationExecuteRequest request, LocalDate asOfDate) {
-        return String.join(
-                "|",
-                String.valueOf(request.getFamilyId()),
-                String.valueOf(request.getRequestedAmount()),
-                String.valueOf(request.getTaxPaymentMethod()),
-                String.valueOf(request.getInvestmentPeriodMonths()),
-                asOfDate.toString()
-        );
+    private boolean termMatches(int months, Integer minimum, Integer maximum) {
+        return (minimum == null || months >= minimum)
+                && (maximum == null || months <= maximum);
+    }
+
+    private String executeFingerprint(
+            SimulationExecuteRequest request,
+            LocalDate asOfDate
+    ) {
+        return request.getFamilyId() + "|"
+                + request.getRequestedAmount() + "|"
+                + request.getTaxPaymentMethod() + "|"
+                + request.getInvestmentPeriodMonths() + "|"
+                + asOfDate;
     }
 
     private String saveFingerprint(Long simulationId, SimulationSaveRequest request) {
-        String products = request.getProducts().stream()
-                .sorted(Comparator.comparing(SimulationSaveRequest.SelectedProduct::getProductId))
-                .map(product -> product.getProductId()
-                        + ":" + product.getRecommendationType()
-                        + ":" + product.getAllocatedAmount())
-                .collect(Collectors.joining(","));
-        return String.join(
-                "|",
-                String.valueOf(simulationId),
-                String.valueOf(request.getVersion()),
-                String.valueOf(request.getSelectedScenarioType()),
-                String.valueOf(request.getResultId()),
-                String.valueOf(request.getRiskProfile()),
-                products,
-                request.getClientCalculation() == null
-                        ? ""
-                        : request.getClientCalculation().getFormulaVersion()
-                        + ":" + request.getClientCalculation().getExpectedFutureValue()
-                        + ":" + request.getClientCalculation().getExpectedProfit()
-        );
-    }
-
-    private long value(Long number) {
-        return number == null ? 0L : number;
+        List<String> products = request.getProductSelections().stream()
+                .map(item -> item.getSimulationProductId() + ":"
+                        + safeList(item.getPreferentialConditionCodes()).stream()
+                        .sorted()
+                        .collect(Collectors.joining(",")))
+                .sorted()
+                .toList();
+        return simulationId + "|" + request.getVersion() + "|"
+                + request.getSelectedPortfolioId() + "|"
+                + request.getReplaceExistingSaved() + "|"
+                + request.getExpectedExistingSavedSimulationId() + "|"
+                + String.join(";", products) + "|"
+                + (request.getClientCalculation() == null ? ""
+                : request.getClientCalculation().getFormulaVersion() + ":"
+                + request.getClientCalculation().getExpectedFutureValue() + ":"
+                + request.getClientCalculation().getExpectedProfit());
     }
 
     private long ratioAmount(long principal, BigDecimal ratio) {
         return BigDecimal.valueOf(principal)
                 .multiply(ratio)
-                .divide(BigDecimal.valueOf(100), 0, RoundingMode.HALF_UP)
+                .divide(ONE_HUNDRED, 0, RoundingMode.HALF_UP)
+                .longValue();
+    }
+
+    private long divideCeiling(long amount, int divisor) {
+        return BigDecimal.valueOf(amount)
+                .divide(BigDecimal.valueOf(divisor), 0, RoundingMode.CEILING)
                 .longValue();
     }
 
     private long safeMultiply(long amount, int multiplier) {
-        if (amount <= 0 || multiplier <= 0) {
-            return 0;
-        }
-        if (amount > Long.MAX_VALUE / multiplier) {
+        try {
+            return Math.multiplyExact(amount, multiplier);
+        } catch (ArithmeticException exception) {
             return Long.MAX_VALUE;
         }
-        return amount * multiplier;
+    }
+
+    private long value(Long value) {
+        return value == null ? 0 : value;
+    }
+
+    private <T> List<T> safeList(List<T> values) {
+        return values == null ? List.of() : values;
     }
 
     private record ScenarioAggregate(
             SimulationResultRecord result,
-            List<SimulationTrancheRecord> tranches,
-            Map<ProductType, Long> defaultAllocationAmounts
+            List<SimulationTrancheRecord> tranches
+    ) {
+    }
+
+    private record PersistedScenario(
+            SimulationResultRecord result,
+            Map<RiskProfile, SimulationPortfolioRecord> portfolios
     ) {
     }
 
     private record GiftPoint(LocalDate date, long amount) {
+    }
+
+    private record ProductSelectionPlan(List<SelectedProductPlan> products) {
+    }
+
+    private record SelectedProductPlan(
+            SimulationProductRecord product,
+            List<PreferentialRateRecord> preferentialRates
+    ) {
     }
 }

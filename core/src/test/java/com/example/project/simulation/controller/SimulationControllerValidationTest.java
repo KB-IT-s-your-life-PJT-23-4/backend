@@ -24,6 +24,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.setup.MockMvcBuilders.standaloneSetup;
 
@@ -40,7 +41,12 @@ class SimulationControllerValidationTest {
                 60_000L,
                 120_000L
         );
-        SimulationController controller = new SimulationController(null, jwtProvider);
+        SimulationController controller = new SimulationController(
+                null,
+                null,
+                null,
+                jwtProvider
+        );
         LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
         validator.afterPropertiesSet();
 
@@ -82,7 +88,7 @@ class SimulationControllerValidationTest {
     }
 
     @Test
-    @DisplayName("실행 요청 필수값이 누락되면 INVALID_REQUEST를 반환한다")
+    @DisplayName("실행 요청 필수값이 누락되면 INVALID_SIMULATION_REQUEST를 반환한다")
     void invalidExecuteRequest() throws Exception {
         authenticate();
 
@@ -97,7 +103,75 @@ class SimulationControllerValidationTest {
                 .andExpect(status().isBadRequest())
                 .andReturn();
 
-        assertEquals("INVALID_REQUEST", body(result).get("error").asText());
+        assertEquals(
+                "INVALID_SIMULATION_REQUEST",
+                body(result).get("error").asText()
+        );
+    }
+
+    @Test
+    @DisplayName("상품 버전 ID 형식이 잘못되면 INVALID_PRODUCT_VERSION_ID를 반환한다")
+    void invalidProductVersionId() throws Exception {
+        authenticate();
+
+        MvcResult result = mockMvc.perform(
+                        get("/api/gs/1/products/not-a-number"))
+                .andExpect(status().isBadRequest())
+                .andReturn();
+
+        assertEquals(
+                "INVALID_PRODUCT_VERSION_ID",
+                body(result).get("error").asText()
+        );
+    }
+
+    @Test
+    @DisplayName("최종 저장 필수값이 누락되면 INVALID_SAVE_REQUEST를 반환한다")
+    void invalidSaveRequest() throws Exception {
+        authenticate();
+
+        MvcResult result = mockMvc.perform(put("/api/gs/1/save")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "version": 1,
+                                  "replaceExistingSaved": false,
+                                  "productSelections": []
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andReturn();
+
+        assertEquals(
+                "INVALID_SAVE_REQUEST",
+                body(result).get("error").asText()
+        );
+    }
+
+    @Test
+    @DisplayName("이력 조회의 수증자 ID 형식이 잘못되면 INVALID_FAMILY_ID를 반환한다")
+    void invalidHistoryFamilyId() throws Exception {
+        authenticate();
+
+        MvcResult result = mockMvc.perform(
+                        get("/api/gs").param("familyId", "not-a-number"))
+                .andExpect(status().isBadRequest())
+                .andReturn();
+
+        assertEquals("INVALID_FAMILY_ID", body(result).get("error").asText());
+    }
+
+    @Test
+    @DisplayName("이력 조회의 페이지 형식이 잘못되면 INVALID_PAGE_REQUEST를 반환한다")
+    void invalidHistoryPage() throws Exception {
+        authenticate();
+
+        MvcResult result = mockMvc.perform(
+                        get("/api/gs").param("page", "not-a-number"))
+                .andExpect(status().isBadRequest())
+                .andReturn();
+
+        assertEquals("INVALID_PAGE_REQUEST", body(result).get("error").asText());
     }
 
     private void authenticate() {
