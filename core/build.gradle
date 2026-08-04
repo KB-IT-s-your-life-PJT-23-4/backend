@@ -67,6 +67,10 @@ dependencies {
     testRuntimeOnly "org.junit.jupiter:junit-jupiter-engine:${junitVersion}"
     testCompileOnly "org.projectlombok:lombok:${lombokVersion}"
     testAnnotationProcessor "org.projectlombok:lombok:${lombokVersion}"
+
+    // WebClient (WebFlux)
+    implementation "org.springframework:spring-webflux:${springVersion}"
+    implementation 'io.projectreactor.netty:reactor-netty:1.0.39'
 }
 
 war {
