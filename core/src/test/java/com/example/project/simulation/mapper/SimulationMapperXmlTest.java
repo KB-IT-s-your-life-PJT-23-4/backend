@@ -82,4 +82,22 @@ class SimulationMapperXmlTest {
         assertFalse(xml.contains("used_deduction_amount"));
         assertFalse(xml.contains("remaining_deduction_amount"));
     }
+
+    @Test
+    @DisplayName("KB 상품 데이터 버전 ID를 Java 필드명에 맞게 명시적으로 매핑한다")
+    void mapProductDataVersionIdExplicitly() throws Exception {
+        String resource = "mapper/simulation/SimulationMapper.xml";
+        String xml;
+
+        try (InputStream inputStream = Resources.getResourceAsStream(resource)) {
+            xml = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
+        }
+
+        assertTrue(xml.contains(
+                "kb_product_data_version_id AS product_data_version_id"
+        ));
+        assertTrue(xml.contains(
+                "s.kb_product_data_version_id AS product_data_version_id"
+        ));
+    }
 }
