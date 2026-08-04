@@ -106,9 +106,9 @@ public class SimulationCalculator {
 
         BigDecimal rate = annualRatePercent == null ? BigDecimal.ZERO : annualRatePercent;
         return switch (calculationType) {
-            case DEPOSIT_SIMPLE_INTEREST -> calculateDeposit(principal, rate, months);
-            case SAVINGS_MONTHLY_INSTALLMENT -> calculateSavings(principal, rate, months);
-            case ETF_COMPOUND_RETURN -> calculateEtf(principal, rate, months);
+            case SIMPLE_INTEREST -> calculateDeposit(principal, rate, months);
+            case MONTHLY_INSTALLMENT -> calculateSavings(principal, rate, months);
+            case COMPOUND_RETURN -> calculateEtf(principal, rate, months);
         };
     }
 
@@ -133,7 +133,7 @@ public class SimulationCalculator {
             }
             int months = remainingMonths(tranche.getGiftDate(), evaluationDate);
             total += calculateProductFutureValue(
-                    product.getCalculationType(),
+                    product.calculationType(),
                     portions.get(index),
                     product.getAppliedAnnualRatePercent(),
                     months
@@ -173,7 +173,7 @@ public class SimulationCalculator {
             }
 
             SimulationProductRecord snapshot = new SimulationProductRecord();
-            snapshot.setCalculationType(product.calculationType());
+            snapshot.setProductType(type);
             snapshot.setAppliedAnnualRatePercent(product.getAppliedAnnualRatePercent());
             total += calculateSelectedProductValue(
                     snapshot,
@@ -200,7 +200,7 @@ public class SimulationCalculator {
                 .multiply(BigDecimal.valueOf(months).divide(TWELVE, MC), MC);
         return BigDecimal.valueOf(principal)
                 .add(interest)
-                .setScale(0, RoundingMode.HALF_UP)
+                .setScale(0, RoundingMode.FLOOR)
                 .longValue();
     }
 
@@ -221,7 +221,7 @@ public class SimulationCalculator {
 
         return monthlyContribution
                 .multiply(annuityFactor, MC)
-                .setScale(0, RoundingMode.HALF_UP)
+                .setScale(0, RoundingMode.FLOOR)
                 .longValue();
     }
 
@@ -231,7 +231,7 @@ public class SimulationCalculator {
                 1 + annualRatePercent.divide(ONE_HUNDRED, MC).doubleValue()
         );
         double value = principal * Math.pow(annualGrowth, months / 12.0);
-        return Math.round(value);
+        return (long) Math.floor(value);
     }
 
     private List<Long> splitAcrossTranches(

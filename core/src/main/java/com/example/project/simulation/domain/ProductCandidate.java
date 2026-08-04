@@ -7,12 +7,18 @@ import java.time.LocalDate;
 
 @Data
 public class ProductCandidate {
+    private Long productVersionId;
+    private Long productDataVersionId;
     private Long productId;
+    private String productCode;
     private String productName;
     private ProductType productType;
     private String productCategory;
-    private BigDecimal minAnnualRatePercent;
-    private BigDecimal maxAnnualRatePercent;
+    private String description;
+    private String productUrl;
+    private String salesStatus;
+    private BigDecimal baseAnnualRatePercent;
+    private BigDecimal maximumAnnualRatePercent;
     private BigDecimal appliedAnnualRatePercent;
     private Integer minMonth;
     private Integer maxMonth;
@@ -20,19 +26,17 @@ public class ProductCandidate {
     private Long maxAmount;
     private Long monthlyMinAmount;
     private Long monthlyMaxAmount;
-    private String preferentialConditions;
     private String trackingIndex;
-    private String marketCapitalization;
-    private BigDecimal dividendYieldPercent;
+    private BigDecimal annualizedReturn5yPercent;
+    private BigDecimal bondRatioPercent;
     private String riskLevel;
-    private String productDetailUrl;
     private LocalDate productDataDate;
 
     public CalculationType calculationType() {
         return switch (productType) {
-            case DEPOSIT -> CalculationType.DEPOSIT_SIMPLE_INTEREST;
-            case SAVINGS -> CalculationType.SAVINGS_MONTHLY_INSTALLMENT;
-            case ETF -> CalculationType.ETF_COMPOUND_RETURN;
+            case DEPOSIT -> CalculationType.SIMPLE_INTEREST;
+            case SAVINGS -> CalculationType.MONTHLY_INSTALLMENT;
+            case ETF -> CalculationType.COMPOUND_RETURN;
         };
     }
 }

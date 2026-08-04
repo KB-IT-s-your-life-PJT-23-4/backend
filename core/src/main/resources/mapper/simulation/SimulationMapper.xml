@@ -11,6 +11,13 @@
         WHERE family_id = #{familyId}
     </select>
 
+    <select id="lockFamily" resultType="com.example.project.simulation.domain.FamilySnapshot">
+        SELECT family_id, user_id, family_name, relation, birth_date
+        FROM family
+        WHERE family_id = #{familyId}
+        FOR UPDATE
+    </select>
+
     <select id="selectDeductionRule" resultType="com.example.project.simulation.domain.DeductionRule">
         SELECT deduction_limit_id, relation, is_minor, deduction_limit, effective_from, effective_to
         FROM gift_deduction_limit
@@ -20,17 +27,6 @@
           AND (effective_to IS NULL OR effective_to &gt; #{asOfDate})
         ORDER BY effective_from DESC
         LIMIT 1
-    </select>
-
-    <select id="selectGiftAggregation" resultType="com.example.project.simulation.domain.GiftAggregation">
-        SELECT
-            COALESCE(SUM(amount), 0) AS completed_amount,
-            MIN(gift_date) AS oldest_gift_date
-        FROM gift
-        WHERE family_id = #{familyId}
-          AND status = 'COMPLETED'
-          AND gift_date &gt;= #{windowStart}
-          AND gift_date &lt; #{asOfDate}
     </select>
 
     <select id="selectCompletedGifts" resultType="com.example.project.simulation.domain.GiftHistoryRecord">
@@ -51,353 +47,620 @@
         ORDER BY lower_bound
     </select>
 
-    <select id="selectDepositCandidates" resultType="com.example.project.simulation.domain.ProductCandidate">
+    <select id="selectLatestCompletedProductDataVersion"
+            resultType="com.example.project.simulation.domain.ProductDataVersionRecord">
+        SELECT kb_product_data_version_id, version_code, data_date, status, created_at, completed_at
+        FROM kb_product_data_version
+        WHERE status = 'COMPLETED'
+        ORDER BY data_date DESC, kb_product_data_version_id DESC
+        LIMIT 1
+    </select>
+
+    <select id="selectProductDataVersion"
+            resultType="com.example.project.simulation.domain.ProductDataVersionRecord">
+        SELECT kb_product_data_version_id, version_code, data_date, status, created_at, completed_at
+        FROM kb_product_data_version
+        WHERE kb_product_data_version_id = #{productDataVersionId}
+    </select>
+
+    <sql id="productCandidateColumns">
+        pv.kb_product_version_id AS product_version_id,
+        pv.kb_product_data_version_id AS product_data_version_id,
+        p.product_id,
+        p.product_code,
+        pv.product_name,
+        p.product_type,
+        pv.description,
+        pv.product_url,
+        pv.sales_status,
+        dv.data_date AS product_data_date
+    </sql>
+
+    <select id="selectDepositCandidates"
+            resultType="com.example.project.simulation.domain.ProductCandidate">
         SELECT
-            p.product_id,
-            p.product_name,
-            p.product_type,
+            <include refid="productCandidateColumns"/>,
             'DEPOSIT' AS product_category,
-            MIN(r.interest_rate) AS min_annual_rate_percent,
-            MAX(r.interest_rate) AS max_annual_rate_percent,
-            MIN(r.interest_rate) AS applied_annual_rate_percent,
-            MIN(r.min_month) AS min_month,
-            MAX(r.max_month) AS max_month,
+            MAX(br.base_rate_percent) AS base_annual_rate_percent,
+            MAX(br.max_rate_percent) AS maximum_annual_rate_percent,
+            MAX(br.base_rate_percent) AS applied_annual_rate_percent,
+            d.min_month,
+            d.max_month,
             d.min_amount,
-            d.max_amount,
-            MAX(r.base_date) AS product_data_date
-        FROM kb_product p
-        JOIN deposit d ON d.product_id = p.product_id
-        JOIN interest_rate r ON r.product_id = p.product_id
-        WHERE p.product_type = 'DEPOSIT'
-          AND (r.min_month IS NULL OR r.min_month &lt;= #{investmentPeriodMonths})
-          AND (r.max_month IS NULL OR r.max_month &gt;= #{investmentPeriodMonths})
-        GROUP BY p.product_id, p.product_name, p.product_type, d.min_amount, d.max_amount
-        ORDER BY applied_annual_rate_percent DESC, p.product_id
+            d.max_amount
+        FROM kb_product_version pv
+        JOIN kb_product p ON p.product_id = pv.product_id
+        JOIN kb_product_data_version dv
+          ON dv.kb_product_data_version_id = pv.kb_product_data_version_id
+        JOIN deposit d ON d.kb_product_version_id = pv.kb_product_version_id
+        JOIN base_interest_rate br
+          ON br.kb_product_version_id = pv.kb_product_version_id
+         AND br.min_month &lt;= #{investmentPeriodMonths}
+         AND (br.max_month IS NULL OR br.max_month &gt;= #{investmentPeriodMonths})
+        WHERE pv.kb_product_data_version_id = #{productDataVersionId}
+          AND pv.sales_status = 'ON_SALE'
+          AND p.product_type = 'DEPOSIT'
+          AND d.min_month &lt;= #{investmentPeriodMonths}
+          AND d.max_month &gt;= #{investmentPeriodMonths}
+        GROUP BY pv.kb_product_version_id, pv.kb_product_data_version_id,
+                 p.product_id, p.product_code, pv.product_name, p.product_type,
+                 pv.description, pv.product_url, pv.sales_status, dv.data_date,
+                 d.min_month, d.max_month, d.min_amount, d.max_amount
+        ORDER BY applied_annual_rate_percent DESC, pv.kb_product_version_id
         LIMIT #{limit}
     </select>
 
-    <select id="selectSavingsCandidates" resultType="com.example.project.simulation.domain.ProductCandidate">
+    <select id="selectSavingsCandidates"
+            resultType="com.example.project.simulation.domain.ProductCandidate">
         SELECT
-            p.product_id,
-            p.product_name,
-            p.product_type,
-            s.product_category,
-            MIN(r.interest_rate) AS min_annual_rate_percent,
-            MAX(r.interest_rate) AS max_annual_rate_percent,
-            MIN(r.interest_rate) AS applied_annual_rate_percent,
-            MIN(r.min_month) AS min_month,
-            MAX(r.max_month) AS max_month,
+            <include refid="productCandidateColumns"/>,
+            s.savings_category AS product_category,
+            MAX(br.base_rate_percent) AS base_annual_rate_percent,
+            MAX(br.max_rate_percent) AS maximum_annual_rate_percent,
+            MAX(br.base_rate_percent) AS applied_annual_rate_percent,
+            s.min_month,
+            s.max_month,
             s.monthly_min_amount,
-            s.monthly_max_amount,
-            MAX(r.base_date) AS product_data_date
-        FROM kb_product p
-        JOIN savings s ON s.product_id = p.product_id
-        JOIN interest_rate r ON r.product_id = p.product_id
-        WHERE p.product_type = 'SAVINGS'
-          AND (r.min_month IS NULL OR r.min_month &lt;= #{investmentPeriodMonths})
-          AND (r.max_month IS NULL OR r.max_month &gt;= #{investmentPeriodMonths})
-        GROUP BY p.product_id, p.product_name, p.product_type, s.product_category,
+            s.monthly_max_amount
+        FROM kb_product_version pv
+        JOIN kb_product p ON p.product_id = pv.product_id
+        JOIN kb_product_data_version dv
+          ON dv.kb_product_data_version_id = pv.kb_product_data_version_id
+        JOIN savings s ON s.kb_product_version_id = pv.kb_product_version_id
+        JOIN base_interest_rate br
+          ON br.kb_product_version_id = pv.kb_product_version_id
+         AND br.min_month &lt;= #{investmentPeriodMonths}
+         AND (br.max_month IS NULL OR br.max_month &gt;= #{investmentPeriodMonths})
+        WHERE pv.kb_product_data_version_id = #{productDataVersionId}
+          AND pv.sales_status = 'ON_SALE'
+          AND p.product_type = 'SAVINGS'
+          AND s.min_month &lt;= #{investmentPeriodMonths}
+          AND s.max_month &gt;= #{investmentPeriodMonths}
+        GROUP BY pv.kb_product_version_id, pv.kb_product_data_version_id,
+                 p.product_id, p.product_code, pv.product_name, p.product_type,
+                 pv.description, pv.product_url, pv.sales_status, dv.data_date,
+                 s.savings_category, s.min_month, s.max_month,
                  s.monthly_min_amount, s.monthly_max_amount
-        ORDER BY applied_annual_rate_percent DESC, p.product_id
+        ORDER BY applied_annual_rate_percent DESC, pv.kb_product_version_id
         LIMIT #{limit}
     </select>
 
-    <select id="selectEtfCandidates" resultType="com.example.project.simulation.domain.ProductCandidate">
+    <select id="selectEtfCandidates"
+            resultType="com.example.project.simulation.domain.ProductCandidate">
         SELECT
-            p.product_id,
-            p.product_name,
-            p.product_type,
+            <include refid="productCandidateColumns"/>,
             e.etf_category AS product_category,
-            e.annual_return_5y AS min_annual_rate_percent,
-            e.annual_return_5y AS max_annual_rate_percent,
+            e.annual_return_5y AS base_annual_rate_percent,
+            e.annual_return_5y AS maximum_annual_rate_percent,
             e.annual_return_5y AS applied_annual_rate_percent,
-            e.benchmark_name AS tracking_index,
-            e.risk_level,
-            e.product_detail_url,
-            DATE(e.updated_at) AS product_data_date
-        FROM kb_product p
-        JOIN etf e ON e.product_id = p.product_id
-        WHERE p.product_type = 'ETF'
-          AND e.etf_category IN ('DOMESTIC_INDEX', 'FOREIGN_INDEX', 'BOND_MIXED')
-          AND e.annual_return_5y IS NOT NULL
-        ORDER BY e.annual_return_5y DESC, p.product_id
+            e.tracking_index,
+            e.annual_return_5y AS annualized_return_5y_percent,
+            e.bond_ratio AS bond_ratio_percent,
+            e.risk_level
+        FROM kb_product_version pv
+        JOIN kb_product p ON p.product_id = pv.product_id
+        JOIN kb_product_data_version dv
+          ON dv.kb_product_data_version_id = pv.kb_product_data_version_id
+        JOIN etf e ON e.kb_product_version_id = pv.kb_product_version_id
+        WHERE pv.kb_product_data_version_id = #{productDataVersionId}
+          AND pv.sales_status = 'ON_SALE'
+          AND p.product_type = 'ETF'
+          AND (
+              #{riskProfile} = 'AGGRESSIVE'
+              OR (#{riskProfile} = 'BALANCED' AND e.risk_level IN ('LOW', 'LOW_MEDIUM', 'MEDIUM', 'HIGH'))
+              OR (#{riskProfile} = 'CONSERVATIVE'
+                  AND e.etf_category = 'BOND_MIXED'
+                  AND e.risk_level IN ('LOW', 'LOW_MEDIUM', 'MEDIUM'))
+          )
+        ORDER BY e.annual_return_5y DESC, pv.kb_product_version_id
         LIMIT #{limit}
     </select>
 
     <insert id="insertSimulation"
             parameterType="com.example.project.simulation.domain.SimulationRecord"
             useGeneratedKeys="true"
-            keyProperty="simulationId">
+            keyProperty="simulationId"
+            keyColumn="simul_id">
         INSERT INTO simulation (
-            family_id,
-            requested_amount,
-            status,
-            tax_payment_method,
-            investment_period_months,
-            as_of_date,
-            investment_end_date,
-            recommended_scenario_type,
-            previous_gift_amount,
-            remaining_deduction_amount,
-            deduction_reset_date,
-            calculation_version,
-            formula_version,
-            product_data_date,
-            version,
-            created_at,
-            expired_at
+            kb_product_data_version_id, family_id, requested_amount, status,
+            tax_payment_method, investment_period_months, as_of_date,
+            investment_end_date, calculation_version, formula_version, version,
+            selected_portfolio_id, age_at_simulation, minor_at_simulation,
+            lookback_start_date, previous_gift_amount, deduction_limit,
+            used_deduction_amount, remaining_deduction_amount,
+            deduction_renewal_date, created_at, updated_at, saved_at, expired_at
         ) VALUES (
-            #{familyId},
-            #{requestedAmount},
-            #{status},
-            #{taxPaymentMethod},
-            #{investmentPeriodMonths},
-            #{asOfDate},
-            #{investmentEndDate},
-            #{recommendedScenarioType},
-            #{previousGiftAmount},
-            #{remainingDeductionAmount},
-            #{deductionResetDate},
-            #{calculationVersion},
-            #{formulaVersion},
-            #{productDataDate},
-            #{version},
-            #{createdAt},
-            #{expiredAt}
+            #{productDataVersionId}, #{familyId}, #{requestedAmount}, #{status},
+            #{taxPaymentMethod}, #{investmentPeriodMonths}, #{asOfDate},
+            #{investmentEndDate}, #{calculationVersion}, #{formulaVersion}, #{version},
+            NULL, #{ageAtSimulation}, #{minorAtSimulation},
+            #{lookbackStartDate}, #{previousGiftAmount}, #{deductionLimit},
+            #{usedDeductionAmount}, #{remainingDeductionAmount},
+            #{deductionRenewalDate}, #{createdAt}, #{updatedAt}, NULL, #{expiredAt}
         )
     </insert>
 
     <insert id="insertResult"
             parameterType="com.example.project.simulation.domain.SimulationResultRecord"
             useGeneratedKeys="true"
-            keyProperty="resultId">
+            keyProperty="resultId"
+            keyColumn="simul_result_id">
         INSERT INTO simulation_result (
-            simulation_id,
-            scenario_type,
-            risk_profile,
-            deduction_amount,
-            taxable_amount,
-            gift_tax,
-            donor_required_amount,
-            post_tax_amount,
-            current_amount,
-            deferred_amount,
-            investment_principal,
-            expected_future_value,
-            created_at
+            simul_id, scenario_type, deduction_amount, taxable_amount, gift_tax,
+            donor_required_amount, post_tax_amount, investment_principal, created_at
         ) VALUES (
-            #{simulationId},
-            #{scenarioType},
-            #{riskProfile},
-            #{deductionAmount},
-            #{taxableAmount},
-            #{giftTax},
-            #{donorRequiredAmount},
-            #{postTaxAmount},
-            #{currentAmount},
-            #{deferredAmount},
-            #{investmentPrincipal},
-            #{expectedFutureValue},
-            #{createdAt}
+            #{simulationId}, #{scenarioType}, #{deductionAmount}, #{taxableAmount},
+            #{giftTax}, #{donorRequiredAmount}, #{postTaxAmount},
+            #{investmentPrincipal}, #{createdAt}
         )
     </insert>
-
-    <update id="updateResultFutureValue">
-        UPDATE simulation_result
-        SET expected_future_value = #{expectedFutureValue},
-            risk_profile = #{riskProfile}
-        WHERE result_id = #{resultId}
-    </update>
 
     <insert id="insertTranche"
             parameterType="com.example.project.simulation.domain.SimulationTrancheRecord"
             useGeneratedKeys="true"
             keyProperty="trancheId">
         INSERT INTO simulation_tranche (
-            result_id,
-            sequence_no,
-            gift_date,
-            gift_amount,
-            estimated_gift_tax,
-            donor_required_amount,
-            investment_amount
+            simul_result_id, sequence_no, gift_date, gift_amount,
+            estimated_gift_tax, donor_required_amount, investment_amount, created_at
         ) VALUES (
-            #{resultId},
-            #{sequenceNo},
-            #{giftDate},
-            #{giftAmount},
-            #{estimatedGiftTax},
-            #{donorRequiredAmount},
-            #{investmentAmount}
+            #{resultId}, #{sequenceNo}, #{giftDate}, #{giftAmount},
+            #{estimatedGiftTax}, #{donorRequiredAmount}, #{investmentAmount}, NOW()
         )
     </insert>
+
+    <insert id="insertPortfolio"
+            parameterType="com.example.project.simulation.domain.SimulationPortfolioRecord"
+            useGeneratedKeys="true"
+            keyProperty="portfolioId"
+            keyColumn="simul_portfolio_id">
+        INSERT INTO simulation_portfolio (
+            simul_result_id, portfolio_type, deposit_amount, savings_amount,
+            etf_amount, expected_future_value, is_recommended, created_at, updated_at
+        ) VALUES (
+            #{resultId}, #{portfolioType}, #{depositAmount}, #{savingsAmount},
+            #{etfAmount}, #{expectedFutureValue}, #{recommended}, #{createdAt}, #{updatedAt}
+        )
+    </insert>
+
+    <update id="updatePortfolioExpectedFutureValue">
+        UPDATE simulation_portfolio
+        SET expected_future_value = #{expectedFutureValue},
+            updated_at = NOW()
+        WHERE simul_portfolio_id = #{portfolioId}
+    </update>
+
+    <update id="markPortfolioRecommended">
+        UPDATE simulation_portfolio
+        SET is_recommended = 1, updated_at = NOW()
+        WHERE simul_portfolio_id = #{portfolioId}
+    </update>
 
     <insert id="insertProductSnapshot"
             parameterType="com.example.project.simulation.domain.SimulationProductRecord"
             useGeneratedKeys="true"
             keyProperty="simulationProductId">
         INSERT INTO simulation_product (
-            result_id,
-            product_id,
-            product_name_snapshot,
-            recommendation_type,
-            product_category_snapshot,
-            is_selected,
-            default_allocated_amount,
-            default_allocation_ratio,
-            min_annual_rate_percent,
-            max_annual_rate_percent,
-            applied_annual_rate_percent,
-            calculation_type,
-            default_expected_future_value,
-            default_expected_profit,
-            min_month,
-            max_month,
-            min_amount,
-            max_amount,
-            monthly_min_amount,
-            monthly_max_amount,
-            preferential_conditions_snapshot,
-            tracking_index_snapshot,
-            market_capitalization_snapshot,
-            dividend_yield_percent_snapshot,
-            risk_level_snapshot,
-            product_detail_url_snapshot,
-            product_data_date,
-            created_at
+            simul_portfolio_id, kb_product_version_id, is_selected,
+            allocated_amount, applied_annual_rate, expected_future_value, created_at
         ) VALUES (
-            #{resultId},
-            #{productId},
-            #{productName},
-            #{productType},
-            #{productCategory},
-            #{selected},
-            #{allocatedAmount},
-            #{allocationRatio},
-            #{minAnnualRatePercent},
-            #{maxAnnualRatePercent},
-            #{appliedAnnualRatePercent},
-            #{calculationType},
-            #{expectedFutureValue},
-            #{expectedProfit},
-            #{minMonth},
-            #{maxMonth},
-            #{minAmount},
-            #{maxAmount},
-            #{monthlyMinAmount},
-            #{monthlyMaxAmount},
-            #{preferentialConditions},
-            #{trackingIndex},
-            #{marketCapitalization},
-            #{dividendYieldPercent},
-            #{riskLevel},
-            #{productDetailUrl},
-            #{productDataDate},
-            NOW()
+            #{portfolioId}, #{productVersionId}, #{selected},
+            #{allocatedAmount}, #{appliedAnnualRatePercent},
+            #{expectedFutureValue}, NOW()
         )
     </insert>
 
+    <sql id="simulationSelectColumns">
+        s.simul_id AS simulation_id,
+        s.kb_product_data_version_id,
+        s.family_id,
+        f.user_id,
+        f.family_name,
+        f.relation,
+        f.birth_date,
+        s.requested_amount,
+        s.status,
+        s.tax_payment_method,
+        s.investment_period_months,
+        s.as_of_date,
+        s.investment_end_date,
+        s.calculation_version,
+        s.formula_version,
+        s.version,
+        s.selected_portfolio_id,
+        s.age_at_simulation,
+        s.minor_at_simulation,
+        s.lookback_start_date,
+        s.previous_gift_amount,
+        s.deduction_limit,
+        s.used_deduction_amount,
+        s.remaining_deduction_amount,
+        s.deduction_renewal_date,
+        s.created_at,
+        s.updated_at,
+        s.saved_at,
+        s.expired_at
+    </sql>
+
     <select id="selectSimulation" resultType="com.example.project.simulation.domain.SimulationRecord">
-        SELECT
-            s.*,
-            f.user_id,
-            f.family_name,
-            f.relation,
-            f.birth_date
+        SELECT <include refid="simulationSelectColumns"/>
         FROM simulation s
         JOIN family f ON f.family_id = s.family_id
-        WHERE s.simulation_id = #{simulationId}
+        WHERE s.simul_id = #{simulationId}
+    </select>
+
+    <select id="selectSavedSimulationByFamily"
+            resultType="com.example.project.simulation.domain.SimulationRecord">
+        SELECT <include refid="simulationSelectColumns"/>
+        FROM simulation s
+        JOIN family f ON f.family_id = s.family_id
+        WHERE s.family_id = #{familyId}
+          AND s.status = 'SAVED'
+        ORDER BY s.saved_at DESC, s.simul_id DESC
+        LIMIT 1
     </select>
 
     <select id="selectResults" resultType="com.example.project.simulation.domain.SimulationResultRecord">
-        SELECT *
+        SELECT simul_result_id AS result_id, simul_id AS simulation_id, scenario_type,
+               deduction_amount, taxable_amount, gift_tax, donor_required_amount,
+               post_tax_amount, investment_principal, created_at
         FROM simulation_result
-        WHERE simulation_id = #{simulationId}
-        ORDER BY result_id
+        WHERE simul_id = #{simulationId}
+        ORDER BY simul_result_id
     </select>
 
     <select id="selectTranches" resultType="com.example.project.simulation.domain.SimulationTrancheRecord">
-        SELECT t.*
+        SELECT t.tranche_id, t.simul_result_id AS result_id, t.sequence_no,
+               t.gift_date, t.gift_amount, t.estimated_gift_tax,
+               t.donor_required_amount, t.investment_amount
         FROM simulation_tranche t
-        JOIN simulation_result r ON r.result_id = t.result_id
-        WHERE r.simulation_id = #{simulationId}
-        ORDER BY t.result_id, t.sequence_no
+        JOIN simulation_result r ON r.simul_result_id = t.simul_result_id
+        WHERE r.simul_id = #{simulationId}
+        ORDER BY t.simul_result_id, t.sequence_no
     </select>
 
-    <select id="selectProductSnapshots" resultType="com.example.project.simulation.domain.SimulationProductRecord">
+    <sql id="portfolioSelectColumns">
+        sp.simul_portfolio_id AS portfolio_id,
+        sp.simul_result_id AS result_id,
+        sr.simul_id AS simulation_id,
+        sr.scenario_type,
+        sp.portfolio_type,
+        sp.deposit_amount,
+        sp.savings_amount,
+        sp.etf_amount,
+        sp.expected_future_value,
+        sp.is_recommended AS recommended,
+        sp.created_at,
+        sp.updated_at
+    </sql>
+
+    <select id="selectPortfolios"
+            resultType="com.example.project.simulation.domain.SimulationPortfolioRecord">
+        SELECT <include refid="portfolioSelectColumns"/>
+        FROM simulation_portfolio sp
+        JOIN simulation_result sr ON sr.simul_result_id = sp.simul_result_id
+        WHERE sr.simul_id = #{simulationId}
+        ORDER BY sr.simul_result_id, sp.portfolio_type
+    </select>
+
+    <select id="selectPortfolio"
+            resultType="com.example.project.simulation.domain.SimulationPortfolioRecord">
+        SELECT <include refid="portfolioSelectColumns"/>
+        FROM simulation_portfolio sp
+        JOIN simulation_result sr ON sr.simul_result_id = sp.simul_result_id
+        WHERE sp.simul_portfolio_id = #{portfolioId}
+    </select>
+
+    <sql id="simulationProductSelectColumns">
+        spr.simulation_product_id,
+        spr.simul_portfolio_id AS portfolio_id,
+        spr.kb_product_version_id AS product_version_id,
+        p.product_id,
+        p.product_code,
+        pv.product_name,
+        p.product_type,
+        CASE
+            WHEN p.product_type = 'DEPOSIT' THEN 'DEPOSIT'
+            WHEN p.product_type = 'SAVINGS' THEN sv.savings_category
+            ELSE e.etf_category
+        END AS product_category,
+        spr.is_selected AS selected,
+        spr.allocated_amount,
+        spr.applied_annual_rate AS applied_annual_rate_percent,
+        spr.expected_future_value,
+        COALESCE(MAX(br.base_rate_percent), e.annual_return_5y) AS base_annual_rate_percent,
+        COALESCE(MAX(br.max_rate_percent), e.annual_return_5y) AS maximum_annual_rate_percent,
+        spr.created_at
+    </sql>
+
+    <select id="selectProductSnapshots"
+            resultType="com.example.project.simulation.domain.SimulationProductRecord">
+        SELECT <include refid="simulationProductSelectColumns"/>
+        FROM simulation_product spr
+        JOIN simulation_portfolio sp ON sp.simul_portfolio_id = spr.simul_portfolio_id
+        JOIN simulation_result sr ON sr.simul_result_id = sp.simul_result_id
+        JOIN simulation s ON s.simul_id = sr.simul_id
+        JOIN kb_product_version pv ON pv.kb_product_version_id = spr.kb_product_version_id
+        JOIN kb_product p ON p.product_id = pv.product_id
+        LEFT JOIN savings sv ON sv.kb_product_version_id = pv.kb_product_version_id
+        LEFT JOIN etf e ON e.kb_product_version_id = pv.kb_product_version_id
+        LEFT JOIN base_interest_rate br
+               ON br.kb_product_version_id = pv.kb_product_version_id
+              AND br.min_month &lt;= s.investment_period_months
+              AND (br.max_month IS NULL OR br.max_month &gt;= s.investment_period_months)
+        WHERE sr.simul_id = #{simulationId}
+        GROUP BY spr.simulation_product_id, spr.simul_portfolio_id,
+                 spr.kb_product_version_id, p.product_id, p.product_code,
+                 pv.product_name, p.product_type, sv.savings_category,
+                 e.etf_category, e.annual_return_5y, spr.is_selected,
+                 spr.allocated_amount, spr.applied_annual_rate,
+                 spr.expected_future_value, spr.created_at
+        ORDER BY spr.simul_portfolio_id, p.product_type, spr.expected_future_value DESC
+    </select>
+
+    <select id="selectPortfolioProducts"
+            resultType="com.example.project.simulation.domain.SimulationProductRecord">
+        SELECT <include refid="simulationProductSelectColumns"/>
+        FROM simulation_product spr
+        JOIN simulation_portfolio sp ON sp.simul_portfolio_id = spr.simul_portfolio_id
+        JOIN simulation_result sr ON sr.simul_result_id = sp.simul_result_id
+        JOIN simulation s ON s.simul_id = sr.simul_id
+        JOIN kb_product_version pv ON pv.kb_product_version_id = spr.kb_product_version_id
+        JOIN kb_product p ON p.product_id = pv.product_id
+        LEFT JOIN savings sv ON sv.kb_product_version_id = pv.kb_product_version_id
+        LEFT JOIN etf e ON e.kb_product_version_id = pv.kb_product_version_id
+        LEFT JOIN base_interest_rate br
+               ON br.kb_product_version_id = pv.kb_product_version_id
+              AND br.min_month &lt;= s.investment_period_months
+              AND (br.max_month IS NULL OR br.max_month &gt;= s.investment_period_months)
+        WHERE spr.simul_portfolio_id = #{portfolioId}
+        GROUP BY spr.simulation_product_id, spr.simul_portfolio_id,
+                 spr.kb_product_version_id, p.product_id, p.product_code,
+                 pv.product_name, p.product_type, sv.savings_category,
+                 e.etf_category, e.annual_return_5y, spr.is_selected,
+                 spr.allocated_amount, spr.applied_annual_rate,
+                 spr.expected_future_value, spr.created_at
+        ORDER BY p.product_type, spr.expected_future_value DESC
+    </select>
+
+    <select id="selectSimulationProduct"
+            resultType="com.example.project.simulation.domain.SimulationProductRecord">
+        SELECT <include refid="simulationProductSelectColumns"/>
+        FROM simulation_product spr
+        JOIN simulation_portfolio sp ON sp.simul_portfolio_id = spr.simul_portfolio_id
+        JOIN simulation_result sr ON sr.simul_result_id = sp.simul_result_id
+        JOIN simulation s ON s.simul_id = sr.simul_id
+        JOIN kb_product_version pv ON pv.kb_product_version_id = spr.kb_product_version_id
+        JOIN kb_product p ON p.product_id = pv.product_id
+        LEFT JOIN savings sv ON sv.kb_product_version_id = pv.kb_product_version_id
+        LEFT JOIN etf e ON e.kb_product_version_id = pv.kb_product_version_id
+        LEFT JOIN base_interest_rate br
+               ON br.kb_product_version_id = pv.kb_product_version_id
+              AND br.min_month &lt;= s.investment_period_months
+              AND (br.max_month IS NULL OR br.max_month &gt;= s.investment_period_months)
+        WHERE spr.simulation_product_id = #{simulationProductId}
+        GROUP BY spr.simulation_product_id, spr.simul_portfolio_id,
+                 spr.kb_product_version_id, p.product_id, p.product_code,
+                 pv.product_name, p.product_type, sv.savings_category,
+                 e.etf_category, e.annual_return_5y, spr.is_selected,
+                 spr.allocated_amount, spr.applied_annual_rate,
+                 spr.expected_future_value, spr.created_at
+    </select>
+
+    <select id="selectProductVersionDetail"
+            resultType="com.example.project.simulation.domain.ProductVersionDetailRecord">
         SELECT
-            simulation_product_id,
-            result_id,
-            product_id,
-            product_name_snapshot AS product_name,
-            recommendation_type AS product_type,
-            product_category_snapshot AS product_category,
-            is_selected AS selected,
-            default_allocated_amount,
-            default_allocation_ratio,
-            default_expected_future_value,
-            default_expected_profit,
-            allocated_amount,
-            allocation_ratio,
-            min_annual_rate_percent,
-            max_annual_rate_percent,
-            applied_annual_rate_percent,
-            calculation_type,
-            expected_future_value,
-            expected_profit,
-            min_month,
-            max_month,
-            min_amount,
-            max_amount,
-            monthly_min_amount,
-            monthly_max_amount,
-            preferential_conditions_snapshot AS preferential_conditions,
-            tracking_index_snapshot AS tracking_index,
-            market_capitalization_snapshot AS market_capitalization,
-            dividend_yield_percent_snapshot AS dividend_yield_percent,
-            risk_level_snapshot AS risk_level,
-            product_detail_url_snapshot AS product_detail_url,
-            product_data_date
-        FROM simulation_product
-        WHERE result_id IN (
-            SELECT result_id
-            FROM simulation_result
-            WHERE simulation_id = #{simulationId}
-        )
-        ORDER BY result_id, recommendation_type, simulation_product_id
+            pv.kb_product_version_id AS product_version_id,
+            pv.kb_product_data_version_id AS product_data_version_id,
+            p.product_id,
+            p.product_code,
+            pv.product_name,
+            p.product_type,
+            pv.description,
+            pv.product_url,
+            pv.sales_status,
+            d.min_amount AS minimum_amount,
+            d.max_amount AS maximum_amount,
+            COALESCE(d.min_month, sv.min_month) AS minimum_months,
+            COALESCE(d.max_month, sv.max_month) AS maximum_months,
+            sv.savings_category,
+            sv.monthly_min_amount AS monthly_minimum_amount,
+            sv.monthly_max_amount AS monthly_maximum_amount,
+            e.stock_code,
+            e.etf_category,
+            e.tracking_index,
+            e.annual_return_5y AS annualized_return_5y_percent,
+            e.bond_ratio AS bond_ratio_percent,
+            e.risk_level
+        FROM kb_product_version pv
+        JOIN kb_product p ON p.product_id = pv.product_id
+        LEFT JOIN deposit d ON d.kb_product_version_id = pv.kb_product_version_id
+        LEFT JOIN savings sv ON sv.kb_product_version_id = pv.kb_product_version_id
+        LEFT JOIN etf e ON e.kb_product_version_id = pv.kb_product_version_id
+        WHERE pv.kb_product_version_id = #{productVersionId}
     </select>
 
-    <update id="clearSelectedProducts">
+    <select id="existsProductInSimulation" resultType="boolean">
+        SELECT EXISTS (
+            SELECT 1
+            FROM simulation_product spr
+            JOIN simulation_portfolio sp ON sp.simul_portfolio_id = spr.simul_portfolio_id
+            JOIN simulation_result sr ON sr.simul_result_id = sp.simul_result_id
+            WHERE sr.simul_id = #{simulationId}
+              AND spr.kb_product_version_id = #{productVersionId}
+        )
+    </select>
+
+    <select id="selectBaseRates" resultType="com.example.project.simulation.domain.BaseRateRecord">
+        SELECT base_interest_rate_id, kb_product_version_id,
+               min_month AS minimum_months, max_month AS maximum_months,
+               base_rate_percent, max_rate_percent AS maximum_rate_percent
+        FROM base_interest_rate
+        WHERE kb_product_version_id = #{productVersionId}
+        ORDER BY min_month, base_interest_rate_id
+    </select>
+
+    <select id="selectPreferentialRates"
+            resultType="com.example.project.simulation.domain.PreferentialRateRecord">
+        SELECT preferential_interest_rate_id, kb_product_version_id,
+               min_month AS minimum_months, max_month AS maximum_months,
+               additional_rate_percent, condition_code,
+               condition_name, preferential_condition AS description
+        FROM preferential_interest_rate
+        WHERE kb_product_version_id = #{productVersionId}
+        ORDER BY condition_code
+    </select>
+
+    <select id="selectPreferentialRatesByCodes"
+            resultType="com.example.project.simulation.domain.PreferentialRateRecord">
+        SELECT preferential_interest_rate_id, kb_product_version_id,
+               min_month AS minimum_months, max_month AS maximum_months,
+               additional_rate_percent, condition_code,
+               condition_name, preferential_condition AS description
+        FROM preferential_interest_rate
+        WHERE kb_product_version_id = #{productVersionId}
+          AND condition_code IN
+          <foreach collection="conditionCodes" item="code" open="(" separator="," close=")">
+              #{code}
+          </foreach>
+        ORDER BY condition_code
+    </select>
+
+    <select id="selectSelectedPreferentialRates"
+            resultType="com.example.project.simulation.domain.PreferentialRateRecord">
+        SELECT pir.preferential_interest_rate_id, pir.kb_product_version_id,
+               pir.min_month AS minimum_months, pir.max_month AS maximum_months,
+               pir.additional_rate_percent, pir.condition_code,
+               pir.condition_name, pir.preferential_condition AS description
+        FROM simulation_product_preferential_condition sppc
+        JOIN preferential_interest_rate pir
+          ON pir.preferential_interest_rate_id = sppc.preferential_interest_rate_id
+        WHERE sppc.simulation_product_id = #{simulationProductId}
+        ORDER BY pir.condition_code
+    </select>
+
+    <select id="selectEtfHoldings" resultType="com.example.project.simulation.domain.EtfHoldingRecord">
+        SELECT holding_id, kb_product_version_id, holding_rank AS rank,
+               holding_name, holding_code, asset_type, country_code, weight_percent
+        FROM etf_holding
+        WHERE kb_product_version_id = #{productVersionId}
+        ORDER BY holding_rank
+        LIMIT #{limit}
+    </select>
+
+    <sql id="historyWhere">
+        f.user_id = #{userId}
+        AND (
+            s.status = 'SAVED'
+            OR (s.status = 'DRAFT' AND s.expired_at &gt; #{now})
+        )
+        <if test="status != null">
+            AND s.status = #{status}
+        </if>
+        <if test="familyId != null">
+            AND s.family_id = #{familyId}
+        </if>
+    </sql>
+
+    <select id="selectSimulationPage"
+            resultType="com.example.project.simulation.domain.SimulationRecord">
+        SELECT <include refid="simulationSelectColumns"/>
+        FROM simulation s
+        JOIN family f ON f.family_id = s.family_id
+        WHERE <include refid="historyWhere"/>
+        ORDER BY s.updated_at DESC, s.simul_id DESC
+        LIMIT #{size} OFFSET #{offset}
+    </select>
+
+    <select id="countSimulations" resultType="long">
+        SELECT COUNT(*)
+        FROM simulation s
+        JOIN family f ON f.family_id = s.family_id
+        WHERE <include refid="historyWhere"/>
+    </select>
+
+    <update id="clearSimulationSelections">
+        UPDATE simulation_product spr
+        JOIN simulation_portfolio sp ON sp.simul_portfolio_id = spr.simul_portfolio_id
+        JOIN simulation_result sr ON sr.simul_result_id = sp.simul_result_id
+        SET spr.is_selected = 0
+        WHERE sr.simul_id = #{simulationId}
+    </update>
+
+    <delete id="deleteSimulationPreferentialConditions">
+        DELETE sppc
+        FROM simulation_product_preferential_condition sppc
+        JOIN simulation_product spr
+          ON spr.simulation_product_id = sppc.simulation_product_id
+        JOIN simulation_portfolio sp ON sp.simul_portfolio_id = spr.simul_portfolio_id
+        JOIN simulation_result sr ON sr.simul_result_id = sp.simul_result_id
+        WHERE sr.simul_id = #{simulationId}
+    </delete>
+
+    <update id="restoreSimulationProduct">
         UPDATE simulation_product
         SET is_selected = 0,
-            allocated_amount = NULL,
-            allocation_ratio = NULL,
-            expected_future_value = NULL,
-            expected_profit = NULL
-        WHERE result_id = #{resultId}
-    </update>
-
-    <update id="selectProduct">
-        UPDATE simulation_product
-        SET is_selected = 1,
-            allocated_amount = #{allocatedAmount},
-            allocation_ratio = #{allocationRatio},
-            applied_annual_rate_percent = #{appliedAnnualRatePercent},
-            expected_future_value = #{expectedFutureValue},
-            expected_profit = #{expectedProfit}
+            applied_annual_rate = #{appliedAnnualRate},
+            expected_future_value = #{expectedFutureValue}
         WHERE simulation_product_id = #{simulationProductId}
     </update>
+
+    <update id="markSimulationProductSelected">
+        UPDATE simulation_product
+        SET is_selected = 1,
+            applied_annual_rate = #{appliedAnnualRate},
+            expected_future_value = #{expectedFutureValue}
+        WHERE simulation_product_id = #{simulationProductId}
+    </update>
+
+    <insert id="insertSelectedPreferentialCondition">
+        INSERT INTO simulation_product_preferential_condition (
+            simulation_product_id, preferential_interest_rate_id
+        ) VALUES (
+            #{simulationProductId}, #{preferentialInterestRateId}
+        )
+    </insert>
 
     <update id="saveSimulation">
         UPDATE simulation
         SET status = 'SAVED',
-            selected_scenario_type = #{selectedScenarioType},
-            selected_result_id = #{selectedResultId},
-            selected_risk_profile = #{selectedRiskProfile},
+            selected_portfolio_id = #{selectedPortfolioId},
             saved_at = #{savedAt},
-            expired_at = #{expiredAt},
+            updated_at = #{savedAt},
+            expired_at = NULL,
             version = version + 1
-        WHERE simulation_id = #{simulationId}
+        WHERE simul_id = #{simulationId}
           AND version = #{expectedVersion}
+    </update>
+
+    <update id="resetSavedSimulation">
+        UPDATE simulation
+        SET status = 'DRAFT',
+            selected_portfolio_id = NULL,
+            saved_at = NULL,
+            expired_at = #{expiredAt},
+            updated_at = #{updatedAt},
+            version = version + 1
+        WHERE simul_id = #{simulationId}
+          AND status = 'SAVED'
     </update>
 </mapper>

@@ -1,16 +1,15 @@
 package com.example.project.simulation.dto.request;
 
-import com.example.project.simulation.domain.ProductType;
-import com.example.project.simulation.domain.RiskProfile;
-import com.example.project.simulation.domain.ScenarioType;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import javax.validation.Valid;
 import javax.validation.constraints.Min;
+import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.NotEmpty;
 import javax.validation.constraints.NotNull;
 import javax.validation.constraints.Positive;
+import java.util.ArrayList;
 import java.util.List;
 
 @Data
@@ -22,40 +21,36 @@ public class SimulationSaveRequest {
     private Long version;
 
     @NotNull
-    private ScenarioType selectedScenarioType;
+    @Positive
+    private Long selectedPortfolioId;
 
     @NotNull
-    @Positive
-    private Long resultId;
+    private Boolean replaceExistingSaved;
 
-    private RiskProfile riskProfile;
+    @Positive
+    private Long expectedExistingSavedSimulationId;
 
     @NotEmpty
     @Valid
-    private List<SelectedProduct> products;
+    private List<ProductSelection> productSelections;
 
     @Valid
     private ClientCalculation clientCalculation;
 
     @Data
     @NoArgsConstructor
-    public static class SelectedProduct {
+    public static class ProductSelection {
         @NotNull
         @Positive
-        private Long productId;
+        private Long simulationProductId;
 
-        @NotNull
-        private ProductType recommendationType;
-
-        @NotNull
-        @Min(1)
-        private Long allocatedAmount;
+        private List<String> preferentialConditionCodes = new ArrayList<>();
     }
 
     @Data
     @NoArgsConstructor
     public static class ClientCalculation {
-        @NotNull
+        @NotBlank
         private String formulaVersion;
 
         @NotNull

@@ -8,6 +8,7 @@ import java.time.LocalDateTime;
 @Data
 public class SimulationRecord {
     private Long simulationId;
+    private Long productDataVersionId;
     private Long familyId;
     private Long userId;
     private String familyName;
@@ -19,18 +20,20 @@ public class SimulationRecord {
     private Integer investmentPeriodMonths;
     private LocalDate asOfDate;
     private LocalDate investmentEndDate;
-    private ScenarioType recommendedScenarioType;
-    private ScenarioType selectedScenarioType;
-    private Long selectedResultId;
-    private RiskProfile selectedRiskProfile;
+    private Long selectedPortfolioId;
+    private Integer ageAtSimulation;
+    private Boolean minorAtSimulation;
+    private LocalDate lookbackStartDate;
     private Long previousGiftAmount;
+    private Long deductionLimit;
+    private Long usedDeductionAmount;
     private Long remainingDeductionAmount;
-    private LocalDate deductionResetDate;
+    private LocalDate deductionRenewalDate;
     private String calculationVersion;
     private String formulaVersion;
-    private LocalDate productDataDate;
     private Long version;
-    private LocalDateTime savedAt;
     private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
+    private LocalDateTime savedAt;
     private LocalDateTime expiredAt;
 }

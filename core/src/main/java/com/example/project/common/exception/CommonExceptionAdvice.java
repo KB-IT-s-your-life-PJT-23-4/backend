@@ -15,6 +15,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.NoHandlerFoundException;
 
 import javax.servlet.http.HttpServletRequest;
@@ -24,7 +25,7 @@ import javax.validation.ConstraintViolationException;
 @Log4j2
 public class CommonExceptionAdvice {
     @ExceptionHandler(SimulationException.class)
-    public ResponseEntity<ApiResponse<Void>> handleSimulationException(
+    public ResponseEntity<ApiResponse<Object>> handleSimulationException(
             SimulationException exception,
             HttpServletRequest request
     ) {
@@ -37,7 +38,8 @@ public class CommonExceptionAdvice {
                         error.getHttpStatus().value(),
                         request.getRequestURI(),
                         error.getMessage(),
-                        error.getCode()
+                        error.getCode(),
+                        exception.getData()
                 ));
     }
 
@@ -71,7 +73,8 @@ public class CommonExceptionAdvice {
             MethodArgumentNotValidException.class,
             ConstraintViolationException.class,
             MissingServletRequestParameterException.class,
-            HttpMessageNotReadableException.class
+            HttpMessageNotReadableException.class,
+            MethodArgumentTypeMismatchException.class
     })
     public ResponseEntity<ApiResponse<Void>> handleValidationException(
             Exception exception,
@@ -80,9 +83,19 @@ public class CommonExceptionAdvice {
         log.warn("Validation failed for {}", request.getRequestURI());
 
         if (request.getRequestURI().startsWith("/api/gs")) {
-            SimulationError error = "PUT".equalsIgnoreCase(request.getMethod())
-                    ? SimulationError.INVALID_SAVE_REQUEST
-                    : SimulationError.INVALID_REQUEST;
+            SimulationError error;
+            if (exception instanceof MethodArgumentTypeMismatchException mismatch) {
+                error = switch (mismatch.getName()) {
+                    case "familyId" -> SimulationError.INVALID_FAMILY_ID;
+                    case "page", "size" -> SimulationError.INVALID_PAGE_REQUEST;
+                    default -> SimulationError.INVALID_SIMULATION_REQUEST;
+                };
+            } else {
+                error = "PUT".equalsIgnoreCase(request.getMethod())
+                        || "PATCH".equalsIgnoreCase(request.getMethod())
+                        ? SimulationError.INVALID_SAVE_REQUEST
+                        : SimulationError.INVALID_SIMULATION_REQUEST;
+            }
             return ResponseEntity
                     .status(error.getHttpStatus())
                     .body(ApiResponse.error(
