@@ -2,6 +2,7 @@ package com.example.project.gift.controller;
 
 import com.example.project.config.RootConfig;
 import com.example.project.config.ServletConfig;
+import com.example.project.consultation.config.WebClientConfig;
 import com.example.project.security.SecurityConfig;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -40,7 +41,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 @ExtendWith(SpringExtension.class)
 @WebAppConfiguration
 @ContextHierarchy({
-        @ContextConfiguration(classes = {RootConfig.class, SecurityConfig.class}),
+        @ContextConfiguration(classes = {RootConfig.class, SecurityConfig.class, WebClientConfig.class}),
         @ContextConfiguration(classes = ServletConfig.class)
 })
 @Transactional

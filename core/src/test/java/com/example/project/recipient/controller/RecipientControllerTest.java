@@ -4,6 +4,7 @@ import com.example.project.common.exception.CommonExceptionAdvice;
 import com.example.project.gift.domain.DeductionVO;
 import com.example.project.gift.domain.GiftVO;
 import com.example.project.gift.domain.Status;
+import com.example.project.gift.domain.TaxBracketVO;
 import com.example.project.gift.mapper.GiftMapper;
 import com.example.project.recipient.domain.RecipientVO;
 import com.example.project.recipient.mapper.RecipientMapper;
@@ -77,11 +78,11 @@ class RecipientControllerTest {
     }
 
     @Test
-    @DisplayName("POST /api/gm/families는 가족을 등록하고 공통 성공 응답을 반환한다")
+    @DisplayName("POST /api/fm/family는 가족을 등록하고 공통 성공 응답을 반환한다")
     void createRecipientApi() throws Exception {
         authenticate(OWNER_ID);
 
-        MvcResult result = mockMvc.perform(post("/api/gm/families")
+        MvcResult result = mockMvc.perform(post("/api/fm/family")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -96,19 +97,19 @@ class RecipientControllerTest {
 
         JsonNode body = body(result);
         assertEquals(201, body.get("statusCode").asInt());
-        assertEquals("/api/gm/families", body.get("path").asText());
+        assertEquals("/api/fm/family", body.get("path").asText());
         assertEquals("홍길동", body.at("/data/familyName").asText());
         assertEquals(OWNER_ID, recipientMapper.lastInserted.getUserId());
     }
 
     @Test
-    @DisplayName("GET /api/gm/families는 로그인 사용자의 가족 목록만 반환한다")
+    @DisplayName("GET /api/fm/family는 로그인 사용자의 가족 목록만 반환한다")
     void getRecipientsApi() throws Exception {
         recipientMapper.add(recipient(10L, OWNER_ID, "본인가족"));
         recipientMapper.add(recipient(20L, OTHER_USER_ID, "타인가족"));
         authenticate(OWNER_ID);
 
-        MvcResult result = mockMvc.perform(get("/api/gm/families"))
+        MvcResult result = mockMvc.perform(get("/api/fm/family"))
                 .andExpect(status().isOk())
                 .andReturn();
 
@@ -118,12 +119,12 @@ class RecipientControllerTest {
     }
 
     @Test
-    @DisplayName("GET /api/gm/families/{familyId}는 본인 가족 상세 정보를 반환한다")
+    @DisplayName("GET /api/fm/family/{familyId}는 본인 가족 상세 정보를 반환한다")
     void getRecipientApi() throws Exception {
         recipientMapper.add(recipient(10L, OWNER_ID, "본인가족"));
         authenticate(OWNER_ID);
 
-        MvcResult result = mockMvc.perform(get("/api/gm/families/{familyId}", 10L))
+        MvcResult result = mockMvc.perform(get("/api/fm/family/{familyId}", 10L))
                 .andExpect(status().isOk())
                 .andReturn();
 
@@ -139,7 +140,7 @@ class RecipientControllerTest {
         recipientMapper.add(recipient(10L, OWNER_ID, "본인가족"));
         authenticate(OWNER_ID);
 
-        MvcResult result = mockMvc.perform(get("/api/gm/families/{familyId}", 10L))
+        MvcResult result = mockMvc.perform(get("/api/fm/family/{familyId}", 10L))
                 .andExpect(status().isOk())
                 .andReturn();
 
@@ -155,12 +156,12 @@ class RecipientControllerTest {
     }
 
     @Test
-    @DisplayName("PATCH /api/gm/families/{familyId}는 본인 가족을 수정한다")
+    @DisplayName("PATCH /api/fm/family/{familyId}는 본인 가족을 수정한다")
     void updateRecipientApi() throws Exception {
         recipientMapper.add(recipient(10L, OWNER_ID, "수정전"));
         authenticate(OWNER_ID);
 
-        MvcResult result = mockMvc.perform(patch("/api/gm/families/{familyId}", 10L)
+        MvcResult result = mockMvc.perform(patch("/api/fm/family/{familyId}", 10L)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -178,12 +179,12 @@ class RecipientControllerTest {
     }
 
     @Test
-    @DisplayName("DELETE /api/gm/families/{familyId}는 Gift가 없으면 가족을 삭제한다")
+    @DisplayName("DELETE /api/fm/family/{familyId}는 Gift가 없으면 가족을 삭제한다")
     void deleteRecipientApi() throws Exception {
         recipientMapper.add(recipient(10L, OWNER_ID, "삭제대상"));
         authenticate(OWNER_ID);
 
-        MvcResult result = mockMvc.perform(delete("/api/gm/families/{familyId}", 10L))
+        MvcResult result = mockMvc.perform(delete("/api/fm/family/{familyId}", 10L))
                 .andExpect(status().isOk())
                 .andReturn();
 
@@ -193,13 +194,13 @@ class RecipientControllerTest {
     }
 
     @Test
-    @DisplayName("Gift가 존재하면 DELETE /api/gm/families/{familyId}는 409를 반환한다")
+    @DisplayName("Gift가 존재하면 DELETE /api/fm/family/{familyId}는 409를 반환한다")
     void rejectDeleteWhenGiftExistsApi() throws Exception {
         recipientMapper.add(recipient(10L, OWNER_ID, "삭제대상"));
         giftMapper.giftCounts.put(10L, 1);
         authenticate(OWNER_ID);
 
-        MvcResult result = mockMvc.perform(delete("/api/gm/families/{familyId}", 10L))
+        MvcResult result = mockMvc.perform(delete("/api/fm/family/{familyId}", 10L))
                 .andExpect(status().isConflict())
                 .andReturn();
 
@@ -216,7 +217,7 @@ class RecipientControllerTest {
         giftMapper.giftCounts.put(10L, 1);
         authenticate(OWNER_ID);
 
-        MvcResult result = mockMvc.perform(delete("/api/gm/families/{familyId}", 10L)
+        MvcResult result = mockMvc.perform(delete("/api/fm/family/{familyId}", 10L)
                         .param("force", "true"))
                 .andExpect(status().isOk())
                 .andReturn();
@@ -231,7 +232,7 @@ class RecipientControllerTest {
     void rejectMissingRequiredValueApi() throws Exception {
         authenticate(OWNER_ID);
 
-        MvcResult result = mockMvc.perform(post("/api/gm/families")
+        MvcResult result = mockMvc.perform(post("/api/fm/family")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -250,7 +251,7 @@ class RecipientControllerTest {
     void rejectInvalidRelationApi() throws Exception {
         authenticate(OWNER_ID);
 
-        MvcResult result = mockMvc.perform(post("/api/gm/families")
+        MvcResult result = mockMvc.perform(post("/api/fm/family")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -268,7 +269,7 @@ class RecipientControllerTest {
     @Test
     @DisplayName("인증 사용자가 없으면 가족 API는 401을 반환한다")
     void rejectUnauthenticatedRequest() throws Exception {
-        MvcResult result = mockMvc.perform(get("/api/gm/families"))
+        MvcResult result = mockMvc.perform(get("/api/fm/family"))
                 .andExpect(status().isUnauthorized())
                 .andReturn();
 
@@ -276,9 +277,9 @@ class RecipientControllerTest {
     }
 
     @Test
-    @DisplayName("요청서의 /gm/families 경로는 최신 Controller에 매핑되어 있지 않다")
+    @DisplayName("/api 접두사가 없는 /fm/family 경로는 Controller에 매핑되어 있지 않다")
     void pathWithoutApiPrefixIsNotMapped() throws Exception {
-        mockMvc.perform(get("/gm/families"))
+        mockMvc.perform(get("/fm/family"))
                 .andExpect(status().isNotFound());
     }
 
@@ -288,7 +289,7 @@ class RecipientControllerTest {
         recipientMapper.add(recipient(10L, OTHER_USER_ID, "타인가족"));
         authenticate(OWNER_ID);
 
-        MvcResult result = mockMvc.perform(get("/api/gm/families/{familyId}", 10L))
+        MvcResult result = mockMvc.perform(get("/api/fm/family/{familyId}", 10L))
                 .andExpect(status().isNotFound())
                 .andReturn();
 
@@ -301,7 +302,7 @@ class RecipientControllerTest {
         recipientMapper.add(recipient(10L, OTHER_USER_ID, "타인가족"));
         authenticate(OWNER_ID);
 
-        MvcResult result = mockMvc.perform(patch("/api/gm/families/{familyId}", 10L)
+        MvcResult result = mockMvc.perform(patch("/api/fm/family/{familyId}", 10L)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -320,13 +321,13 @@ class RecipientControllerTest {
     void missingRecipientApi() throws Exception {
         authenticate(OWNER_ID);
 
-        MvcResult result = mockMvc.perform(get("/api/gm/families/{familyId}", 999L))
+        MvcResult result = mockMvc.perform(get("/api/fm/family/{familyId}", 999L))
                 .andExpect(status().isNotFound())
                 .andReturn();
 
         JsonNode body = body(result);
         assertEquals(411, body.get("statusCode").asInt());
-        assertEquals("/api/gm/families/999", body.get("path").asText());
+        assertEquals("/api/fm/family/999", body.get("path").asText());
         assertTrue(body.has("timestamp"));
         assertTrue(body.has("error"));
         assertFalse(body.has("data"));
@@ -443,9 +444,25 @@ class RecipientControllerTest {
                 Long familyId,
                 Long userId,
                 LocalDate windowStartDate,
+                LocalDate baseDate,
+                Long excludeGiftId
+        ) {
+            return List.of();
+        }
+
+        @Override
+        public List<GiftVO> selectWindowGifts(
+                Long familyId,
+                Long userId,
+                LocalDate windowStartDate,
                 LocalDate baseDate
         ) {
             return List.of();
+        }
+
+        @Override
+        public TaxBracketVO selectTaxBracket(LocalDate baseDate, Long taxableBase) {
+            return null;
         }
 
         @Override

@@ -2,6 +2,7 @@ package com.example.project.gift.controller;
 
 import com.example.project.config.RootConfig;
 import com.example.project.config.ServletConfig;
+import com.example.project.consultation.config.WebClientConfig;
 import com.example.project.security.SecurityConfig;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -41,7 +42,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @WebAppConfiguration
 @ContextHierarchy({
         // WebConfig.getRootConfigClasses() 와 동일하게 맞춘다. SecurityConfig 에 PasswordEncoder 가 있다.
-        @ContextConfiguration(classes = {RootConfig.class, SecurityConfig.class}),
+        @ContextConfiguration(classes = {RootConfig.class, SecurityConfig.class, WebClientConfig.class}),
         @ContextConfiguration(classes = ServletConfig.class)
 })
 @Transactional

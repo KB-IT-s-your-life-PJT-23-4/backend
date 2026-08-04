@@ -1,6 +1,7 @@
 package com.example.project.user.integration;
 
 import com.example.project.config.RootConfig;
+import com.example.project.consultation.config.WebClientConfig;
 import com.example.project.security.SecurityConfig;
 import com.example.project.user.domain.UserVO;
 import com.example.project.user.dto.UserDTO;
@@ -23,7 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 @ExtendWith(SpringExtension.class)
-@ContextConfiguration(classes = {RootConfig.class, SecurityConfig.class})
+@ContextConfiguration(classes = {RootConfig.class, SecurityConfig.class, WebClientConfig.class})
 @Transactional
 class UserDatabaseIntegrationTest {
 
