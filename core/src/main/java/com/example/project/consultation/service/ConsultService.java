@@ -13,6 +13,8 @@ import com.example.project.consultation.dto.response.ConsultResponse;
 import com.example.project.consultation.mapper.ConsultationMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -36,9 +38,10 @@ public class ConsultService {
     private final ConsultationMapper consultationMapper;
 
     // 최초 질문
-    public ConsultResponse consult(String question, Long userId) {
+    //public ConsultResponse consult(String question, Long userId) { // 동기 처리
+    public Mono<ConsultResponse> consult(String question, Long userId) {
         validateQuestion(question);
-
+        /* 동기처리
         ChatRequest request = new ChatRequest(
                 null, // 최초 요청은 conversation_id가 null
                 question,
@@ -48,15 +51,28 @@ public class ConsultService {
         );
 
         ChatResponse response = fastApiClient.startChat(request);
-        return ConsultResponse.from(response);
+        return ConsultResponse.from(response);*/
+        return fetchFamiliesAsync(userId)
+                .flatMap(families -> {
+                    ChatRequest request = new ChatRequest(
+                            null, // 최초 요청은 conversation_id가 null
+                            question,
+                            families,
+                            fetchProduct(userId), // TODO product 도메인 연동 필요, 현재 null
+                            INITIAL_FACTS
+                    );
+                    return fastApiClient.startChat(request);
+                })
+                .map(ConsultResponse::from);
     }
 
     // 추가 답변 제출
-    public ConsultResponse answerClarification(ConsultClarificationRequest req, Long userId) {
+    //public ConsultResponse answerClarification(ConsultClarificationRequest req, Long userId) { // 동가 처리
+    public Mono<ConsultResponse> answerClarification(ConsultClarificationRequest req, Long userId) {
         if (req.answers() == null || req.answers().isEmpty()) {
             throw new ServiceException(ResponseCode.BAD_REQUEST);
         }
-
+        /* 동기처리
         ClarificationRequest request = new ClarificationRequest(
                 req.conversationId(),
                 req.question(),
@@ -69,7 +85,22 @@ public class ConsultService {
         );
 
         ChatResponse response = fastApiClient.submitClarification(request);
-        return ConsultResponse.from(response);
+        return ConsultResponse.from(response);*/
+        return fetchFamiliesAsync(userId)
+                .flatMap(families -> {
+                    ClarificationRequest request = new ClarificationRequest(
+                            req.conversationId(),
+                            req.question(),
+                            req.intent(),
+                            req.requiresCalculation(),
+                            req.facts(),
+                            req.answers(),
+                            families,
+                            fetchProduct(userId) // TODO product 도메인 연동 필요
+                    );
+                    return fastApiClient.submitClarification(request);
+                })
+                .map(ConsultResponse::from);
     }
 
     private void validateQuestion(String question) {
@@ -87,9 +118,25 @@ public class ConsultService {
             throw new ServiceException(ResponseCode.VALIDATION_FAILED);
         }
     }
-
+    /* 동기 처리
     private List<FamilyData> fetchFamilies(Long userId) {
         if(userId == null){
+            throw new ServiceException(ResponseCode.UNAUTHORIZED);
+        }
+
+        List<FamilyPreviousGiftVO> families = consultationMapper.selectAllByUserId(userId);
+
+        return families.stream()
+                .map(this::toFamilyData)
+                .toList();
+    }*/
+    private Mono<List<FamilyData>> fetchFamiliesAsync(Long userId) {
+        return Mono.fromCallable(() -> fetchFamilies(userId))
+                .subscribeOn(Schedulers.boundedElastic());
+    }
+
+    private List<FamilyData> fetchFamilies(Long userId) {
+        if (userId == null) {
             throw new ServiceException(ResponseCode.UNAUTHORIZED);
         }
 
