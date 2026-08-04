@@ -2,11 +2,16 @@ package com.example.project.consultation.controller;
 
 import com.example.project.common.api.ApiResponse;
 import com.example.project.common.api.ResponseCode;
+import com.example.project.common.logging.ApiLog;
+import com.example.project.common.web.CurrentUser;
 import com.example.project.consultation.dto.request.ConsultClarificationRequest;
 import com.example.project.consultation.dto.request.ConsultRequest;
 import com.example.project.consultation.dto.response.ConsultResponse;
 import com.example.project.consultation.service.ConsultService;
+import io.swagger.annotations.Api;
+import io.swagger.annotations.ApiOperation;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -15,6 +20,8 @@ import org.springframework.web.context.request.async.DeferredResult;
 
 import javax.servlet.http.HttpServletRequest;
 
+@ApiLog
+@Api(tags = "AI 상담 API")
 @RestController
 @RequestMapping("/api/ai")
 @RequiredArgsConstructor
@@ -24,14 +31,18 @@ public class ConsultController {
 
     private static final long TIMEOUT_MS = 20_000L;
 
+    @ApiOperation(
+            value = "AI 상담 시작",
+            notes = "사용자의 질문을 FastAPI 서버에 전달"
+    )
     @PostMapping("/consult")
     public DeferredResult<ApiResponse<ConsultResponse>> consult(
             @RequestBody ConsultRequest request,
-            HttpServletRequest httpRequest
-            // TODO 인증 사용자 정보 주입 방식 확정 후 파라미터 추가
+            HttpServletRequest httpRequest,
+            @AuthenticationPrincipal String principal
     ) {
         DeferredResult<ApiResponse<ConsultResponse>> deferredResult = new DeferredResult<>(TIMEOUT_MS);
-        Long userId = 1L; // TODO 인증 확정 후 실제 값으로 교체
+        Long userId = CurrentUser.id(principal);
 
         consultService.consult(request.question(), userId)
                 .subscribe(
@@ -44,14 +55,18 @@ public class ConsultController {
         return deferredResult;
     }
 
+    @ApiOperation(
+            value = "AI 상담 추가 질문",
+            notes = "사용자의 질문 외에 더 필요한 정보 응답 후 FastAPI 서버 전달"
+    )
     @PostMapping("/consult/clarification")
     public DeferredResult<ApiResponse<ConsultResponse>> answerClarification(
             @RequestBody ConsultClarificationRequest request,
-            HttpServletRequest httpRequest
-            // TODO 인증 사용자 정보 주입 방식 확정 후 파라미터 추가
+            HttpServletRequest httpRequest,
+            @AuthenticationPrincipal String principal
     ) {
         DeferredResult<ApiResponse<ConsultResponse>> deferredResult = new DeferredResult<>(TIMEOUT_MS);
-        Long userId = null; // TODO 인증 확정 후 실제 값으로 교체
+        Long userId = CurrentUser.id(principal);
 
         consultService.answerClarification(request, userId)
                 .subscribe(
