@@ -390,7 +390,16 @@ class GiftControllerTest {
                 LocalDate windowStartDate,
                 LocalDate baseDate
         ) {
-            return List.of();
+            return gifts.values().stream()
+                    .filter(gift -> userId.equals(
+                            recipientMapper.ownerId(gift.getFamilyId())))
+                    .filter(gift -> familyId.equals(gift.getFamilyId()))
+                    .filter(gift -> gift.getStatus() == Status.COMPLETED)
+                    .filter(gift -> !gift.getGiftDate().isBefore(windowStartDate))
+                    .filter(gift -> gift.getGiftDate().isBefore(baseDate))
+                    .sorted(Comparator.comparing(GiftVO::getGiftDate)
+                            .thenComparing(GiftVO::getGiftId))
+                    .toList();
         }
 
         @Override

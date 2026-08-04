@@ -21,13 +21,8 @@ public class SimulationRecord {
     private LocalDate asOfDate;
     private LocalDate investmentEndDate;
     private Long selectedPortfolioId;
-    private Integer ageAtSimulation;
-    private Boolean minorAtSimulation;
-    private LocalDate lookbackStartDate;
     private Long previousGiftAmount;
     private Long deductionLimit;
-    private Long usedDeductionAmount;
-    private Long remainingDeductionAmount;
     private LocalDate deductionRenewalDate;
     private String calculationVersion;
     private String formulaVersion;

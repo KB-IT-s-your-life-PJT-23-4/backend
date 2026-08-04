@@ -62,4 +62,42 @@ class SimulationMapperXmlTest {
         assertFalse(xml.contains("pir.min_month"));
         assertFalse(xml.contains("pir.max_month"));
     }
+
+    @Test
+    @DisplayName("시뮬레이션은 증여 이력과 공제의 최소 스냅샷 세 값만 저장한다")
+    void useMinimalGiftSnapshotContract() throws Exception {
+        String resource = "mapper/simulation/SimulationMapper.xml";
+        String xml;
+
+        try (InputStream inputStream = Resources.getResourceAsStream(resource)) {
+            xml = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
+        }
+
+        assertTrue(xml.contains("previous_gift_amount"));
+        assertTrue(xml.contains("deduction_limit"));
+        assertTrue(xml.contains("deduction_renewal_date"));
+        assertFalse(xml.contains("age_at_simulation"));
+        assertFalse(xml.contains("minor_at_simulation"));
+        assertFalse(xml.contains("lookback_start_date"));
+        assertFalse(xml.contains("used_deduction_amount"));
+        assertFalse(xml.contains("remaining_deduction_amount"));
+    }
+
+    @Test
+    @DisplayName("KB 상품 데이터 버전 ID를 Java 필드명에 맞게 명시적으로 매핑한다")
+    void mapProductDataVersionIdExplicitly() throws Exception {
+        String resource = "mapper/simulation/SimulationMapper.xml";
+        String xml;
+
+        try (InputStream inputStream = Resources.getResourceAsStream(resource)) {
+            xml = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
+        }
+
+        assertTrue(xml.contains(
+                "kb_product_data_version_id AS product_data_version_id"
+        ));
+        assertTrue(xml.contains(
+                "s.kb_product_data_version_id AS product_data_version_id"
+        ));
+    }
 }

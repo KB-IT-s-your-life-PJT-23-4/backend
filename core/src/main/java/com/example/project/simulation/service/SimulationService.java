@@ -169,13 +169,8 @@ public class SimulationService {
             simulation.setCalculationVersion(CALCULATION_VERSION);
             simulation.setFormulaVersion(FORMULA_VERSION);
             simulation.setVersion(1L);
-            simulation.setAgeAtSimulation(age);
-            simulation.setMinorAtSimulation(minor);
-            simulation.setLookbackStartDate(lookbackStart);
             simulation.setPreviousGiftAmount(previousGiftAmount);
             simulation.setDeductionLimit(deductionLimit);
-            simulation.setUsedDeductionAmount(usedDeduction);
-            simulation.setRemainingDeductionAmount(remainingDeduction);
             simulation.setDeductionRenewalDate(renewalDate);
             simulation.setCreatedAt(now);
             simulation.setUpdatedAt(now);
@@ -452,6 +447,23 @@ public class SimulationService {
 
     SimulationResponse buildResponse(SimulationRecord simulation) {
         Long simulationId = simulation.getSimulationId();
+        if (simulation.getPreviousGiftAmount() == null
+                || simulation.getDeductionLimit() == null) {
+            throw new SimulationException(
+                    SimulationError.SIMULATION_RESULT_INCOMPLETE);
+        }
+        int ageAtSimulation = Period.between(
+                simulation.getBirthDate(),
+                simulation.getAsOfDate()
+        ).getYears();
+        boolean minorAtSimulation = ageAtSimulation < 19;
+        LocalDate lookbackStartDate =
+                simulation.getAsOfDate().minusYears(DEDUCTION_WINDOW_YEARS);
+        long previousGiftAmount = simulation.getPreviousGiftAmount();
+        long deductionLimit = simulation.getDeductionLimit();
+        long usedDeductionAmount = Math.min(previousGiftAmount, deductionLimit);
+        long remainingDeductionAmount =
+                Math.max(0, deductionLimit - usedDeductionAmount);
         List<SimulationResultRecord> results =
                 safeList(simulationMapper.selectResults(simulationId));
         List<SimulationTrancheRecord> tranches =
@@ -571,8 +583,8 @@ public class SimulationService {
                         simulation.getFamilyName(),
                         simulation.getRelation(),
                         simulation.getBirthDate(),
-                        simulation.getAgeAtSimulation(),
-                        simulation.getMinorAtSimulation()
+                        ageAtSimulation,
+                        minorAtSimulation
                 ),
                 new SimulationResponse.Input(
                         simulation.getRequestedAmount(),
@@ -582,11 +594,11 @@ public class SimulationService {
                         simulation.getInvestmentEndDate()
                 ),
                 new SimulationResponse.GiftHistorySummary(
-                        simulation.getLookbackStartDate(),
-                        simulation.getPreviousGiftAmount(),
-                        simulation.getDeductionLimit(),
-                        simulation.getUsedDeductionAmount(),
-                        simulation.getRemainingDeductionAmount(),
+                        lookbackStartDate,
+                        previousGiftAmount,
+                        deductionLimit,
+                        usedDeductionAmount,
+                        remainingDeductionAmount,
                         simulation.getDeductionRenewalDate()
                 ),
                 new SimulationResponse.ProductDataVersion(
