@@ -3,11 +3,45 @@
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 
 <mapper namespace="com.example.project.batch.law.mapper.LawArticleMapper">
+
+    <!--
+      주간 갱신을 전제로 UPSERT 한다. uk_law_article_unit(law_code, unit_type, article_key) 이
+      충돌 기준이고, law_code 는 개정돼도 불변이라 같은 조문이 제자리에서 갱신된다.
+
+      MySQL 은 ON DUPLICATE KEY UPDATE 에서 값이 실제로 달라진 행만 변경으로 치므로,
+      updated_at(ON UPDATE CURRENT_TIMESTAMP)이 "내용이 바뀐 조문"만 가리키게 된다.
+      RAG 쪽은 embedded_at < updated_at 으로 재임베딩 대상을 고르면 된다.
+
+      embedded_at 과 created_at 은 갱신 목록에서 제외한다. embedded_at 은 RAG 소유라
+      배치가 건드리면 안 되고, created_at 은 최초 적재 시각이라 유지해야 한다.
+    -->
     <insert id="insertBatch" parameterType="list">
-        INSERT INTO law_article(law_name, article_no, title, content, effective_date)
+        INSERT INTO law_article (
+        law_code, law_key, law_name, law_type, ministry,
+        promulgation_no, promulgation_date, effective_date,
+        unit_type, article_no, article_key, title, article_effective_date,
+        content, revision_history, latest_revision_date
+        )
         VALUES
         <foreach collection="list" item="a" separator=",">
-            (#{a.lawName}, #{a.articleNo}, #{a.title},#{a.content},#{a.effectiveDate})
+            (#{a.lawCode}, #{a.lawKey}, #{a.lawName}, #{a.lawType}, #{a.ministry},
+            #{a.promulgationNo}, #{a.promulgationDate}, #{a.effectiveDate},
+            #{a.unitType}, #{a.articleNo}, #{a.articleKey}, #{a.title}, #{a.articleEffectiveDate},
+            #{a.content}, #{a.revisionHistory}, #{a.latestRevisionDate})
         </foreach>
+        ON DUPLICATE KEY UPDATE
+        law_key = VALUES(law_key),
+        law_name = VALUES(law_name),
+        law_type = VALUES(law_type),
+        ministry = VALUES(ministry),
+        promulgation_no = VALUES(promulgation_no),
+        promulgation_date = VALUES(promulgation_date),
+        effective_date = VALUES(effective_date),
+        article_no = VALUES(article_no),
+        title = VALUES(title),
+        article_effective_date = VALUES(article_effective_date),
+        content = VALUES(content),
+        revision_history = VALUES(revision_history),
+        latest_revision_date = VALUES(latest_revision_date)
     </insert>
 </mapper>
