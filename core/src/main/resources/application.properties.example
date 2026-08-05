@@ -1,0 +1,9 @@
+# Copy this file to application.properties and adjust it locally.
+application.name=project-core
+upload.location=${java.io.tmpdir}
+profile.image.max-size-bytes=10485760
+fastapi.base-url=http://localhost:8000
+
+jwt.secret=${JWT_SECRET}
+jwt.expiration=${JWT_ACCESS_EXPIRATION:3600000}
+jwt.refresh-expiration=${JWT_REFRESH_EXPIRATION:604800000}
