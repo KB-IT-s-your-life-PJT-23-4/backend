@@ -161,6 +161,9 @@ public class UserService {
             if (storedImage != null) {
                 requireImageStorage().deleteManagedFile(storedImage);
             }
+            if (exception instanceof DuplicateKeyException) {
+                throw new ServiceException(ResponseCode.DUPLICATE_DATA);
+            }
             throw exception;
         }
     }

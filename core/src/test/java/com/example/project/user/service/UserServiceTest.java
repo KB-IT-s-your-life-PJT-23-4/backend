@@ -13,6 +13,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.mock.web.MockMultipartFile;
@@ -203,6 +204,25 @@ class UserServiceTest {
     }
 
     @Test
+    @DisplayName("멀티파트 프로필 수정 중 중복키가 발생하면 중복 데이터 오류로 처리한다")
+    void updateEditableProfileWithDuplicateData() {
+        userMapper.savedUser = createUser("user@example.com");
+        userMapper.throwDuplicateOnUpdate = true;
+        UserProfileUpdateRequest request = new UserProfileUpdateRequest(
+                "김길동",
+                LocalDate.of(1991, 2, 2),
+                "010-9999-8888"
+        );
+
+        ServiceException exception = assertThrows(
+                ServiceException.class,
+                () -> userService.updateEditableProfile(1L, request, null, false)
+        );
+
+        assertEquals(ResponseCode.DUPLICATE_DATA, exception.getResponseCode());
+    }
+
+    @Test
     @DisplayName("회원 탈퇴 시 인증된 회원 정보를 삭제한다")
     void deleteUser() {
         userMapper.savedUser = createUser("user@example.com");
@@ -263,6 +283,7 @@ class UserServiceTest {
         private int updateCount;
         private int deleteCount;
         private int deleteResult = 1;
+        private boolean throwDuplicateOnUpdate;
 
         @Override
         public UserVO findById(Long userId) {
@@ -301,6 +322,9 @@ class UserServiceTest {
         @Override
         public int update(UserVO user) {
             updateCount++;
+            if (throwDuplicateOnUpdate) {
+                throw new DuplicateKeyException("duplicate user data");
+            }
             user.setUpdatedAt(LocalDateTime.now());
             savedUser = user;
             return 1;

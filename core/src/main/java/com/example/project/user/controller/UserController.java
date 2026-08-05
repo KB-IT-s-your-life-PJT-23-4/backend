@@ -3,6 +3,7 @@ package com.example.project.user.controller;
 import com.example.project.common.api.ApiResponse;
 import com.example.project.common.api.ResponseCode;
 import com.example.project.common.exception.ServiceException;
+import com.example.project.common.web.CurrentUser;
 import com.example.project.user.dto.UserDTO;
 import com.example.project.user.dto.request.UserProfileUpdateRequest;
 import com.example.project.user.dto.request.UserSignupRequest;
@@ -147,7 +148,8 @@ public class UserController {
             @io.swagger.annotations.ApiResponse(code = 200, message = "수정 성공(body statusCode 203)"),
             @io.swagger.annotations.ApiResponse(code = 400, message = "입력값 또는 이미지 검증 실패", response = ApiResponse.class),
             @io.swagger.annotations.ApiResponse(code = 401, message = "인증 실패", response = ApiResponse.class),
-            @io.swagger.annotations.ApiResponse(code = 404, message = "회원 정보 없음", response = ApiResponse.class)
+            @io.swagger.annotations.ApiResponse(code = 404, message = "회원 정보 없음", response = ApiResponse.class),
+            @io.swagger.annotations.ApiResponse(code = 409, message = "전화번호 중복", response = ApiResponse.class)
     })
     public ApiResponse<UserDTO> updateMyEditableProfile(
             Authentication authentication,
@@ -200,10 +202,6 @@ public class UserController {
             throw new ServiceException(ResponseCode.UNAUTHORIZED);
         }
 
-        try {
-            return Long.valueOf(authentication.getName());
-        } catch (NumberFormatException exception) {
-            throw new ServiceException(ResponseCode.UNAUTHORIZED);
-        }
+        return CurrentUser.id(authentication.getName());
     }
 }
