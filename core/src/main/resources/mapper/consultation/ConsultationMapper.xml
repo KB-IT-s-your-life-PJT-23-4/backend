@@ -37,14 +37,14 @@
             resultMap="familyPreviousGiftResultMap">
 
         SELECT
-            user_id,
-            family_id,
-            name,
-            recipient_age,
-            has_previous_gifts,
-            previous_gift_amount,
-            previous_gift_date,
-            deduction_renewal_date
+        user_id,
+        family_id,
+        name,
+        recipient_age,
+        has_previous_gifts,
+        previous_gift_amount,
+        previous_gift_date,
+        deduction_renewal_date
         FROM vw_family_previous_gift
         WHERE user_id = #{userId}
         ORDER BY family_id
@@ -59,22 +59,22 @@
             resultMap="familyPreviousGiftResultMap">
 
         SELECT
-            user_id,
-            family_id,
-            name,
-            recipient_age,
-            has_previous_gifts,
-            previous_gift_amount,
-            previous_gift_date,
-            deduction_renewal_date
+        user_id,
+        family_id,
+        name,
+        recipient_age,
+        has_previous_gifts,
+        previous_gift_amount,
+        previous_gift_date,
+        deduction_renewal_date
         FROM vw_family_previous_gift
         WHERE family_id = #{familyId}
         AND user_id = #{userId}
 
     </select>
 
-    <!-- 특정 상품의 이름, 최단 기간 기본금리, 우대조건(여러 개면 콤마로 연결)을 조회한다 -->
-    <select id="selectProductById" parameterType="long" resultType="com.example.project.consultation.domain.ProductVO">
+    <!-- 판매중인 전체 상품의 이름, 최단 기간 기본금리, 우대조건(여러 개면 콤마로 연결)을 조회한다 -->
+    <select id="selectAllOnSaleProducts" resultType="com.example.project.consultation.domain.ProductVO">
         SELECT
             p.product_id AS productId,
             pv.product_name AS productName,
@@ -93,7 +93,7 @@
                     PARTITION BY kb_product_version_id
                     ORDER BY min_month ASC
                 ) AS rn
-        FROM base_interest_rate
+            FROM base_interest_rate
         ) bir ON bir.kb_product_version_id = pv.kb_product_version_id AND bir.rn = 1
         LEFT JOIN (
             SELECT
@@ -102,8 +102,11 @@
             FROM preferential_interest_rate
             GROUP BY kb_product_version_id
         ) pref ON pref.kb_product_version_id = pv.kb_product_version_id
-        WHERE p.product_id = #{productId}
-        ORDER BY pv.kb_product_version_id DESC
-        LIMIT 1
+        WHERE pv.kb_product_version_id IN (
+            SELECT MAX(kb_product_version_id)
+            FROM kb_product_version
+            WHERE sales_status = 'ON_SALE'
+            GROUP BY product_id
+        )
     </select>
 </mapper>
