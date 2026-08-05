@@ -446,24 +446,8 @@ public class SimulationService {
     }
 
     SimulationResponse buildResponse(SimulationRecord simulation) {
+        hydrateSnapshotDerivedFields(simulation);
         Long simulationId = simulation.getSimulationId();
-        if (simulation.getPreviousGiftAmount() == null
-                || simulation.getDeductionLimit() == null) {
-            throw new SimulationException(
-                    SimulationError.SIMULATION_RESULT_INCOMPLETE);
-        }
-        int ageAtSimulation = Period.between(
-                simulation.getBirthDate(),
-                simulation.getAsOfDate()
-        ).getYears();
-        boolean minorAtSimulation = ageAtSimulation < 19;
-        LocalDate lookbackStartDate =
-                simulation.getAsOfDate().minusYears(DEDUCTION_WINDOW_YEARS);
-        long previousGiftAmount = simulation.getPreviousGiftAmount();
-        long deductionLimit = simulation.getDeductionLimit();
-        long usedDeductionAmount = Math.min(previousGiftAmount, deductionLimit);
-        long remainingDeductionAmount =
-                Math.max(0, deductionLimit - usedDeductionAmount);
         List<SimulationResultRecord> results =
                 safeList(simulationMapper.selectResults(simulationId));
         List<SimulationTrancheRecord> tranches =
@@ -477,6 +461,11 @@ public class SimulationService {
                         simulation.getProductDataVersionId()
                 );
         validateSnapshotCompleteness(results, tranches, portfolios, products, productDataVersion);
+        if (simulation.getStatus() == SimulationStatus.DRAFT
+                && products.stream().anyMatch(SimulationProductRecord::isSelected)) {
+            throw new SimulationException(
+                    SimulationError.SIMULATION_SNAPSHOT_INCOMPLETE);
+        }
 
         Map<Long, List<SimulationTrancheRecord>> tranchesByResult = tranches.stream()
                 .collect(Collectors.groupingBy(SimulationTrancheRecord::getResultId));
@@ -545,8 +534,7 @@ public class SimulationService {
                             simulation.getSelectedPortfolioId()
                     ))
                     .findFirst()
-                    .orElseThrow(() -> new SimulationException(
-                            SimulationError.SIMULATION_HISTORY_INCOMPLETE));
+                    .orElseThrow(this::incompleteSavedSelection);
             SimulationResultRecord selectedResult = resultById.get(
                     selectedPortfolio.getResultId()
             );
@@ -562,10 +550,12 @@ public class SimulationService {
                                     ))
                             ))
                             .toList();
-            if (selectedProducts.isEmpty()) {
-                throw new SimulationException(
-                        SimulationError.SIMULATION_HISTORY_INCOMPLETE);
-            }
+            validateSavedSelection(
+                    selectedPortfolio,
+                    selectedResult,
+                    selectedProducts,
+                    products
+            );
             selection = toSelection(
                     selectedPortfolio,
                     selectedResult,
@@ -634,6 +624,7 @@ public class SimulationService {
         simulationMapper.insertResult(result);
         for (SimulationTrancheRecord tranche : aggregate.tranches()) {
             tranche.setResultId(result.getResultId());
+            tranche.setCreatedAt(now);
             simulationMapper.insertTranche(tranche);
         }
 
@@ -1313,31 +1304,72 @@ public class SimulationService {
             List<SimulationProductRecord> products,
             ProductDataVersionRecord productDataVersion
     ) {
-        if (productDataVersion == null || results.size() != 2 || tranches.isEmpty()
-                || portfolios.size() != 6 || products.isEmpty()) {
-            throw new SimulationException(
-                    SimulationError.SIMULATION_RESULT_INCOMPLETE);
+        if (productDataVersion == null || results.isEmpty()
+                || tranches.isEmpty() || portfolios.isEmpty() || products.isEmpty()) {
+            throw incompleteSnapshot();
+        }
+        Set<ScenarioType> scenarioTypes = results.stream()
+                .map(SimulationResultRecord::getScenarioType)
+                .collect(Collectors.toSet());
+        Set<Long> resultIds = results.stream()
+                .map(SimulationResultRecord::getResultId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Set<Long> portfolioIds = portfolios.stream()
+                .map(SimulationPortfolioRecord::getPortfolioId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        if (!scenarioTypes.equals(EnumSet.allOf(ScenarioType.class))
+                || results.size() != ScenarioType.values().length
+                || resultIds.size() != results.size()
+                || portfolioIds.size() != portfolios.size()
+                || tranches.stream().anyMatch(item -> item.getResultId() == null
+                || !resultIds.contains(item.getResultId()))
+                || portfolios.stream().anyMatch(item -> item.getResultId() == null
+                || !resultIds.contains(item.getResultId())
+                || item.getPortfolioType() == null
+                || item.getScenarioType() == null)
+                || products.stream().anyMatch(item -> item.getPortfolioId() == null
+                || !portfolioIds.contains(item.getPortfolioId())
+                || item.getSimulationProductId() == null
+                || item.getProductType() == null
+                || item.getAllocatedAmount() == null
+                || item.getExpectedFutureValue() == null)) {
+            throw incompleteSnapshot();
         }
         for (SimulationResultRecord result : results) {
+            List<SimulationTrancheRecord> resultTranches = tranches.stream()
+                    .filter(item -> Objects.equals(
+                            item.getResultId(), result.getResultId()))
+                    .sorted(Comparator.comparing(
+                            SimulationTrancheRecord::getSequenceNo,
+                            Comparator.nullsLast(Comparator.naturalOrder())
+                    ))
+                    .toList();
             List<SimulationPortfolioRecord> resultPortfolios = portfolios.stream()
                     .filter(item -> Objects.equals(
                             item.getResultId(),
                             result.getResultId()
                     ))
                     .toList();
-            long profileCount = resultPortfolios.stream()
+            Set<RiskProfile> profiles = resultPortfolios.stream()
                     .map(SimulationPortfolioRecord::getPortfolioType)
-                    .distinct()
-                    .count();
+                    .collect(Collectors.toSet());
             boolean allocationMismatch = resultPortfolios.stream()
-                    .anyMatch(item -> item.getDepositAmount()
+                    .anyMatch(item -> item.getDepositAmount() == null
+                            || item.getSavingsAmount() == null
+                            || item.getEtfAmount() == null
+                            || item.getDepositAmount()
                             + item.getSavingsAmount()
                             + item.getEtfAmount()
                             != result.getInvestmentPrincipal());
-            if (profileCount != RiskProfile.values().length
+            if (!validTranches(result, resultTranches)
+                    || !profiles.equals(EnumSet.allOf(RiskProfile.class))
+                    || resultPortfolios.size() != RiskProfile.values().length
+                    || resultPortfolios.stream().anyMatch(item ->
+                    item.getScenarioType() != result.getScenarioType())
                     || allocationMismatch) {
-                throw new SimulationException(
-                        SimulationError.SIMULATION_RESULT_INCOMPLETE);
+                throw incompleteSnapshot();
             }
         }
         for (RiskProfile profile : RiskProfile.values()) {
@@ -1346,10 +1378,98 @@ public class SimulationService {
                     .filter(SimulationPortfolioRecord::isRecommended)
                     .count();
             if (recommendedCount != 1) {
-                throw new SimulationException(
-                        SimulationError.SIMULATION_RESULT_INCOMPLETE);
+                throw incompleteSnapshot();
             }
         }
+    }
+
+    private boolean validTranches(
+            SimulationResultRecord result,
+            List<SimulationTrancheRecord> tranches
+    ) {
+        if (tranches.isEmpty()) {
+            return false;
+        }
+        for (int index = 0; index < tranches.size(); index++) {
+            SimulationTrancheRecord tranche = tranches.get(index);
+            if (tranche.getTrancheId() == null
+                    || !Objects.equals(tranche.getSequenceNo(), index + 1)
+                    || tranche.getGiftDate() == null
+                    || value(tranche.getGiftAmount()) <= 0
+                    || tranche.getEstimatedGiftTax() == null
+                    || value(tranche.getEstimatedGiftTax()) < 0
+                    || tranche.getDonorRequiredAmount() != null
+                    && tranche.getDonorRequiredAmount() < 0
+                    || tranche.getInvestmentAmount() == null
+                    || tranche.getCreatedAt() == null
+                    || value(tranche.getInvestmentAmount()) < 0) {
+                return false;
+            }
+        }
+        long giftTax = tranches.stream()
+                .mapToLong(item -> value(item.getEstimatedGiftTax()))
+                .sum();
+        long investmentPrincipal = tranches.stream()
+                .mapToLong(item -> value(item.getInvestmentAmount()))
+                .sum();
+        long donorRequiredAmount = tranches.stream()
+                .mapToLong(item -> value(item.getDonorRequiredAmount()))
+                .sum();
+        return giftTax == value(result.getGiftTax())
+                && investmentPrincipal == value(result.getInvestmentPrincipal())
+                && (result.getDonorRequiredAmount() == null
+                || donorRequiredAmount == result.getDonorRequiredAmount());
+    }
+
+    private void validateSavedSelection(
+            SimulationPortfolioRecord selectedPortfolio,
+            SimulationResultRecord selectedResult,
+            List<SimulationProductRecord> selectedProducts,
+            List<SimulationProductRecord> allProducts
+    ) {
+        if (selectedResult == null || selectedProducts.isEmpty()
+                || allProducts.stream().anyMatch(item -> item.isSelected()
+                && !Objects.equals(
+                item.getPortfolioId(), selectedPortfolio.getPortfolioId()))) {
+            throw incompleteSavedSelection();
+        }
+
+        Map<ProductType, Long> allocations = new EnumMap<>(ProductType.class);
+        allocations.put(ProductType.DEPOSIT, value(selectedPortfolio.getDepositAmount()));
+        allocations.put(ProductType.SAVINGS, value(selectedPortfolio.getSavingsAmount()));
+        allocations.put(ProductType.ETF, value(selectedPortfolio.getEtfAmount()));
+        Set<ProductType> requiredTypes = allocations.entrySet().stream()
+                .filter(entry -> entry.getValue() > 0)
+                .map(Map.Entry::getKey)
+                .collect(Collectors.toSet());
+        Set<ProductType> selectedTypes = selectedProducts.stream()
+                .map(SimulationProductRecord::getProductType)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        long selectedAmount = selectedProducts.stream()
+                .mapToLong(item -> value(item.getAllocatedAmount()))
+                .sum();
+        boolean allocationMismatch = selectedProducts.stream().anyMatch(item ->
+                item.getProductType() == null
+                        || !Objects.equals(
+                        item.getAllocatedAmount(),
+                        allocations.get(item.getProductType())));
+        if (!selectedTypes.equals(requiredTypes)
+                || selectedTypes.size() != selectedProducts.size()
+                || allocationMismatch
+                || selectedAmount != value(selectedResult.getInvestmentPrincipal())) {
+            throw incompleteSavedSelection();
+        }
+    }
+
+    private SimulationException incompleteSnapshot() {
+        return new SimulationException(
+                SimulationError.SIMULATION_SNAPSHOT_INCOMPLETE);
+    }
+
+    private SimulationException incompleteSavedSelection() {
+        return new SimulationException(
+                SimulationError.SAVED_SELECTION_INCOMPLETE);
     }
 
     private Map<ProductType, List<ProductCandidate>> loadSafeAssetCandidates(
@@ -1426,6 +1546,28 @@ public class SimulationService {
         return family;
     }
 
+    private void hydrateSnapshotDerivedFields(SimulationRecord simulation) {
+        if (simulation.getAsOfDate() == null
+                || simulation.getBirthDate() == null
+                || simulation.getPreviousGiftAmount() == null
+                || simulation.getDeductionLimit() == null) {
+            throw incompleteSnapshot();
+        }
+
+        int age = Period.between(
+                simulation.getBirthDate(), simulation.getAsOfDate()).getYears();
+        long previousGiftAmount = simulation.getPreviousGiftAmount();
+        long deductionLimit = simulation.getDeductionLimit();
+        simulation.setAgeAtSimulation(age);
+        simulation.setMinorAtSimulation(age < 19);
+        simulation.setLookbackStartDate(
+                simulation.getAsOfDate().minusYears(DEDUCTION_WINDOW_YEARS));
+        simulation.setUsedDeductionAmount(
+                Math.min(previousGiftAmount, deductionLimit));
+        simulation.setRemainingDeductionAmount(
+                Math.max(0, deductionLimit - previousGiftAmount));
+    }
+
     SimulationRecord requireSimulation(Long simulationId, Long userId) {
         SimulationRecord simulation = simulationMapper.selectSimulation(simulationId);
         if (simulation == null) {
@@ -1439,11 +1581,15 @@ public class SimulationService {
                 || !simulation.getExpiredAt().isAfter(LocalDateTime.now()))) {
             throw new SimulationException(SimulationError.SIMULATION_EXPIRED);
         }
+        if (simulation.getStatus() == SimulationStatus.DRAFT
+                && (simulation.getSelectedPortfolioId() != null
+                || simulation.getSavedAt() != null)) {
+            throw incompleteSnapshot();
+        }
         if (simulation.getStatus() == SimulationStatus.SAVED
                 && (simulation.getSelectedPortfolioId() == null
                 || simulation.getSavedAt() == null)) {
-            throw new SimulationException(
-                    SimulationError.SIMULATION_HISTORY_INCOMPLETE);
+            throw incompleteSavedSelection();
         }
         return simulation;
     }
