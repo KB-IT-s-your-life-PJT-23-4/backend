@@ -17,6 +17,7 @@ import com.example.project.simulation.domain.SimulationResultRecord;
 import com.example.project.simulation.domain.SimulationStatus;
 import com.example.project.simulation.domain.SimulationTrancheRecord;
 import com.example.project.simulation.domain.TaxBracket;
+import com.example.project.simulation.domain.TaxPaymentMethod;
 import com.example.project.simulation.dto.request.SimulationExecuteRequest;
 import com.example.project.simulation.dto.request.SimulationSaveRequest;
 import com.example.project.simulation.dto.response.SimulationResponse;
@@ -197,7 +198,20 @@ public class SimulationService {
             );
             markRecommendations(immediatePersisted, optimizedPersisted);
 
-            SimulationResponse response = get(simulation.getSimulationId(), userId);
+            SimulationResponse response;
+            try {
+                response = get(simulation.getSimulationId(), userId);
+            } catch (SimulationException exception) {
+                if (exception.getError() == SimulationError.SIMULATION_SNAPSHOT_INCOMPLETE
+                        || exception.getError()
+                        == SimulationError.SIMULATION_RECOMMENDATION_INCOMPLETE) {
+                    throw new SimulationException(
+                            SimulationError.SIMULATION_RESULT_INCOMPLETE,
+                            exception
+                    );
+                }
+                throw exception;
+            }
             idempotencyStore.remember(
                     userId,
                     "POST:/api/gs",
@@ -446,8 +460,8 @@ public class SimulationService {
     }
 
     SimulationResponse buildResponse(SimulationRecord simulation) {
-        hydrateSnapshotDerivedFields(simulation);
         Long simulationId = simulation.getSimulationId();
+        SnapshotDerivedValues derived = deriveSnapshotValues(simulation);
         List<SimulationResultRecord> results =
                 safeList(simulationMapper.selectResults(simulationId));
         List<SimulationTrancheRecord> tranches =
@@ -460,11 +474,17 @@ public class SimulationService {
                 simulationMapper.selectProductDataVersion(
                         simulation.getProductDataVersionId()
                 );
-        validateSnapshotCompleteness(results, tranches, portfolios, products, productDataVersion);
+        validateSnapshotCompleteness(
+                simulation,
+                results,
+                tranches,
+                portfolios,
+                products,
+                productDataVersion
+        );
         if (simulation.getStatus() == SimulationStatus.DRAFT
                 && products.stream().anyMatch(SimulationProductRecord::isSelected)) {
-            throw new SimulationException(
-                    SimulationError.SIMULATION_SNAPSHOT_INCOMPLETE);
+            throw incompleteSnapshot();
         }
 
         Map<Long, List<SimulationTrancheRecord>> tranchesByResult = tranches.stream()
@@ -573,8 +593,8 @@ public class SimulationService {
                         simulation.getFamilyName(),
                         simulation.getRelation(),
                         simulation.getBirthDate(),
-                        ageAtSimulation,
-                        minorAtSimulation
+                        derived.ageAtSimulation(),
+                        derived.minorAtSimulation()
                 ),
                 new SimulationResponse.Input(
                         simulation.getRequestedAmount(),
@@ -584,11 +604,11 @@ public class SimulationService {
                         simulation.getInvestmentEndDate()
                 ),
                 new SimulationResponse.GiftHistorySummary(
-                        lookbackStartDate,
-                        previousGiftAmount,
-                        deductionLimit,
-                        usedDeductionAmount,
-                        remainingDeductionAmount,
+                        derived.lookbackStartDate(),
+                        derived.previousGiftAmount(),
+                        derived.deductionLimit(),
+                        derived.usedDeductionAmount(),
+                        derived.remainingDeductionAmount(),
                         simulation.getDeductionRenewalDate()
                 ),
                 new SimulationResponse.ProductDataVersion(
@@ -624,7 +644,6 @@ public class SimulationService {
         simulationMapper.insertResult(result);
         for (SimulationTrancheRecord tranche : aggregate.tranches()) {
             tranche.setResultId(result.getResultId());
-            tranche.setCreatedAt(now);
             simulationMapper.insertTranche(tranche);
         }
 
@@ -661,8 +680,11 @@ public class SimulationService {
             long portfolioFutureValue = 0;
             for (ProductType type : ProductType.values()) {
                 long allocatedAmount = amounts.getOrDefault(type, 0L);
+                if (allocatedAmount <= 0) {
+                    continue;
+                }
                 List<ProductCandidate> typeCandidates = candidates.get(type);
-                if (allocatedAmount > 0 && (typeCandidates == null || typeCandidates.isEmpty())) {
+                if (typeCandidates == null || typeCandidates.isEmpty()) {
                     throw new SimulationException(
                             SimulationError.PRODUCT_CANDIDATE_NOT_FOUND);
                 }
@@ -778,6 +800,7 @@ public class SimulationService {
         long totalTaxable = 0;
         long totalTax = 0;
         long totalDonorRequired = 0;
+        long totalPostTaxAmount = 0;
         long totalInvestment = 0;
         int sequence = 1;
 
@@ -796,6 +819,7 @@ public class SimulationService {
             totalTaxable += tax.taxableAmount();
             totalTax += tax.giftTax();
             totalDonorRequired += tax.donorRequiredAmount();
+            totalPostTaxAmount += tax.investmentAmount();
             totalInvestment += tax.investmentAmount();
         }
 
@@ -829,6 +853,7 @@ public class SimulationService {
             totalTaxable += tax.taxableAmount();
             totalTax += tax.giftTax();
             totalDonorRequired += tax.donorRequiredAmount();
+            totalPostTaxAmount += tax.investmentAmount();
             if (included) {
                 totalInvestment += tax.investmentAmount();
             }
@@ -847,7 +872,7 @@ public class SimulationService {
                 totalTaxable,
                 totalTax,
                 totalDonorRequired,
-                Math.max(0, request.getRequestedAmount() - totalTax),
+                totalPostTaxAmount,
                 totalInvestment
         );
         return new ScenarioAggregate(result, tranches);
@@ -1298,6 +1323,7 @@ public class SimulationService {
     }
 
     private void validateSnapshotCompleteness(
+            SimulationRecord simulation,
             List<SimulationResultRecord> results,
             List<SimulationTrancheRecord> tranches,
             List<SimulationPortfolioRecord> portfolios,
@@ -1308,8 +1334,10 @@ public class SimulationService {
                 || tranches.isEmpty() || portfolios.isEmpty() || products.isEmpty()) {
             throw incompleteSnapshot();
         }
+
         Set<ScenarioType> scenarioTypes = results.stream()
                 .map(SimulationResultRecord::getScenarioType)
+                .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
         Set<Long> resultIds = results.stream()
                 .map(SimulationResultRecord::getResultId)
@@ -1323,34 +1351,35 @@ public class SimulationService {
                 || results.size() != ScenarioType.values().length
                 || resultIds.size() != results.size()
                 || portfolioIds.size() != portfolios.size()
-                || tranches.stream().anyMatch(item -> item.getResultId() == null
-                || !resultIds.contains(item.getResultId()))
-                || portfolios.stream().anyMatch(item -> item.getResultId() == null
-                || !resultIds.contains(item.getResultId())
-                || item.getPortfolioType() == null
-                || item.getScenarioType() == null)
-                || products.stream().anyMatch(item -> item.getPortfolioId() == null
-                || !portfolioIds.contains(item.getPortfolioId())
-                || item.getSimulationProductId() == null
-                || item.getProductType() == null
-                || item.getAllocatedAmount() == null
-                || item.getExpectedFutureValue() == null)) {
+                || tranches.stream().anyMatch(item ->
+                item.getResultId() == null || !resultIds.contains(item.getResultId()))
+                || portfolios.stream().anyMatch(item ->
+                item.getResultId() == null
+                        || !resultIds.contains(item.getResultId())
+                        || item.getPortfolioType() == null
+                        || item.getScenarioType() == null)
+                || products.stream().anyMatch(item ->
+                item.getSimulationProductId() == null
+                        || item.getPortfolioId() == null
+                        || !portfolioIds.contains(item.getPortfolioId())
+                        || item.getProductVersionId() == null
+                        || item.getProductType() == null
+                        || item.getAllocatedAmount() == null
+                        || item.getAppliedAnnualRatePercent() == null
+                        || item.getExpectedFutureValue() == null)) {
             throw incompleteSnapshot();
         }
+
         for (SimulationResultRecord result : results) {
             List<SimulationTrancheRecord> resultTranches = tranches.stream()
-                    .filter(item -> Objects.equals(
-                            item.getResultId(), result.getResultId()))
+                    .filter(item -> Objects.equals(item.getResultId(), result.getResultId()))
                     .sorted(Comparator.comparing(
                             SimulationTrancheRecord::getSequenceNo,
                             Comparator.nullsLast(Comparator.naturalOrder())
                     ))
                     .toList();
             List<SimulationPortfolioRecord> resultPortfolios = portfolios.stream()
-                    .filter(item -> Objects.equals(
-                            item.getResultId(),
-                            result.getResultId()
-                    ))
+                    .filter(item -> Objects.equals(item.getResultId(), result.getResultId()))
                     .toList();
             Set<RiskProfile> profiles = resultPortfolios.stream()
                     .map(SimulationPortfolioRecord::getPortfolioType)
@@ -1359,11 +1388,14 @@ public class SimulationService {
                     .anyMatch(item -> item.getDepositAmount() == null
                             || item.getSavingsAmount() == null
                             || item.getEtfAmount() == null
+                            || item.getDepositAmount() < 0
+                            || item.getSavingsAmount() < 0
+                            || item.getEtfAmount() < 0
                             || item.getDepositAmount()
                             + item.getSavingsAmount()
                             + item.getEtfAmount()
-                            != result.getInvestmentPrincipal());
-            if (!validTranches(result, resultTranches)
+                            != value(result.getInvestmentPrincipal()));
+            if (!validTranches(simulation, result, resultTranches)
                     || !profiles.equals(EnumSet.allOf(RiskProfile.class))
                     || resultPortfolios.size() != RiskProfile.values().length
                     || resultPortfolios.stream().anyMatch(item ->
@@ -1371,54 +1403,131 @@ public class SimulationService {
                     || allocationMismatch) {
                 throw incompleteSnapshot();
             }
+            for (SimulationPortfolioRecord portfolio : resultPortfolios) {
+                List<SimulationProductRecord> portfolioProducts = products.stream()
+                        .filter(item -> Objects.equals(
+                                item.getPortfolioId(), portfolio.getPortfolioId()))
+                        .toList();
+                if (!validPortfolioProducts(portfolio, portfolioProducts)) {
+                    throw incompleteSnapshot();
+                }
+            }
         }
+
         for (RiskProfile profile : RiskProfile.values()) {
             long recommendedCount = portfolios.stream()
                     .filter(item -> item.getPortfolioType() == profile)
                     .filter(SimulationPortfolioRecord::isRecommended)
                     .count();
             if (recommendedCount != 1) {
-                throw incompleteSnapshot();
+                throw new SimulationException(
+                        SimulationError.SIMULATION_RECOMMENDATION_INCOMPLETE);
             }
         }
     }
 
     private boolean validTranches(
+            SimulationRecord simulation,
             SimulationResultRecord result,
             List<SimulationTrancheRecord> tranches
     ) {
-        if (tranches.isEmpty()) {
+        if (result.getScenarioType() == null
+                || result.getDeductionAmount() == null
+                || result.getTaxableAmount() == null
+                || result.getGiftTax() == null
+                || result.getDonorRequiredAmount() == null
+                || result.getPostTaxAmount() == null
+                || result.getInvestmentPrincipal() == null
+                || tranches.isEmpty()) {
             return false;
         }
+
+        LocalDate previousDate = null;
         for (int index = 0; index < tranches.size(); index++) {
             SimulationTrancheRecord tranche = tranches.get(index);
             if (tranche.getTrancheId() == null
                     || !Objects.equals(tranche.getSequenceNo(), index + 1)
                     || tranche.getGiftDate() == null
+                    || tranche.getGiftDate().isBefore(simulation.getAsOfDate())
+                    || previousDate != null && tranche.getGiftDate().isBefore(previousDate)
                     || value(tranche.getGiftAmount()) <= 0
                     || tranche.getEstimatedGiftTax() == null
-                    || value(tranche.getEstimatedGiftTax()) < 0
-                    || tranche.getDonorRequiredAmount() != null
-                    && tranche.getDonorRequiredAmount() < 0
+                    || tranche.getEstimatedGiftTax() < 0
+                    || tranche.getDonorRequiredAmount() == null
+                    || tranche.getDonorRequiredAmount() < 0
                     || tranche.getInvestmentAmount() == null
-                    || tranche.getCreatedAt() == null
-                    || value(tranche.getInvestmentAmount()) < 0) {
+                    || tranche.getInvestmentAmount() < 0) {
                 return false;
             }
+            previousDate = tranche.getGiftDate();
         }
+
+        long giftAmount = tranches.stream()
+                .mapToLong(item -> value(item.getGiftAmount()))
+                .sum();
         long giftTax = tranches.stream()
                 .mapToLong(item -> value(item.getEstimatedGiftTax()))
-                .sum();
-        long investmentPrincipal = tranches.stream()
-                .mapToLong(item -> value(item.getInvestmentAmount()))
                 .sum();
         long donorRequiredAmount = tranches.stream()
                 .mapToLong(item -> value(item.getDonorRequiredAmount()))
                 .sum();
-        return giftTax == value(result.getGiftTax())
+        long investmentPrincipal = tranches.stream()
+                .mapToLong(item -> value(item.getInvestmentAmount()))
+                .sum();
+        long expectedPostTaxAmount =
+                simulation.getTaxPaymentMethod()
+                        == TaxPaymentMethod.DONOR_PAYS
+                        ? simulation.getRequestedAmount()
+                        : Math.max(0, simulation.getRequestedAmount() - result.getGiftTax());
+        boolean immediateScheduleValid =
+                result.getScenarioType() != ScenarioType.IMMEDIATE
+                        || tranches.size() == 1
+                        && Objects.equals(
+                        tranches.get(0).getGiftDate(), simulation.getAsOfDate())
+                        && Objects.equals(
+                        tranches.get(0).getGiftAmount(), simulation.getRequestedAmount());
+
+        return giftAmount == value(simulation.getRequestedAmount())
+                && giftTax == value(result.getGiftTax())
+                && donorRequiredAmount == value(result.getDonorRequiredAmount())
                 && investmentPrincipal == value(result.getInvestmentPrincipal())
-                && (result.getDonorRequiredAmount() == null
-                || donorRequiredAmount == result.getDonorRequiredAmount());
+                && expectedPostTaxAmount == value(result.getPostTaxAmount())
+                && immediateScheduleValid;
+    }
+
+    private boolean validPortfolioProducts(
+            SimulationPortfolioRecord portfolio,
+            List<SimulationProductRecord> products
+    ) {
+        Map<ProductType, Long> allocations = portfolioAllocations(portfolio);
+        Set<ProductType> requiredTypes = allocations.entrySet().stream()
+                .filter(entry -> entry.getValue() > 0)
+                .map(Map.Entry::getKey)
+                .collect(Collectors.toSet());
+        Map<ProductType, List<SimulationProductRecord>> productsByType = products.stream()
+                .collect(Collectors.groupingBy(
+                        SimulationProductRecord::getProductType,
+                        () -> new EnumMap<>(ProductType.class),
+                        Collectors.toList()
+                ));
+        if (!productsByType.keySet().equals(requiredTypes)) {
+            return false;
+        }
+
+        Set<Long> productVersionIds = new HashSet<>();
+        for (Map.Entry<ProductType, List<SimulationProductRecord>> entry :
+                productsByType.entrySet()) {
+            List<SimulationProductRecord> candidates = entry.getValue();
+            long expectedAllocation = allocations.get(entry.getKey());
+            if (candidates.isEmpty() || candidates.size() > MAX_PRODUCT_CANDIDATES
+                    || candidates.stream().anyMatch(product ->
+                    !productVersionIds.add(product.getProductVersionId())
+                            || value(product.getAllocatedAmount()) != expectedAllocation
+                            || value(product.getExpectedFutureValue()) < 0)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private void validateSavedSelection(
@@ -1427,17 +1536,17 @@ public class SimulationService {
             List<SimulationProductRecord> selectedProducts,
             List<SimulationProductRecord> allProducts
     ) {
-        if (selectedResult == null || selectedProducts.isEmpty()
-                || allProducts.stream().anyMatch(item -> item.isSelected()
-                && !Objects.equals(
-                item.getPortfolioId(), selectedPortfolio.getPortfolioId()))) {
+        if (selectedResult == null
+                || !selectedPortfolio.isRecommended()
+                || selectedProducts.isEmpty()
+                || allProducts.stream().anyMatch(item ->
+                item.isSelected()
+                        && !Objects.equals(
+                        item.getPortfolioId(), selectedPortfolio.getPortfolioId()))) {
             throw incompleteSavedSelection();
         }
 
-        Map<ProductType, Long> allocations = new EnumMap<>(ProductType.class);
-        allocations.put(ProductType.DEPOSIT, value(selectedPortfolio.getDepositAmount()));
-        allocations.put(ProductType.SAVINGS, value(selectedPortfolio.getSavingsAmount()));
-        allocations.put(ProductType.ETF, value(selectedPortfolio.getEtfAmount()));
+        Map<ProductType, Long> allocations = portfolioAllocations(selectedPortfolio);
         Set<ProductType> requiredTypes = allocations.entrySet().stream()
                 .filter(entry -> entry.getValue() > 0)
                 .map(Map.Entry::getKey)
@@ -1452,14 +1561,23 @@ public class SimulationService {
         boolean allocationMismatch = selectedProducts.stream().anyMatch(item ->
                 item.getProductType() == null
                         || !Objects.equals(
-                        item.getAllocatedAmount(),
-                        allocations.get(item.getProductType())));
+                        item.getAllocatedAmount(), allocations.get(item.getProductType())));
         if (!selectedTypes.equals(requiredTypes)
                 || selectedTypes.size() != selectedProducts.size()
                 || allocationMismatch
                 || selectedAmount != value(selectedResult.getInvestmentPrincipal())) {
             throw incompleteSavedSelection();
         }
+    }
+
+    private Map<ProductType, Long> portfolioAllocations(
+            SimulationPortfolioRecord portfolio
+    ) {
+        Map<ProductType, Long> allocations = new EnumMap<>(ProductType.class);
+        allocations.put(ProductType.DEPOSIT, value(portfolio.getDepositAmount()));
+        allocations.put(ProductType.SAVINGS, value(portfolio.getSavingsAmount()));
+        allocations.put(ProductType.ETF, value(portfolio.getEtfAmount()));
+        return allocations;
     }
 
     private SimulationException incompleteSnapshot() {
@@ -1546,26 +1664,35 @@ public class SimulationService {
         return family;
     }
 
-    private void hydrateSnapshotDerivedFields(SimulationRecord simulation) {
+    private SnapshotDerivedValues deriveSnapshotValues(
+            SimulationRecord simulation
+    ) {
         if (simulation.getAsOfDate() == null
                 || simulation.getBirthDate() == null
+                || simulation.getRequestedAmount() == null
+                || simulation.getRequestedAmount() <= 0
+                || simulation.getTaxPaymentMethod() == null
                 || simulation.getPreviousGiftAmount() == null
-                || simulation.getDeductionLimit() == null) {
+                || simulation.getPreviousGiftAmount() < 0
+                || simulation.getDeductionLimit() == null
+                || simulation.getDeductionLimit() < 0) {
             throw incompleteSnapshot();
         }
 
-        int age = Period.between(
+        int ageAtSimulation = Period.between(
                 simulation.getBirthDate(), simulation.getAsOfDate()).getYears();
         long previousGiftAmount = simulation.getPreviousGiftAmount();
         long deductionLimit = simulation.getDeductionLimit();
-        simulation.setAgeAtSimulation(age);
-        simulation.setMinorAtSimulation(age < 19);
-        simulation.setLookbackStartDate(
-                simulation.getAsOfDate().minusYears(DEDUCTION_WINDOW_YEARS));
-        simulation.setUsedDeductionAmount(
-                Math.min(previousGiftAmount, deductionLimit));
-        simulation.setRemainingDeductionAmount(
-                Math.max(0, deductionLimit - previousGiftAmount));
+        long usedDeductionAmount = Math.min(previousGiftAmount, deductionLimit);
+        return new SnapshotDerivedValues(
+                ageAtSimulation,
+                ageAtSimulation < 19,
+                simulation.getAsOfDate().minusYears(DEDUCTION_WINDOW_YEARS),
+                previousGiftAmount,
+                deductionLimit,
+                usedDeductionAmount,
+                Math.max(0, deductionLimit - usedDeductionAmount)
+        );
     }
 
     SimulationRecord requireSimulation(Long simulationId, Long userId) {
@@ -1822,6 +1949,17 @@ public class SimulationService {
 
     private <T> List<T> safeList(List<T> values) {
         return values == null ? List.of() : values;
+    }
+
+    private record SnapshotDerivedValues(
+            int ageAtSimulation,
+            boolean minorAtSimulation,
+            LocalDate lookbackStartDate,
+            long previousGiftAmount,
+            long deductionLimit,
+            long usedDeductionAmount,
+            long remainingDeductionAmount
+    ) {
     }
 
     private record ScenarioAggregate(
