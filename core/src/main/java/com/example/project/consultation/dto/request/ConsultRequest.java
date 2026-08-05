@@ -6,6 +6,5 @@ import lombok.RequiredArgsConstructor;
 
 
 public record ConsultRequest(
-        String question,
-        Long productId
+        String question
 ) {}

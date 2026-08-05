@@ -19,5 +19,5 @@ public interface ConsultationMapper {
             @Param("familyId") Long familyId,
             @Param("userId") Long userId
     );
-    ProductVO selectProductById(Long productId);
+    List<ProductVO> selectAllOnSaleProducts();
 }

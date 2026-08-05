@@ -38,7 +38,7 @@ public class ConsultService {
 
     // 최초 질문
     //public ConsultResponse consult(String question, Long userId) { // 동기 처리
-    public Mono<ConsultResponse> consult(String question, Long userId, Long productId) {
+    public Mono<ConsultResponse> consult(String question, Long userId) {
         validateQuestion(question);
         /* 동기처리
         ChatRequest request = new ChatRequest(
@@ -57,7 +57,7 @@ public class ConsultService {
                             null, // 최초 요청은 conversation_id가 null
                             question,
                             families,
-                            fetchProduct(productId),
+                            fetchAllProducts(),
                             INITIAL_FACTS
                     );
                     return fastApiClient.startChat(request);
@@ -67,7 +67,7 @@ public class ConsultService {
 
     // 추가 답변 제출
     //public ConsultResponse answerClarification(ConsultClarificationRequest req, Long userId) { // 동가 처리
-    public Mono<ConsultResponse> answerClarification(ConsultClarificationRequest req, Long userId, long productId) {
+    public Mono<ConsultResponse> answerClarification(ConsultClarificationRequest req, Long userId) {
         if (req.answers() == null || req.answers().isEmpty()) {
             throw new ServiceException(ResponseCode.BAD_REQUEST);
         }
@@ -95,7 +95,7 @@ public class ConsultService {
                             req.facts(),
                             req.answers(),
                             families,
-                            fetchProduct(productId)
+                            fetchAllProducts()
                     );
                     return fastApiClient.submitClarification(request);
                 })
@@ -194,21 +194,14 @@ public class ConsultService {
         return previousGiftAmount;
     }
 
-    private ProductData fetchProduct(Long productId) {
-        if (productId == null) {
-            return null;
-        }
-
-        ProductVO product = consultationMapper.selectProductById(productId);
-
-        if (product == null) {
-            throw new ServiceException(ResponseCode.PRODUCT_NOT_FOUND);
-        }
-
-        return ProductData.builder()
-                .productName(product.getProductName())
-                .interestRate(product.getBaseRatePercent())
-                .preferentialCondition(product.getPreferentialCondition())
-                .build();
+    private List<ProductData> fetchAllProducts() {
+        List<ProductVO> products = consultationMapper.selectAllOnSaleProducts();
+        return products.stream()
+                .map(p -> ProductData.builder()
+                        .productName(p.getProductName())
+                        .interestRate(p.getBaseRatePercent())
+                        .preferentialCondition(p.getPreferentialCondition())
+                        .build())
+                .toList();
     }
 }

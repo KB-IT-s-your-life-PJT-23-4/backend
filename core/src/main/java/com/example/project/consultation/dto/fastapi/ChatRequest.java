@@ -11,6 +11,6 @@ public record ChatRequest(
         String conversationId,
         String question,
         List<FamilyData> families,
-        ProductData product,
+        List<ProductData> products,
         Map<String, Object> facts
 ) {}
