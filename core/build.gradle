@@ -49,6 +49,9 @@ dependencies {
     implementation "org.mybatis:mybatis:${mybatisVersion}"
     implementation "org.mybatis:mybatis-spring:${mybatisSpringVersion}"
 
+    // Local cache
+    implementation "com.github.ben-manes.caffeine:caffeine:${caffeineVersion}"
+
     // Log4j2
     implementation "org.apache.logging.log4j:log4j-api:${log4jVersion}"
     implementation "org.apache.logging.log4j:log4j-core:${log4jVersion}"
