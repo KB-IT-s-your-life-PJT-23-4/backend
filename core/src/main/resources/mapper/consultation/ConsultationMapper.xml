@@ -73,7 +73,7 @@
 
     </select>
 
-    <!-- 판매중인 전체 상품의 이름, 최단 기간 기본금리, 우대조건(여러 개면 콤마로 연결)을 조회한다 -->
+    <!-- 판매중인 전체 상품의 이름, 최단 기간 기본금리, 우대조건(여러 개면 콤마로 연결) 조회 -->
     <select id="selectAllOnSaleProducts" resultType="com.example.project.consultation.domain.ProductVO">
         SELECT
             p.product_id AS productId,
@@ -108,5 +108,28 @@
             WHERE sales_status = 'ON_SALE'
             GROUP BY product_id
         )
+        AND p.product_type IN ('DEPOSIT', 'SAVINGS')
+    </select>
+
+    <!-- 판매중인 ETF 상품의 이름, 추종지수, 5년 연평균 수익률 조회 -->
+    <select id="selectAllOnSaleEtfProducts" resultType="com.example.project.consultation.domain.EtfVO">
+        SELECT
+            p.product_id AS productId,
+            pv.product_name AS productName,
+            e.tracking_index AS trackingIndex,
+            e.annual_return_5y AS annualReturn5y
+        FROM kb_product p
+        JOIN kb_product_version pv
+            ON pv.product_id = p.product_id
+            AND pv.sales_status = 'ON_SALE'
+        JOIN etf e
+            ON e.kb_product_version_id = pv.kb_product_version_id
+        WHERE pv.kb_product_version_id IN (
+            SELECT MAX(kb_product_version_id)
+            FROM kb_product_version
+            WHERE sales_status = 'ON_SALE'
+            GROUP BY product_id
+        )
+        AND p.product_type = 'ETF'
     </select>
 </mapper>
