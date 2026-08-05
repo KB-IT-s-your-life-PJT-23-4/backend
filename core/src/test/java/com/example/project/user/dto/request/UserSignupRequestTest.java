@@ -78,4 +78,23 @@ class UserSignupRequestTest {
         assertTrue(violations.stream()
                 .anyMatch(violation -> violation.getPropertyPath().toString().equals("name")));
     }
+
+    @Test
+    @DisplayName("복잡도가 부족한 비밀번호와 미래 생년월일 및 잘못된 전화번호는 검증에 실패한다")
+    void invalidPasswordBirthDateAndPhone() {
+        UserSignupRequest request = new UserSignupRequest(
+                "user@example.com",
+                "password",
+                "홍길동",
+                LocalDate.now().plusDays(1),
+                "01012345678",
+                null
+        );
+
+        Set<String> invalidFields = validator.validate(request).stream()
+                .map(violation -> violation.getPropertyPath().toString())
+                .collect(Collectors.toSet());
+
+        assertEquals(Set.of("password", "birthDate", "phone"), invalidFields);
+    }
 }

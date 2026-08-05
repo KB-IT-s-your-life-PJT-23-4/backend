@@ -224,6 +224,7 @@ class RecipientServiceTest {
     void rejectInvalidCreateRequest() {
         RecipientRequest missingName = request(null, "OTHER", LocalDate.of(2000, 1, 1));
         RecipientRequest invalidRelation = request("홍길동", "PARENT", LocalDate.of(2000, 1, 1));
+        RecipientRequest futureBirthDate = request("홍길동", "OTHER", LocalDate.now().plusDays(1));
 
         ServiceException missingNameException = assertThrows(
                 ServiceException.class,
@@ -233,9 +234,14 @@ class RecipientServiceTest {
                 ServiceException.class,
                 () -> recipientService.createRecipient(invalidRelation, OWNER_ID)
         );
+        ServiceException futureBirthDateException = assertThrows(
+                ServiceException.class,
+                () -> recipientService.createRecipient(futureBirthDate, OWNER_ID)
+        );
 
         assertEquals(ResponseCode.VALIDATION_FAILED, missingNameException.getResponseCode());
         assertEquals(ResponseCode.VALIDATION_FAILED, invalidRelationException.getResponseCode());
+        assertEquals(ResponseCode.VALIDATION_FAILED, futureBirthDateException.getResponseCode());
         assertEquals(0, recipientMapper.insertCount);
     }
 

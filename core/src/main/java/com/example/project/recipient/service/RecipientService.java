@@ -180,7 +180,7 @@ public class RecipientService {
     }
 
     private LocalDate requireBirthDate(LocalDate birthDate) {
-        if (birthDate == null) {
+        if (birthDate == null || birthDate.isAfter(LocalDate.now())) {
             throw new ServiceException(ResponseCode.VALIDATION_FAILED);
         }
 

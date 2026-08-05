@@ -1,6 +1,7 @@
 package com.example.project.consultation.mapper;
 
 
+import com.example.project.consultation.domain.EtfVO;
 import com.example.project.consultation.domain.FamilyPreviousGiftVO;
 import com.example.project.consultation.domain.ProductVO;
 import org.apache.ibatis.annotations.Mapper;
@@ -20,4 +21,5 @@ public interface ConsultationMapper {
             @Param("userId") Long userId
     );
     List<ProductVO> selectAllOnSaleProducts();
+    List<EtfVO> selectAllOnSaleEtfProducts();
 }

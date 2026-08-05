@@ -325,7 +325,7 @@
     <select id="selectTranches" resultType="com.example.project.simulation.domain.SimulationTrancheRecord">
         SELECT t.tranche_id, t.simul_result_id AS result_id, t.sequence_no,
                t.gift_date, t.gift_amount, t.estimated_gift_tax,
-               t.donor_required_amount, t.investment_amount
+               t.donor_required_amount, t.investment_amount, t.created_at
         FROM simulation_tranche t
         JOIN simulation_result r ON r.simul_result_id = t.simul_result_id
         WHERE r.simul_id = #{simulationId}
@@ -505,7 +505,8 @@
     </select>
 
     <select id="selectBaseRates" resultType="com.example.project.simulation.domain.BaseRateRecord">
-        SELECT base_interest_rate_id, kb_product_version_id,
+        SELECT base_interest_rate_id,
+               kb_product_version_id AS product_version_id,
                min_month AS minimum_months, max_month AS maximum_months,
                base_rate_percent, max_rate_percent AS maximum_rate_percent
         FROM base_interest_rate
@@ -515,7 +516,8 @@
 
     <select id="selectPreferentialRates"
             resultType="com.example.project.simulation.domain.PreferentialRateRecord">
-        SELECT preferential_interest_rate_id, kb_product_version_id,
+        SELECT preferential_interest_rate_id,
+               kb_product_version_id AS product_version_id,
                additional_rate_percent, condition_code,
                preferential_condition AS description
         FROM preferential_interest_rate
@@ -525,7 +527,8 @@
 
     <select id="selectPreferentialRatesByCodes"
             resultType="com.example.project.simulation.domain.PreferentialRateRecord">
-        SELECT preferential_interest_rate_id, kb_product_version_id,
+        SELECT preferential_interest_rate_id,
+               kb_product_version_id AS product_version_id,
                additional_rate_percent, condition_code,
                preferential_condition AS description
         FROM preferential_interest_rate
@@ -539,7 +542,8 @@
 
     <select id="selectSelectedPreferentialRates"
             resultType="com.example.project.simulation.domain.PreferentialRateRecord">
-        SELECT pir.preferential_interest_rate_id, pir.kb_product_version_id,
+        SELECT pir.preferential_interest_rate_id,
+               pir.kb_product_version_id AS product_version_id,
                pir.additional_rate_percent, pir.condition_code,
                pir.preferential_condition AS description
         FROM simulation_product_preferential_condition sppc

@@ -16,6 +16,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
@@ -32,6 +33,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -203,6 +205,40 @@ class UserControllerTest {
         assertEquals("1991-02-02", body.at("/data/birthDate").asText());
         assertEquals("010-9999-8888", body.at("/data/phone").asText());
         assertEquals("updated.png", body.at("/data/img").asText());
+    }
+
+    @Test
+    @DisplayName("multipart PUT /api/users/me는 수정 가능한 프로필 정보를 반영한다")
+    void updateMyEditableProfileApi() throws Exception {
+        MockMultipartFile profile = new MockMultipartFile(
+                "profile",
+                "profile.json",
+                MediaType.APPLICATION_JSON_VALUE,
+                """
+                        {
+                          "name": "변경이름",
+                          "birthDate": "1992-03-04",
+                          "phone": "010-3333-4444"
+                        }
+                        """.getBytes(StandardCharsets.UTF_8)
+        );
+
+        MvcResult result = mockMvc.perform(multipart("/api/users/me")
+                        .file(profile)
+                        .principal(authentication(USER_ID))
+                        .with(request -> {
+                            request.setMethod("PUT");
+                            return request;
+                        }))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        JsonNode body = body(result);
+        assertEquals(203, body.get("statusCode").asInt());
+        assertEquals("변경이름", body.at("/data/name").asText());
+        assertEquals("1992-03-04", body.at("/data/birthDate").asText());
+        assertEquals("010-3333-4444", body.at("/data/phone").asText());
+        assertEquals("user@example.com", body.at("/data/email").asText());
     }
 
     @Test
