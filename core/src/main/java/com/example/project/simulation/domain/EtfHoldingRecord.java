@@ -8,7 +8,7 @@ import java.math.BigDecimal;
 public class EtfHoldingRecord {
     private Long holdingId;
     private Long productVersionId;
-    private Integer rank;
+    private Integer holdingRank;
     private String holdingName;
     private String holdingCode;
     private String assetType;

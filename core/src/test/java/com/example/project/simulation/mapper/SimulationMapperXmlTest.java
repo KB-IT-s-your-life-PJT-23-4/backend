@@ -61,6 +61,7 @@ class SimulationMapperXmlTest {
         assertFalse(xml.contains("condition_name"));
         assertFalse(xml.contains("pir.min_month"));
         assertFalse(xml.contains("pir.max_month"));
+        assertFalse(xml.contains("holding_rank AS rank"));
     }
 
     @Test

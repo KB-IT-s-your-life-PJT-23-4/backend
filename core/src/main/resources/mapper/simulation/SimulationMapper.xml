@@ -550,7 +550,7 @@
     </select>
 
     <select id="selectEtfHoldings" resultType="com.example.project.simulation.domain.EtfHoldingRecord">
-        SELECT holding_id, kb_product_version_id, holding_rank AS rank,
+        SELECT holding_id, kb_product_version_id, holding_rank,
                holding_name, holding_code, asset_type,
                country_code, weight_percent
         FROM etf_holding
