@@ -2,6 +2,7 @@ package com.example.project.consultation.mapper;
 
 
 import com.example.project.consultation.domain.FamilyPreviousGiftVO;
+import com.example.project.consultation.domain.ProductVO;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -18,4 +19,5 @@ public interface ConsultationMapper {
             @Param("familyId") Long familyId,
             @Param("userId") Long userId
     );
+    List<ProductVO> selectAllOnSaleProducts();
 }

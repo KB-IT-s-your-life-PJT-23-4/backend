@@ -4,14 +4,13 @@ import com.example.project.common.api.ResponseCode;
 import com.example.project.common.exception.ServiceException;
 import com.example.project.consultation.client.FastApiClient;
 import com.example.project.consultation.domain.FamilyPreviousGiftVO;
-import com.example.project.consultation.dto.fastapi.ChatRequest;
-import com.example.project.consultation.dto.fastapi.ChatResponse;
-import com.example.project.consultation.dto.fastapi.ClarificationRequest;
-import com.example.project.consultation.dto.fastapi.FamilyData;
+import com.example.project.consultation.domain.ProductVO;
+import com.example.project.consultation.dto.fastapi.*;
 import com.example.project.consultation.dto.request.ConsultClarificationRequest;
 import com.example.project.consultation.dto.response.ConsultResponse;
 import com.example.project.consultation.mapper.ConsultationMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
@@ -19,7 +18,7 @@ import reactor.core.scheduler.Schedulers;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
-
+@Log4j2
 @Service
 @RequiredArgsConstructor
 public class ConsultService {
@@ -46,7 +45,7 @@ public class ConsultService {
                 null, // 최초 요청은 conversation_id가 null
                 question,
                 fetchFamilies(userId),
-                fetchProduct(userId),       // TODO product 도메인 연동 필요, 현재 null
+                fetchProduct(userId),
                 INITIAL_FACTS               // 초기 facts
         );
 
@@ -58,7 +57,7 @@ public class ConsultService {
                             null, // 최초 요청은 conversation_id가 null
                             question,
                             families,
-                            fetchProduct(userId), // TODO product 도메인 연동 필요, 현재 null
+                            fetchAllProducts(),
                             INITIAL_FACTS
                     );
                     return fastApiClient.startChat(request);
@@ -81,7 +80,7 @@ public class ConsultService {
                 req.facts(),
                 req.answers(),
                 fetchFamilies(userId),
-                fetchProduct(userId)        // TODO product 도메인 연동 필요
+                fetchProduct(userId)
         );
 
         ChatResponse response = fastApiClient.submitClarification(request);
@@ -96,7 +95,7 @@ public class ConsultService {
                             req.facts(),
                             req.answers(),
                             families,
-                            fetchProduct(userId) // TODO product 도메인 연동 필요
+                            fetchAllProducts()
                     );
                     return fastApiClient.submitClarification(request);
                 })
@@ -104,6 +103,7 @@ public class ConsultService {
     }
 
     private void validateQuestion(String question) {
+        log.info("검증할 질문: [{}], 길이: {}", question, question == null ? -1 : question.length()); // 확인용
         if (question == null || question.isBlank()) {
             throw new ServiceException(ResponseCode.BAD_REQUEST);
         }
@@ -193,8 +193,15 @@ public class ConsultService {
 
         return previousGiftAmount;
     }
-    // TODO product 도메인 완성 후 실제 조회 로직으로 교체
-    private Object fetchProduct(Long userId) {
-        return null;
+
+    private List<ProductData> fetchAllProducts() {
+        List<ProductVO> products = consultationMapper.selectAllOnSaleProducts();
+        return products.stream()
+                .map(p -> ProductData.builder()
+                        .productName(p.getProductName())
+                        .interestRate(p.getBaseRatePercent())
+                        .preferentialCondition(p.getPreferentialCondition())
+                        .build())
+                .toList();
     }
 }
