@@ -3,6 +3,7 @@ package com.example.project.simulation.domain;
 import lombok.Data;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @Data
 public class SimulationTrancheRecord {
@@ -14,4 +15,5 @@ public class SimulationTrancheRecord {
     private Long estimatedGiftTax;
     private Long donorRequiredAmount;
     private Long investmentAmount;
+    private LocalDateTime createdAt;
 }
