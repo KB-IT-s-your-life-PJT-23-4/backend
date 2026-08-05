@@ -18,6 +18,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.method.annotation.AuthenticationPrincipalArgumentResolver;
@@ -39,6 +40,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -177,6 +179,39 @@ class RecipientControllerTest {
         assertEquals(203, body.get("statusCode").asInt());
         assertEquals("수정후", body.at("/data/familyName").asText());
         assertEquals("OTHER", body.at("/data/relation").asText());
+    }
+
+    @Test
+    @DisplayName("multipart PATCH /api/fm/family/{familyId}는 이름과 생년월일을 수정하고 관계를 유지한다")
+    void updateEditableRecipientApi() throws Exception {
+        recipientMapper.add(recipient(10L, OWNER_ID, "수정전"));
+        authenticate(OWNER_ID);
+        MockMultipartFile profile = new MockMultipartFile(
+                "profile",
+                "profile.json",
+                MediaType.APPLICATION_JSON_VALUE,
+                """
+                        {
+                          "familyName": "수정후",
+                          "birthDate": "2011-02-03"
+                        }
+                        """.getBytes(StandardCharsets.UTF_8)
+        );
+
+        MvcResult result = mockMvc.perform(multipart("/api/fm/family/{familyId}", 10L)
+                        .file(profile)
+                        .with(request -> {
+                            request.setMethod("PATCH");
+                            return request;
+                        }))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        JsonNode body = body(result);
+        assertEquals(203, body.get("statusCode").asInt());
+        assertEquals("수정후", body.at("/data/familyName").asText());
+        assertEquals("2011-02-03", body.at("/data/birthDate").asText());
+        assertEquals("LINEAL_DESCENDANT", body.at("/data/relation").asText());
     }
 
     @Test
