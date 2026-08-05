@@ -161,6 +161,7 @@ public record SimulationResponse(
             Long estimatedGiftTax,
             Long donorRequiredAmount,
             Long investmentPrincipal,
+            Allocation allocation,
             Long expectedFutureValue,
             Long expectedProfit,
             List<Product> selectedProducts
