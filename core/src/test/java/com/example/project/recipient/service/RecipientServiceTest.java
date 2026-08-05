@@ -2,6 +2,7 @@ package com.example.project.recipient.service;
 
 import com.example.project.common.api.ResponseCode;
 import com.example.project.common.exception.ServiceException;
+import com.example.project.common.file.ProfileImageStorageService;
 import com.example.project.gift.domain.DeductionVO;
 import com.example.project.gift.domain.GiftVO;
 import com.example.project.gift.domain.Status;
@@ -9,12 +10,16 @@ import com.example.project.gift.domain.TaxBracketVO;
 import com.example.project.gift.mapper.GiftMapper;
 import com.example.project.recipient.domain.RecipientVO;
 import com.example.project.recipient.dto.request.RecipientRequest;
+import com.example.project.recipient.dto.request.RecipientProfileUpdateRequest;
 import com.example.project.recipient.dto.response.RecipientResponse;
 import com.example.project.recipient.mapper.RecipientMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import org.springframework.mock.web.MockMultipartFile;
 
+import java.nio.file.Path;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -31,6 +36,9 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class RecipientServiceTest {
+
+    @TempDir
+    Path tempDirectory;
 
     private static final Long OWNER_ID = 1L;
     private static final Long OTHER_USER_ID = 2L;
@@ -82,6 +90,35 @@ class RecipientServiceTest {
 
         assertEquals(10L, response.getFamilyId());
         assertEquals("본인가족", response.getFamilyName());
+    }
+
+    @Test
+    @DisplayName("수증자 프로필 수정은 소유권과 관계를 유지하며 사진을 등록·삭제한다")
+    void updateEditableRecipientProfile() {
+        recipientMapper.add(recipient(10L, OWNER_ID, "기존이름"));
+        ProfileImageStorageService storage = new ProfileImageStorageService(tempDirectory.toString(), 1024);
+        recipientService = new RecipientService(recipientMapper, giftMapper, storage);
+        RecipientProfileUpdateRequest request = new RecipientProfileUpdateRequest(
+                "변경이름",
+                LocalDate.of(2011, 2, 3)
+        );
+        MockMultipartFile image = new MockMultipartFile(
+                "image",
+                "family.png",
+                "image/png",
+                new byte[]{(byte) 0x89, 'P', 'N', 'G', 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0}
+        );
+
+        RecipientResponse updated = recipientService.updateEditableProfile(
+                10L, request, image, false, OWNER_ID
+        );
+        RecipientResponse removed = recipientService.updateEditableProfile(
+                10L, request, null, true, OWNER_ID
+        );
+
+        assertEquals("LINEAL_DESCENDANT", updated.getRelation());
+        assertTrue(updated.getFamilyImg().startsWith(ProfileImageStorageService.PUBLIC_PATH_PREFIX));
+        assertNull(removed.getFamilyImg());
     }
 
     @Test

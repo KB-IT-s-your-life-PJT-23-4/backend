@@ -194,7 +194,7 @@ class RecipientControllerTest {
     }
 
     @Test
-    @DisplayName("Gift가 존재하면 DELETE /api/gm/families/{familyId}는 409를 반환한다")
+    @DisplayName("Gift가 존재하면 DELETE /api/fm/family/{familyId}는 409를 반환한다")
     void rejectDeleteWhenGiftExistsApi() throws Exception {
         recipientMapper.add(recipient(10L, OWNER_ID, "삭제대상"));
         giftMapper.giftCounts.put(10L, 1);
@@ -277,9 +277,9 @@ class RecipientControllerTest {
     }
 
     @Test
-    @DisplayName("요청서의 /gm/families 경로는 최신 Controller에 매핑되어 있지 않다")
+    @DisplayName("/api 접두사가 없는 /fm/family 경로는 Controller에 매핑되어 있지 않다")
     void pathWithoutApiPrefixIsNotMapped() throws Exception {
-        mockMvc.perform(get("/gm/families"))
+        mockMvc.perform(get("/fm/family"))
                 .andExpect(status().isNotFound());
     }
 

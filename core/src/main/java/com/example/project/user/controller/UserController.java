@@ -4,6 +4,7 @@ import com.example.project.common.api.ApiResponse;
 import com.example.project.common.api.ResponseCode;
 import com.example.project.common.exception.ServiceException;
 import com.example.project.user.dto.UserDTO;
+import com.example.project.user.dto.request.UserProfileUpdateRequest;
 import com.example.project.user.dto.request.UserSignupRequest;
 import com.example.project.user.dto.request.UserUpdateRequest;
 import com.example.project.user.dto.response.EmailAvailabilityResponse;
@@ -11,6 +12,7 @@ import com.example.project.user.service.UserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.security.core.Authentication;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -19,9 +21,11 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.validation.Valid;
@@ -77,7 +81,7 @@ public class UserController {
         return ApiResponse.success(ResponseCode.SUCCESS, httpRequest.getRequestURI(), userProfile);
     }
 
-    @PutMapping("/users/me")
+    @PutMapping(value = "/users/me", consumes = MediaType.APPLICATION_JSON_VALUE)
     public ApiResponse<UserDTO> updateMyProfile(
             Authentication authentication,
             @Valid @RequestBody UserUpdateRequest updateRequest,
@@ -86,6 +90,27 @@ public class UserController {
         Long userId = resolveUserId(authentication);
         UserDTO updatedUser = userService.updateProfile(userId, updateRequest);
         log.info("User profile updated: userId={}", userId);
+
+        return ApiResponse.success(ResponseCode.UPDATED, httpRequest.getRequestURI(), updatedUser);
+    }
+
+    @PutMapping(value = "/users/me", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ApiResponse<UserDTO> updateMyEditableProfile(
+            Authentication authentication,
+            @Valid @RequestPart("profile") UserProfileUpdateRequest updateRequest,
+            @RequestPart(value = "image", required = false) MultipartFile image,
+            @RequestParam(defaultValue = "false") boolean removeImage,
+            HttpServletRequest httpRequest
+    ) {
+        Long userId = resolveUserId(authentication);
+        UserDTO updatedUser = userService.updateEditableProfile(
+                userId,
+                updateRequest,
+                image,
+                removeImage
+        );
+        log.info("User editable profile updated: userId={}, imageChanged={}",
+                userId, image != null || removeImage);
 
         return ApiResponse.success(ResponseCode.UPDATED, httpRequest.getRequestURI(), updatedUser);
     }

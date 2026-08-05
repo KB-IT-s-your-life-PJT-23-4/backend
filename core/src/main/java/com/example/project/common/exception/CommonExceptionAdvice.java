@@ -16,6 +16,8 @@ import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.MultipartException;
 import org.springframework.web.servlet.NoHandlerFoundException;
 
 import javax.servlet.http.HttpServletRequest;
@@ -67,6 +69,28 @@ public class CommonExceptionAdvice {
         return ResponseEntity
                 .status(resolveHttpStatus(responseCode))
                 .body(res);
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMaxUploadSizeExceeded(
+            MaxUploadSizeExceededException exception,
+            HttpServletRequest request
+    ) {
+        log.warn("Uploaded file exceeded the configured limit. path={}", request.getRequestURI());
+        return ResponseEntity
+                .badRequest()
+                .body(ApiResponse.error(ResponseCode.FILE_SIZE_EXCEEDED, request.getRequestURI()));
+    }
+
+    @ExceptionHandler(MultipartException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMultipartException(
+            MultipartException exception,
+            HttpServletRequest request
+    ) {
+        log.warn("Invalid multipart request. path={}", request.getRequestURI());
+        return ResponseEntity
+                .badRequest()
+                .body(ApiResponse.error(ResponseCode.FILE_FORMAT_INVALID, request.getRequestURI()));
     }
 
     @ExceptionHandler({

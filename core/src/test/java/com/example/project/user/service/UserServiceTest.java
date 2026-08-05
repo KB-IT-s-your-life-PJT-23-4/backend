@@ -2,17 +2,22 @@ package com.example.project.user.service;
 
 import com.example.project.common.api.ResponseCode;
 import com.example.project.common.exception.ServiceException;
+import com.example.project.common.file.ProfileImageStorageService;
 import com.example.project.user.domain.UserVO;
 import com.example.project.user.dto.UserDTO;
 import com.example.project.user.dto.request.UserSignupRequest;
+import com.example.project.user.dto.request.UserProfileUpdateRequest;
 import com.example.project.user.dto.request.UserUpdateRequest;
 import com.example.project.user.mapper.UserMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.mock.web.MockMultipartFile;
 
+import java.nio.file.Path;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
@@ -24,6 +29,9 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class UserServiceTest {
+
+    @TempDir
+    Path tempDirectory;
 
     private FakeUserMapper userMapper;
     private PasswordEncoder passwordEncoder;
@@ -166,6 +174,32 @@ class UserServiceTest {
 
         assertEquals(ResponseCode.DUPLICATE_DATA, exception.getResponseCode());
         assertEquals(0, userMapper.updateCount);
+    }
+
+    @Test
+    @DisplayName("프로필 사진 수정은 이메일을 유지하고 등록·삭제 상태를 구분한다")
+    void updateEditableProfileImage() {
+        userMapper.savedUser = createUser("user@example.com");
+        ProfileImageStorageService storage = new ProfileImageStorageService(tempDirectory.toString(), 1024);
+        userService = new UserService(userMapper, passwordEncoder, storage);
+        UserProfileUpdateRequest request = new UserProfileUpdateRequest(
+                "김길동",
+                LocalDate.of(1991, 2, 2),
+                "010-9999-8888"
+        );
+        MockMultipartFile image = new MockMultipartFile(
+                "image",
+                "profile.png",
+                "image/png",
+                new byte[]{(byte) 0x89, 'P', 'N', 'G', 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0}
+        );
+
+        UserDTO updated = userService.updateEditableProfile(1L, request, image, false);
+        UserDTO removed = userService.updateEditableProfile(1L, request, null, true);
+
+        assertEquals("user@example.com", updated.email());
+        assertTrue(updated.img().startsWith(ProfileImageStorageService.PUBLIC_PATH_PREFIX));
+        assertNull(removed.img());
     }
 
     @Test

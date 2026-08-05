@@ -2,25 +2,44 @@ package com.example.project.user.service;
 
 import com.example.project.common.api.ResponseCode;
 import com.example.project.common.exception.ServiceException;
+import com.example.project.common.file.ProfileImageStorageService;
 import com.example.project.user.domain.UserVO;
 import com.example.project.user.dto.UserDTO;
+import com.example.project.user.dto.request.UserProfileUpdateRequest;
 import com.example.project.user.dto.request.UserSignupRequest;
 import com.example.project.user.dto.request.UserUpdateRequest;
 import com.example.project.user.dto.response.EmailAvailabilityResponse;
 import com.example.project.user.mapper.UserMapper;
-import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.Locale;
 
 @Service
-@RequiredArgsConstructor
 public class UserService {
 
     private final UserMapper userMapper;
     private final PasswordEncoder passwordEncoder;
+    private final ProfileImageStorageService profileImageStorageService;
+
+    @Autowired
+    public UserService(
+            UserMapper userMapper,
+            PasswordEncoder passwordEncoder,
+            ProfileImageStorageService profileImageStorageService
+    ) {
+        this.userMapper = userMapper;
+        this.passwordEncoder = passwordEncoder;
+        this.profileImageStorageService = profileImageStorageService;
+    }
+
+    public UserService(UserMapper userMapper, PasswordEncoder passwordEncoder) {
+        this(userMapper, passwordEncoder, null);
+    }
 
     public UserDTO signup(UserSignupRequest signupRequest) {
         String normalizedEmail = normalizeEmail(signupRequest.email());
@@ -98,11 +117,63 @@ public class UserService {
         return UserDTO.from(updatedUser);
     }
 
+    @Transactional
+    public UserDTO updateEditableProfile(
+            Long userId,
+            UserProfileUpdateRequest updateRequest,
+            MultipartFile image,
+            boolean removeImage
+    ) {
+        if (image != null && removeImage) {
+            throw new ServiceException(ResponseCode.BAD_REQUEST);
+        }
+
+        UserVO existingUser = findUser(userId);
+        String previousImage = existingUser.getImg();
+        String storedImage = null;
+
+        try {
+            if (image != null) {
+                storedImage = requireImageStorage().store(image);
+                existingUser.setImg(storedImage);
+            } else if (removeImage) {
+                existingUser.setImg(null);
+            }
+
+            existingUser.setUserName(updateRequest.getName().trim());
+            existingUser.setBirthDate(updateRequest.getBirthDate());
+            existingUser.setPhone(updateRequest.getPhone().trim());
+
+            if (userMapper.update(existingUser) != 1) {
+                throw new ServiceException(ResponseCode.DATABASE_ERROR);
+            }
+
+            UserVO updatedUser = userMapper.findById(userId);
+            if (updatedUser == null) {
+                throw new ServiceException(ResponseCode.DATABASE_ERROR);
+            }
+
+            if ((storedImage != null || removeImage) && !previousImageEquals(previousImage, updatedUser.getImg())) {
+                requireImageStorage().cleanupAfterSuccessfulUpdate(previousImage, storedImage);
+            }
+            return UserDTO.from(updatedUser);
+        } catch (RuntimeException exception) {
+            if (storedImage != null) {
+                requireImageStorage().deleteManagedFile(storedImage);
+            }
+            throw exception;
+        }
+    }
+
     public void deleteUser(Long userId) {
-        findUser(userId);
+        UserVO user = findUser(userId);
 
         if (userMapper.deleteById(userId) != 1) {
             throw new ServiceException(ResponseCode.DATABASE_ERROR);
+        }
+
+        if (profileImageStorageService != null) {
+            profileImageStorageService.deleteManagedFile(user.getImg());
         }
     }
 
@@ -125,5 +196,16 @@ public class UserService {
         }
 
         return value.trim();
+    }
+
+    private ProfileImageStorageService requireImageStorage() {
+        if (profileImageStorageService == null) {
+            throw new ServiceException(ResponseCode.FILE_PROCESSING_ERROR);
+        }
+        return profileImageStorageService;
+    }
+
+    private boolean previousImageEquals(String previousImage, String updatedImage) {
+        return previousImage == null ? updatedImage == null : previousImage.equals(updatedImage);
     }
 }
