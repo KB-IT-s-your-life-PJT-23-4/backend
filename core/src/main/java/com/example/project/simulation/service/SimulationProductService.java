@@ -227,7 +227,7 @@ public class SimulationProductService {
                 "연 평균 수익률은 최근 5년 데이터를 기준으로 계산한 값이며, 미래 수익을 보장하지 않습니다.",
                 holdings.stream()
                         .map(item -> new ProductDetailResponse.Holding(
-                                item.getRank(),
+                                item.getHoldingRank(),
                                 item.getHoldingName(),
                                 item.getHoldingCode(),
                                 item.getAssetType(),
