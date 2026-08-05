@@ -105,7 +105,10 @@ class SimulationMapperXmlTest {
         assertTrue(selectSimulation.contains(
                 "s.kb_product_data_version_id AS product_data_version_id"));
         assertTrue(insertTranche.contains("simulation_tranche ( simul_result_id,"));
+        assertTrue(insertTranche.contains("investment_amount, created_at"));
+        assertTrue(insertTranche.contains("NOW()"));
         assertTrue(selectTranches.contains("t.simul_result_id AS result_id"));
+        assertTrue(selectTranches.contains("t.created_at"));
         assertFalse(selectTranches.contains("t.result_id"));
         assertTrue(insertPortfolio.contains("simulation_portfolio ( simul_result_id,"));
         assertTrue(insertProduct.contains(

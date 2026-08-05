@@ -74,6 +74,23 @@ class SimulationCalculatorTest {
     }
 
     @Test
+    @DisplayName("증여자가 세금을 대납하면 수증자의 투자 원금은 증여액 전액이다")
+    void donorPaysGiftTaxWithoutReducingRecipientPrincipal() {
+        SimulationCalculator.TaxOutcome result = calculator.calculateTax(
+                100_000_000L,
+                30_000_000L,
+                TaxPaymentMethod.DONOR_PAYS,
+                brackets()
+        );
+
+        assertEquals(100_000_000L, result.investmentAmount());
+        assertEquals(
+                100_000_000L + result.giftTax(),
+                result.donorRequiredAmount()
+        );
+    }
+
+    @Test
     @DisplayName("운용 기간별 균형형 비중은 예금·적금·ETF 합계가 100이다")
     void balancedPortfolioTotalsOneHundred() {
         Map<ProductType, BigDecimal> balanced =

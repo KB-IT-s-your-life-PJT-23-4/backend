@@ -76,11 +76,6 @@ class SimulationServiceGetTest {
     @DisplayName("0.5.8에 저장된 증여 스냅샷으로 파생 필드를 복원한다")
     void deriveFieldsFromPersistedGiftSnapshot() {
         Fixture fixture = new Fixture();
-        fixture.simulation.setAgeAtSimulation(null);
-        fixture.simulation.setMinorAtSimulation(null);
-        fixture.simulation.setLookbackStartDate(null);
-        fixture.simulation.setUsedDeductionAmount(null);
-        fixture.simulation.setRemainingDeductionAmount(null);
 
         SimulationResponse response = fixture.service().get(SIMULATION_ID, USER_ID);
 
@@ -170,7 +165,7 @@ class SimulationServiceGetTest {
 
         assertEquals(selectedPortfolio.getPortfolioId(), response.selection().selectedPortfolioId());
         assertEquals(1, response.selection().selectedProducts().size());
-        assertEquals(1_000L, response.selection().investmentPrincipal());
+        assertEquals(900L, response.selection().investmentPrincipal());
     }
 
     @Test
@@ -183,12 +178,13 @@ class SimulationServiceGetTest {
         fixture.simulation.setSelectedPortfolioId(selectedPortfolio.getPortfolioId());
         fixture.simulation.setSavedAt(LocalDateTime.now().minusMinutes(1));
         selectedProduct.setSelected(true);
-        selectedProduct.setAllocatedAmount(999L);
-        fixture.products.add(product(
+        SimulationProductRecord duplicateSelection = product(
                 999L,
                 selectedPortfolio.getPortfolioId(),
-                1_000L
-        ));
+                900L
+        );
+        duplicateSelection.setSelected(true);
+        fixture.products.add(duplicateSelection);
 
         SimulationException exception = assertThrows(
                 SimulationException.class,
@@ -210,7 +206,7 @@ class SimulationServiceGetTest {
         private final ProductDataVersionRecord productDataVersion = productDataVersion();
 
         private Fixture() {
-            addScenario(1L, ScenarioType.IMMEDIATE, 1_000L, true, 100L);
+            addScenario(1L, ScenarioType.IMMEDIATE, 900L, true, 100L);
             addScenario(2L, ScenarioType.TAX_OPTIMIZED, 900L, false, 200L);
         }
 
@@ -318,13 +314,8 @@ class SimulationServiceGetTest {
         simulation.setInvestmentPeriodMonths(36);
         simulation.setAsOfDate(LocalDate.of(2026, 8, 4));
         simulation.setInvestmentEndDate(LocalDate.of(2029, 8, 4));
-        simulation.setAgeAtSimulation(26);
-        simulation.setMinorAtSimulation(false);
-        simulation.setLookbackStartDate(LocalDate.of(2016, 8, 4));
         simulation.setPreviousGiftAmount(20_000_000L);
         simulation.setDeductionLimit(50_000_000L);
-        simulation.setUsedDeductionAmount(20_000_000L);
-        simulation.setRemainingDeductionAmount(30_000_000L);
         simulation.setDeductionRenewalDate(LocalDate.of(2028, 1, 1));
         simulation.setCalculationVersion(SimulationService.CALCULATION_VERSION);
         simulation.setFormulaVersion(SimulationService.FORMULA_VERSION);
