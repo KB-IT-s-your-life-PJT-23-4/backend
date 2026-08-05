@@ -58,4 +58,22 @@ class UserUpdateRequestTest {
 
         assertEquals(Set.of("email", "name", "phone"), invalidFields);
     }
+
+    @Test
+    @DisplayName("미래 생년월일과 잘못된 전화번호는 검증에 실패한다")
+    void invalidBirthDateAndPhone() {
+        UserUpdateRequest request = new UserUpdateRequest(
+                "user@example.com",
+                "홍길동",
+                LocalDate.now().plusDays(1),
+                "01012345678",
+                null
+        );
+
+        Set<String> invalidFields = validator.validate(request).stream()
+                .map(violation -> violation.getPropertyPath().toString())
+                .collect(Collectors.toSet());
+
+        assertEquals(Set.of("birthDate", "phone"), invalidFields);
+    }
 }
