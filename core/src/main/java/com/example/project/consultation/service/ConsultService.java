@@ -3,6 +3,7 @@ package com.example.project.consultation.service;
 import com.example.project.common.api.ResponseCode;
 import com.example.project.common.exception.ServiceException;
 import com.example.project.consultation.client.FastApiClient;
+import com.example.project.consultation.domain.EtfVO;
 import com.example.project.consultation.domain.FamilyPreviousGiftVO;
 import com.example.project.consultation.domain.ProductVO;
 import com.example.project.consultation.dto.fastapi.*;
@@ -58,6 +59,7 @@ public class ConsultService {
                             question,
                             families,
                             fetchAllProducts(),
+                            fetchAllEtfProducts(),
                             INITIAL_FACTS
                     );
                     return fastApiClient.startChat(request);
@@ -95,7 +97,8 @@ public class ConsultService {
                             req.facts(),
                             req.answers(),
                             families,
-                            fetchAllProducts()
+                            fetchAllProducts(),
+                            fetchAllEtfProducts()
                     );
                     return fastApiClient.submitClarification(request);
                 })
@@ -201,6 +204,16 @@ public class ConsultService {
                         .productName(p.getProductName())
                         .interestRate(p.getBaseRatePercent())
                         .preferentialCondition(p.getPreferentialCondition())
+                        .build())
+                .toList();
+    }
+    private List<EtfProductData> fetchAllEtfProducts() {
+        List<EtfVO> etfProducts = consultationMapper.selectAllOnSaleEtfProducts();
+        return etfProducts.stream()
+                .map(e -> EtfProductData.builder()
+                        .productName(e.getProductName())
+                        .trackingIndex(e.getTrackingIndex())
+                        .annualReturn5y(e.getAnnualReturn5y())
                         .build())
                 .toList();
     }
