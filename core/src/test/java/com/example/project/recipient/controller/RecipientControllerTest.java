@@ -35,6 +35,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -264,6 +265,27 @@ class RecipientControllerTest {
                 .andReturn();
 
         assertEquals(407, body(result).get("statusCode").asInt());
+    }
+
+    @Test
+    @DisplayName("미래 생년월일의 가족 등록 요청은 400을 반환한다")
+    void rejectFutureBirthDateApi() throws Exception {
+        authenticate(OWNER_ID);
+
+        MvcResult result = mockMvc.perform(post("/api/fm/family")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "familyName": "홍길동",
+                                  "relation": "OTHER",
+                                  "birthDate": "2999-01-01"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andReturn();
+
+        assertEquals(407, body(result).get("statusCode").asInt());
+        assertNull(recipientMapper.lastInserted);
     }
 
     @Test

@@ -28,7 +28,7 @@ public class RecipientController {
 
     @PostMapping
     public ApiResponse<RecipientResponse> createRecipient(
-            @RequestBody RecipientRequest recipientRequest,
+            @Valid @RequestBody RecipientRequest recipientRequest,
             @AuthenticationPrincipal String principal,
             HttpServletRequest request
     ) {
@@ -40,7 +40,7 @@ public class RecipientController {
     @PatchMapping(value = "/{familyId}", consumes = MediaType.APPLICATION_JSON_VALUE)
     public ApiResponse<RecipientResponse> updateRecipient(
             @PathVariable Long familyId,
-            @RequestBody RecipientRequest recipientRequest,
+            @Valid @RequestBody RecipientRequest recipientRequest,
             @AuthenticationPrincipal String principal,
             HttpServletRequest request
     ) {
@@ -88,7 +88,6 @@ public class RecipientController {
     public ApiResponse<RecipientResponse> getRecipient(@PathVariable Long familyId, @AuthenticationPrincipal String principal,
                                                        HttpServletRequest request) {
         RecipientResponse data = recipientService.selectRecipient(familyId, CurrentUser.id(principal));
-        log.info("data: " + data);
 
         return ApiResponse.success(ResponseCode.SUCCESS, request.getRequestURI(), data);
     }
@@ -96,7 +95,6 @@ public class RecipientController {
     @GetMapping
     public ApiResponse<List<RecipientResponse>> getRecipients(@AuthenticationPrincipal String principal, HttpServletRequest request) {
         List<RecipientResponse> data = recipientService.selectAllRecipient(CurrentUser.id(principal));
-        log.info("list: " + data);
 
         return ApiResponse.success(ResponseCode.SUCCESS, request.getRequestURI(), data);
     }

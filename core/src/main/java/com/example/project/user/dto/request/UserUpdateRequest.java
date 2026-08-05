@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 
 import javax.validation.constraints.Email;
 import javax.validation.constraints.NotBlank;
+import javax.validation.constraints.PastOrPresent;
 import javax.validation.constraints.Pattern;
 import javax.validation.constraints.Size;
 import java.time.LocalDate;
@@ -25,10 +26,12 @@ public final class UserUpdateRequest {
     @Pattern(regexp = "^\\S(?:.*\\S)?$", message = "이름의 앞뒤에 공백을 입력할 수 없습니다")
     private final String name;
 
+    @PastOrPresent(message = "생년월일은 오늘 이후일 수 없습니다")
     private final LocalDate birthDate;
 
     @NotBlank(message = "전화번호는 필수입니다")
     @Size(max = 20, message = "전화번호는 20자 이하여야 합니다")
+    @Pattern(regexp = "^01[016789]-\\d{3,4}-\\d{4}$", message = "올바른 전화번호 형식이 아닙니다")
     private final String phone;
 
     @Size(max = 255, message = "프로필 이미지는 255자 이하여야 합니다")
