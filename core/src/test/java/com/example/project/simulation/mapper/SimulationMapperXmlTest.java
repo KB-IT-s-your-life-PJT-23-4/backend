@@ -125,7 +125,8 @@ class SimulationMapperXmlTest {
         assertFalse(selectSelectedPreferentialRates.contains("pir.condition_name"));
         assertTrue(selectEtfHoldings.contains(
                 "kb_product_version_id AS product_version_id"));
-        assertTrue(selectEtfHoldings.contains("holding_rank AS `rank`"));
+        assertTrue(selectEtfHoldings.contains("holding_rank"));
+        assertFalse(selectEtfHoldings.contains("holding_rank AS `rank`"));
     }
 
     private String sql(Configuration configuration, String statement, Object parameter) {

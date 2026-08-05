@@ -60,7 +60,7 @@ public class SimulationService {
     private static final int DEDUCTION_WINDOW_YEARS = 10;
     private static final int MAX_PRODUCT_CANDIDATES = 3;
     private static final int MAX_INVESTMENT_MONTHS = 240;
-    private static final int DRAFT_RETENTION_HOURS = 24;
+    static final Period DRAFT_RETENTION = Period.ofMonths(1);
     private static final long CALCULATION_TOLERANCE_WON = 1L;
     private static final BigDecimal ONE_HUNDRED = BigDecimal.valueOf(100);
 
@@ -175,7 +175,7 @@ public class SimulationService {
             simulation.setDeductionRenewalDate(renewalDate);
             simulation.setCreatedAt(now);
             simulation.setUpdatedAt(now);
-            simulation.setExpiredAt(now.plusHours(DRAFT_RETENTION_HOURS));
+            simulation.setExpiredAt(now.plus(DRAFT_RETENTION));
             simulationMapper.insertSimulation(simulation);
 
             PersistedScenario immediatePersisted = persistScenario(
@@ -318,7 +318,7 @@ public class SimulationService {
                         activeSaved.getSimulationId()
                 );
                 simulationMapper.clearSimulationSelections(activeSaved.getSimulationId());
-                LocalDateTime previousExpiry = now.plusHours(DRAFT_RETENTION_HOURS);
+                LocalDateTime previousExpiry = now.plus(DRAFT_RETENTION);
                 int reset = simulationMapper.resetSavedSimulation(
                         activeSaved.getSimulationId(),
                         previousExpiry,
