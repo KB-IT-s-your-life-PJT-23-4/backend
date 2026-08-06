@@ -47,8 +47,8 @@ class SimulationHistoryServiceTest {
 
         assertEquals(SimulationStatus.SAVED, mapperStub.observedStatus);
         assertTrue(response.items().isEmpty());
-        assertEquals(0, response.pagination().page());
-        assertEquals(10, response.pagination().size());
+        assertEquals(0, response.pagination().getPage());
+        assertEquals(10, response.pagination().getSize());
     }
 
     @Test
@@ -109,9 +109,9 @@ class SimulationHistoryServiceTest {
         );
 
         assertEquals(2, response.items().size());
-        assertEquals(2L, response.pagination().totalElements());
-        assertTrue(response.pagination().first());
-        assertTrue(response.pagination().last());
+        assertEquals(2L, response.pagination().getTotalElements());
+        assertTrue(response.pagination().isFirst());
+        assertTrue(response.pagination().isLast());
 
         SimulationHistoryResponse.Item draftItem = response.items().get(0);
         assertEquals(SimulationStatus.DRAFT, draftItem.status());

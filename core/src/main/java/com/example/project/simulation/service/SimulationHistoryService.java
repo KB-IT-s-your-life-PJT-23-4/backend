@@ -1,5 +1,6 @@
 package com.example.project.simulation.service;
 
+import com.example.project.common.api.Pagination;
 import com.example.project.simulation.domain.ProductType;
 import com.example.project.simulation.domain.RiskProfile;
 import com.example.project.simulation.domain.SimulationPortfolioRecord;
@@ -408,7 +409,7 @@ public class SimulationHistoryService {
         }
     }
 
-    private SimulationHistoryResponse.Pagination pagination(
+    private Pagination pagination(
             int page,
             int size,
             long totalElements,
@@ -417,7 +418,7 @@ public class SimulationHistoryService {
         long pages = totalElements / size + (totalElements % size == 0 ? 0 : 1);
         int totalPages = pages > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) pages;
         boolean hasNext = page + 1L < pages;
-        return new SimulationHistoryResponse.Pagination(
+        return new Pagination(
                 page,
                 size,
                 totalElements,

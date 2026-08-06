@@ -1,5 +1,6 @@
 package com.example.project.simulation.dto.response;
 
+import com.example.project.common.api.Pagination;
 import com.example.project.simulation.domain.ProductType;
 import com.example.project.simulation.domain.RiskProfile;
 import com.example.project.simulation.domain.ScenarioType;
@@ -74,16 +75,4 @@ public record SimulationHistoryResponse(
     ) {
     }
 
-    public record Pagination(
-            int page,
-            int size,
-            long totalElements,
-            int totalPages,
-            int numberOfElements,
-            boolean first,
-            boolean last,
-            boolean hasNext,
-            boolean hasPrevious
-    ) {
-    }
 }
