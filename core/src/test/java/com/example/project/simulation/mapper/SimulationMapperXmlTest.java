@@ -108,12 +108,14 @@ class SimulationMapperXmlTest {
         assertTrue(insertSimulation.contains("previous_gift_amount"));
         assertTrue(insertSimulation.contains("deduction_limit"));
         assertTrue(insertSimulation.contains("deduction_renewal_date"));
+        assertTrue(insertSimulation.contains("as_of_date, gift_date, investment_end_date"));
         assertTrue(selectLatestProductDataVersion.contains(
                 "kb_product_data_version_id AS product_data_version_id"));
         assertTrue(selectProductDataVersion.contains(
                 "kb_product_data_version_id AS product_data_version_id"));
         assertTrue(selectSimulation.contains(
                 "s.kb_product_data_version_id AS product_data_version_id"));
+        assertTrue(selectSimulation.contains("s.gift_date"));
         assertTrue(insertTranche.contains("simulation_tranche ( simul_result_id,"));
         assertTrue(insertTranche.contains("investment_amount, created_at"));
         assertTrue(insertTranche.contains("NOW()"));

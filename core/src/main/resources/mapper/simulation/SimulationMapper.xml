@@ -179,13 +179,13 @@
         INSERT INTO simulation (
             kb_product_data_version_id, family_id, requested_amount, status,
             tax_payment_method, investment_period_months, as_of_date,
-            investment_end_date, calculation_version, formula_version, version,
+            gift_date, investment_end_date, calculation_version, formula_version, version,
             selected_portfolio_id, previous_gift_amount, deduction_limit,
             deduction_renewal_date, created_at, updated_at, saved_at, expired_at
         ) VALUES (
             #{productDataVersionId}, #{familyId}, #{requestedAmount}, #{status},
             #{taxPaymentMethod}, #{investmentPeriodMonths}, #{asOfDate},
-            #{investmentEndDate}, #{calculationVersion}, #{formulaVersion}, #{version},
+            #{giftDate}, #{investmentEndDate}, #{calculationVersion}, #{formulaVersion}, #{version},
             NULL, #{previousGiftAmount}, #{deductionLimit},
             #{deductionRenewalDate}, #{createdAt}, #{updatedAt}, NULL, #{expiredAt}
         )
@@ -273,6 +273,7 @@
         s.tax_payment_method,
         s.investment_period_months,
         s.as_of_date,
+        s.gift_date,
         s.investment_end_date,
         s.calculation_version,
         s.formula_version,

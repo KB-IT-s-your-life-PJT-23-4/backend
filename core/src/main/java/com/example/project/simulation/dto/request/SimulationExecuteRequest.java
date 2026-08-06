@@ -4,7 +4,10 @@ import com.example.project.simulation.domain.TaxPaymentMethod;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDate;
+
 import javax.validation.constraints.Max;
+import javax.validation.constraints.FutureOrPresent;
 import javax.validation.constraints.Min;
 import javax.validation.constraints.NotNull;
 import javax.validation.constraints.Positive;
@@ -27,4 +30,8 @@ public class SimulationExecuteRequest {
     @Min(1)
     @Max(240)
     private Integer investmentPeriodMonths;
+
+    @NotNull
+    @FutureOrPresent
+    private LocalDate giftDate;
 }

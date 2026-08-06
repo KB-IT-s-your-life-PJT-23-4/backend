@@ -52,6 +52,23 @@ class SimulationServiceGetTest {
     }
 
     @Test
+    @DisplayName("미래 증여 예정일로 생성한 DRAFT 스냅샷을 조회한다")
+    void getDraftSnapshotWithFutureGiftDate() {
+        Fixture fixture = new Fixture();
+        LocalDate futureGiftDate = LocalDate.of(2026, 9, 4);
+        fixture.simulation.setGiftDate(futureGiftDate);
+        fixture.simulation.setInvestmentEndDate(futureGiftDate.plusMonths(36));
+        fixture.tranches.forEach(tranche -> tranche.setGiftDate(futureGiftDate));
+
+        SimulationResponse response = fixture.service().get(SIMULATION_ID, USER_ID);
+
+        assertEquals(LocalDate.of(2026, 8, 4), response.input().asOfDate());
+        assertEquals(futureGiftDate, response.input().giftDate());
+        assertEquals(LocalDate.of(2016, 9, 4),
+                response.giftHistorySummary().lookbackStartDate());
+    }
+
+    @Test
     @DisplayName("API 필수 시나리오와 포트폴리오가 일부 누락되면 충돌로 처리한다")
     void rejectPartialDraftSnapshot() {
         Fixture fixture = new Fixture();
@@ -332,6 +349,7 @@ class SimulationServiceGetTest {
         simulation.setTaxPaymentMethod(TaxPaymentMethod.RECIPIENT_PAYS);
         simulation.setInvestmentPeriodMonths(36);
         simulation.setAsOfDate(LocalDate.of(2026, 8, 4));
+        simulation.setGiftDate(LocalDate.of(2026, 8, 4));
         simulation.setInvestmentEndDate(LocalDate.of(2029, 8, 4));
         simulation.setPreviousGiftAmount(20_000_000L);
         simulation.setDeductionLimit(50_000_000L);
