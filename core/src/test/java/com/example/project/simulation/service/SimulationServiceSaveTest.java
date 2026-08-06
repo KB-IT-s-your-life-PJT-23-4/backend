@@ -275,6 +275,8 @@ class SimulationServiceSaveTest {
         product.setBaseAnnualRatePercent(new BigDecimal("3.00"));
         product.setMaximumAnnualRatePercent(new BigDecimal("4.00"));
         product.setAppliedAnnualRatePercent(new BigDecimal("3.00"));
+        product.setMinimumContractMonths(1);
+        product.setMaximumContractMonths(60);
         product.setExpectedFutureValue(1_030L);
         return product;
     }

@@ -56,11 +56,12 @@ import java.util.stream.Collectors;
 @Log4j2
 public class SimulationService {
 
-    public static final String FORMULA_VERSION = "INVESTMENT_V1";
-    public static final String CALCULATION_VERSION = "GIFT_SIM_V3";
+    public static final String FORMULA_VERSION = "INVESTMENT_V2";
+    public static final String CALCULATION_VERSION = "GIFT_SIM_V4";
 
     private static final int DEDUCTION_WINDOW_YEARS = 10;
     private static final int MAX_PRODUCT_CANDIDATES = 3;
+    private static final int PRODUCT_CANDIDATE_QUERY_LIMIT = 100;
     private static final int MAX_INVESTMENT_MONTHS = 240;
     static final Period DRAFT_RETENTION = Period.ofMonths(1);
     private static final long CALCULATION_TOLERANCE_WON = 1L;
@@ -449,7 +450,8 @@ public class SimulationService {
                     selectedPortfolio,
                     selectedResult,
                     selectedProducts,
-                    target.getInvestmentPeriodMonths()
+                    selectedTranches,
+                    target
             );
             SimulationSaveResponse response = new SimulationSaveResponse(
                     simulationId,
@@ -563,6 +565,10 @@ public class SimulationService {
                                                 portfolio.getPortfolioId(),
                                                 List.of()
                                         ),
+                                        tranchesByResult.getOrDefault(
+                                                result.getResultId(),
+                                                List.of()
+                                        ),
                                         simulation
                                 ))
                                 .toList()
@@ -603,7 +609,11 @@ public class SimulationService {
                     selectedPortfolio,
                     selectedResult,
                     selectedProducts,
-                    simulation.getInvestmentPeriodMonths()
+                    tranchesByResult.getOrDefault(
+                            selectedResult.getResultId(),
+                            List.of()
+                    ),
+                    simulation
             );
         }
 
@@ -670,6 +680,25 @@ public class SimulationService {
             simulationMapper.insertTranche(tranche);
         }
 
+        Map<ProductType, List<ProductCandidate>> scenarioSafeCandidates =
+                new EnumMap<>(ProductType.class);
+        scenarioSafeCandidates.put(
+                ProductType.DEPOSIT,
+                candidatesForScenario(
+                        safeCandidates.get(ProductType.DEPOSIT),
+                        aggregate.tranches(),
+                        investmentEndDate
+                )
+        );
+        scenarioSafeCandidates.put(
+                ProductType.SAVINGS,
+                candidatesForScenario(
+                        safeCandidates.get(ProductType.SAVINGS),
+                        aggregate.tranches(),
+                        investmentEndDate
+                )
+        );
+
         Map<RiskProfile, SimulationPortfolioRecord> persisted =
                 new EnumMap<>(RiskProfile.class);
         for (RiskProfile profile : RiskProfile.values()) {
@@ -679,14 +708,20 @@ public class SimulationService {
                     result.getInvestmentPrincipal(),
                     ratios,
                     aggregate.tranches(),
-                    safeCandidates.get(ProductType.DEPOSIT).get(0),
-                    safeCandidates.get(ProductType.SAVINGS).get(0),
+                    scenarioSafeCandidates.get(ProductType.DEPOSIT).get(0),
+                    scenarioSafeCandidates.get(ProductType.SAVINGS).get(0),
                     investmentEndDate
             );
             Map<ProductType, List<ProductCandidate>> candidates =
                     new EnumMap<>(ProductType.class);
-            candidates.put(ProductType.DEPOSIT, safeCandidates.get(ProductType.DEPOSIT));
-            candidates.put(ProductType.SAVINGS, safeCandidates.get(ProductType.SAVINGS));
+            candidates.put(
+                    ProductType.DEPOSIT,
+                    scenarioSafeCandidates.get(ProductType.DEPOSIT)
+            );
+            candidates.put(
+                    ProductType.SAVINGS,
+                    scenarioSafeCandidates.get(ProductType.SAVINGS)
+            );
             candidates.put(ProductType.ETF, etfCandidates.get(profile));
 
             SimulationPortfolioRecord portfolio = new SimulationPortfolioRecord();
@@ -735,6 +770,38 @@ public class SimulationService {
             persisted.put(profile, portfolio);
         }
         return new PersistedScenario(result, persisted);
+    }
+
+    private List<ProductCandidate> candidatesForScenario(
+            List<ProductCandidate> candidates,
+            List<SimulationTrancheRecord> tranches,
+            LocalDate investmentEndDate
+    ) {
+        List<Integer> investmentPeriods = safeList(tranches).stream()
+                .filter(tranche -> tranche.getGiftDate() != null
+                        && !tranche.getGiftDate().isAfter(investmentEndDate)
+                        && value(tranche.getInvestmentAmount()) > 0)
+                .map(tranche -> calculator.remainingMonths(
+                        tranche.getGiftDate(),
+                        investmentEndDate
+                ))
+                .filter(months -> months > 0)
+                .distinct()
+                .toList();
+        List<ProductCandidate> eligible = safeList(candidates).stream()
+                .filter(candidate -> investmentPeriods.stream().allMatch(months ->
+                        calculator.canCoverWithReinvestment(
+                                months,
+                                candidate.getMinMonth(),
+                                candidate.getMaxMonth()
+                        )))
+                .limit(MAX_PRODUCT_CANDIDATES)
+                .toList();
+        if (eligible.isEmpty()) {
+            throw new SimulationException(
+                    SimulationError.PRODUCT_CANDIDATE_NOT_FOUND);
+        }
+        return eligible;
     }
 
     private void updatePortfolioValue(SimulationPortfolioRecord portfolio) {
@@ -990,6 +1057,8 @@ public class SimulationService {
         SimulationProductRecord product = new SimulationProductRecord();
         product.setProductType(candidate.getProductType());
         product.setAppliedAnnualRatePercent(candidate.getAppliedAnnualRatePercent());
+        product.setMinimumContractMonths(candidate.getMinMonth());
+        product.setMaximumContractMonths(candidate.getMaxMonth());
         return calculator.calculateSelectedProductValue(
                 product,
                 principal,
@@ -1020,6 +1089,8 @@ public class SimulationService {
         product.setBaseAnnualRatePercent(candidate.getBaseAnnualRatePercent());
         product.setMaximumAnnualRatePercent(candidate.getMaximumAnnualRatePercent());
         product.setAppliedAnnualRatePercent(candidate.getAppliedAnnualRatePercent());
+        product.setMinimumContractMonths(candidate.getMinMonth());
+        product.setMaximumContractMonths(candidate.getMaxMonth());
         long futureValue = investmentPrincipal <= 0 ? 0
                 : calculator.calculateSelectedProductValue(
                 product,
@@ -1131,7 +1202,8 @@ public class SimulationService {
             throw new SimulationException(
                     SimulationError.PRODUCT_DATA_VERSION_MISMATCH);
         }
-        if (!termMatches(
+        if (product.getProductType() != ProductType.ETF
+                && !calculator.canCoverWithReinvestment(
                 investmentPeriodMonths,
                 detail.getMinimumMonths(),
                 detail.getMaximumMonths()
@@ -1149,9 +1221,17 @@ public class SimulationService {
             }
         }
         if (product.getProductType() == ProductType.SAVINGS) {
+            int firstContractMonths = calculator.reinvestmentPeriods(
+                            investmentPeriodMonths,
+                            detail.getMinimumMonths(),
+                            detail.getMaximumMonths()
+                    ).stream()
+                    .findFirst()
+                    .orElseThrow(() -> new SimulationException(
+                            SimulationError.PRODUCT_LIMIT_EXCEEDED));
             long monthly = divideCeiling(
                     product.getAllocatedAmount(),
-                    investmentPeriodMonths
+                    firstContractMonths
             );
             if (detail.getMonthlyMinimumAmount() != null
                     && monthly < detail.getMonthlyMinimumAmount()) {
@@ -1228,6 +1308,7 @@ public class SimulationService {
             SimulationPortfolioRecord portfolio,
             SimulationResultRecord result,
             List<SimulationProductRecord> products,
+            List<SimulationTrancheRecord> tranches,
             SimulationRecord simulation
     ) {
         return new SimulationResponse.Portfolio(
@@ -1249,7 +1330,8 @@ public class SimulationService {
                         .map(product -> toProductResponse(
                                 product,
                                 result.getInvestmentPrincipal(),
-                                simulation.getInvestmentPeriodMonths()
+                                tranches,
+                                simulation
                         ))
                         .toList()
         );
@@ -1258,7 +1340,8 @@ public class SimulationService {
     private SimulationResponse.Product toProductResponse(
             SimulationProductRecord product,
             long investmentPrincipal,
-            int investmentPeriodMonths
+            List<SimulationTrancheRecord> tranches,
+            SimulationRecord simulation
     ) {
         BigDecimal ratio = investmentPrincipal <= 0
                 ? BigDecimal.ZERO
@@ -1272,7 +1355,13 @@ public class SimulationService {
         Long monthlyContribution = product.getProductType() == ProductType.SAVINGS
                 ? divideCeiling(
                 product.getAllocatedAmount(),
-                Math.max(1, investmentPeriodMonths)
+                calculator.reinvestmentPeriods(
+                                simulation.getInvestmentPeriodMonths(),
+                                product.getMinimumContractMonths(),
+                                product.getMaximumContractMonths()
+                        ).stream()
+                        .findFirst()
+                        .orElse(Math.max(1, simulation.getInvestmentPeriodMonths()))
         ) : null;
         SimulationResponse.ReturnMetric metric =
                 product.getProductType() == ProductType.ETF
@@ -1310,6 +1399,13 @@ public class SimulationService {
                 product.getExpectedFutureValue(),
                 product.getExpectedFutureValue() - product.getAllocatedAmount(),
                 product.isSelected(),
+                product.getMinimumContractMonths(),
+                product.getMaximumContractMonths(),
+                reinvestmentSchedule(
+                        product,
+                        tranches,
+                        simulation.getInvestmentEndDate()
+                ),
                 conditions
         );
     }
@@ -1318,7 +1414,8 @@ public class SimulationService {
             SimulationPortfolioRecord portfolio,
             SimulationResultRecord result,
             List<SimulationProductRecord> selectedProducts,
-            int investmentPeriodMonths
+            List<SimulationTrancheRecord> tranches,
+            SimulationRecord simulation
     ) {
         long futureValue = selectedProducts.stream()
                 .mapToLong(item -> value(item.getExpectedFutureValue()))
@@ -1342,10 +1439,51 @@ public class SimulationService {
                         .map(product -> toProductResponse(
                                 product,
                                 result.getInvestmentPrincipal(),
-                                investmentPeriodMonths
+                                tranches,
+                                simulation
                         ))
                         .toList()
         );
+    }
+
+    private List<SimulationResponse.Reinvestment> reinvestmentSchedule(
+            SimulationProductRecord product,
+            List<SimulationTrancheRecord> tranches,
+            LocalDate investmentEndDate
+    ) {
+        if (product.getProductType() == ProductType.ETF) {
+            return List.of();
+        }
+
+        List<SimulationResponse.Reinvestment> schedule = new ArrayList<>();
+        for (SimulationTrancheRecord tranche : safeList(tranches)) {
+            if (tranche.getGiftDate() == null
+                    || tranche.getGiftDate().isAfter(investmentEndDate)
+                    || value(tranche.getInvestmentAmount()) <= 0) {
+                continue;
+            }
+            int totalMonths = calculator.remainingMonths(
+                    tranche.getGiftDate(),
+                    investmentEndDate
+            );
+            List<Integer> periods = calculator.reinvestmentPeriods(
+                    totalMonths,
+                    product.getMinimumContractMonths(),
+                    product.getMaximumContractMonths()
+            );
+            LocalDate renewalDate = tranche.getGiftDate();
+            for (int index = 0; index < periods.size() - 1; index++) {
+                int completedMonths = periods.get(index);
+                renewalDate = renewalDate.plusMonths(completedMonths);
+                schedule.add(new SimulationResponse.Reinvestment(
+                        tranche.getSequenceNo(),
+                        index + 1,
+                        renewalDate,
+                        completedMonths
+                ));
+            }
+        }
+        return List.copyOf(schedule);
     }
 
     private SimulationResponse.Tranche toTrancheResponse(
@@ -1384,6 +1522,11 @@ public class SimulationService {
                 methods,
                 "END_OF_MONTH",
                 "ANNUALIZED_RETURN_5Y",
+                new SimulationResponse.ReinvestmentPolicy(
+                        true,
+                        true,
+                        "REINVEST_PRINCIPAL_AND_INTEREST"
+                ),
                 PortfolioPolicy.allocations(months)
         );
     }
@@ -1664,25 +1807,54 @@ public class SimulationService {
                 new EnumMap<>(ProductType.class);
         result.put(
                 ProductType.DEPOSIT,
-                requireCandidates(
+                prepareReinvestableCandidates(
                         simulationMapper.selectDepositCandidates(
                                 dataVersionId,
                                 months,
-                                MAX_PRODUCT_CANDIDATES
-                        )
+                                PRODUCT_CANDIDATE_QUERY_LIMIT
+                        ),
+                        months
                 )
         );
         result.put(
                 ProductType.SAVINGS,
-                requireCandidates(
+                prepareReinvestableCandidates(
                         simulationMapper.selectSavingsCandidates(
                                 dataVersionId,
                                 months,
-                                MAX_PRODUCT_CANDIDATES
-                        )
+                                PRODUCT_CANDIDATE_QUERY_LIMIT
+                        ),
+                        months
                 )
         );
         return result;
+    }
+
+    private List<ProductCandidate> prepareReinvestableCandidates(
+            List<ProductCandidate> candidates,
+            int investmentPeriodMonths
+    ) {
+        List<ProductCandidate> eligible = requireCandidates(candidates).stream()
+                .filter(candidate -> calculator.canCoverWithReinvestment(
+                        investmentPeriodMonths,
+                        candidate.getMinMonth(),
+                        candidate.getMaxMonth()
+                ))
+                .sorted(Comparator.comparingLong((ProductCandidate candidate) ->
+                        calculator.calculateReinvestedProductFutureValue(
+                                candidate.calculationType(),
+                                100_000_000L,
+                                candidate.getAppliedAnnualRatePercent(),
+                                investmentPeriodMonths,
+                                candidate.getMinMonth(),
+                                candidate.getMaxMonth()
+                        )).reversed())
+                .toList();
+        if (eligible.isEmpty()) {
+            throw new SimulationException(
+                    SimulationError.PRODUCT_CANDIDATE_NOT_FOUND);
+        }
+        return eligible;
     }
 
     private Map<RiskProfile, List<ProductCandidate>> loadEtfCandidates(
@@ -1961,11 +2133,6 @@ public class SimulationService {
                 .filter(date -> date.isAfter(afterDate))
                 .min(LocalDate::compareTo)
                 .orElse(afterDate.plusYears(DEDUCTION_WINDOW_YEARS).plusDays(1));
-    }
-
-    private boolean termMatches(int months, Integer minimum, Integer maximum) {
-        return (minimum == null || months >= minimum)
-                && (maximum == null || months <= maximum);
     }
 
     private String executeFingerprint(

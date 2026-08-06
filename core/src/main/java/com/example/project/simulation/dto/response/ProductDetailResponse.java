@@ -31,6 +31,7 @@ public record ProductDetailResponse(
             RateSummary rateSummary,
             List<BaseRateTier> baseRateTiers,
             List<PreferentialCondition> preferentialConditions,
+            ReinvestmentPolicy reinvestmentPolicy,
             CalculationPolicy calculationPolicy
     ) {
     }
@@ -42,6 +43,7 @@ public record ProductDetailResponse(
             RateSummary rateSummary,
             List<BaseRateTier> baseRateTiers,
             List<PreferentialCondition> preferentialConditions,
+            ReinvestmentPolicy reinvestmentPolicy,
             CalculationPolicy calculationPolicy
     ) {
     }
@@ -86,6 +88,13 @@ public record ProductDetailResponse(
             String conditionCode,
             String description,
             BigDecimal additionalRatePercent
+    ) {
+    }
+
+    public record ReinvestmentPolicy(
+            boolean available,
+            boolean unlimited,
+            String maturityValueTreatment
     ) {
     }
 

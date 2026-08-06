@@ -22,6 +22,8 @@ public class SimulationProductRecord {
     private BigDecimal baseAnnualRatePercent;
     private BigDecimal maximumAnnualRatePercent;
     private BigDecimal appliedAnnualRatePercent;
+    private Integer minimumContractMonths;
+    private Integer maximumContractMonths;
     private Long expectedFutureValue;
     private List<PreferentialRateRecord> selectedPreferentialConditions;
     private LocalDateTime createdAt;

@@ -97,13 +97,9 @@
         JOIN deposit d ON d.kb_product_version_id = pv.kb_product_version_id
         JOIN base_interest_rate br
           ON br.kb_product_version_id = pv.kb_product_version_id
-         AND br.min_month &lt;= #{investmentPeriodMonths}
-         AND (br.max_month IS NULL OR br.max_month &gt;= #{investmentPeriodMonths})
         WHERE pv.kb_product_data_version_id = #{productDataVersionId}
           AND pv.sales_status = 'ON_SALE'
           AND p.product_type = 'DEPOSIT'
-          AND d.min_month &lt;= #{investmentPeriodMonths}
-          AND d.max_month &gt;= #{investmentPeriodMonths}
         GROUP BY pv.kb_product_version_id, pv.kb_product_data_version_id,
                  p.product_id, p.product_code, pv.product_name, p.product_type,
                  pv.description, pv.product_url, pv.sales_status, dv.data_date,
@@ -131,13 +127,9 @@
         JOIN savings s ON s.kb_product_version_id = pv.kb_product_version_id
         JOIN base_interest_rate br
           ON br.kb_product_version_id = pv.kb_product_version_id
-         AND br.min_month &lt;= #{investmentPeriodMonths}
-         AND (br.max_month IS NULL OR br.max_month &gt;= #{investmentPeriodMonths})
         WHERE pv.kb_product_data_version_id = #{productDataVersionId}
           AND pv.sales_status = 'ON_SALE'
           AND p.product_type = 'SAVINGS'
-          AND s.min_month &lt;= #{investmentPeriodMonths}
-          AND s.max_month &gt;= #{investmentPeriodMonths}
         GROUP BY pv.kb_product_version_id, pv.kb_product_data_version_id,
                  p.product_id, p.product_code, pv.product_name, p.product_type,
                  pv.description, pv.product_url, pv.sales_status, dv.data_date,
@@ -383,6 +375,8 @@
         spr.expected_future_value,
         COALESCE(MAX(br.base_rate_percent), e.annual_return_5y) AS base_annual_rate_percent,
         COALESCE(MAX(br.max_rate_percent), e.annual_return_5y) AS maximum_annual_rate_percent,
+        COALESCE(d.min_month, sv.min_month) AS minimum_contract_months,
+        COALESCE(d.max_month, sv.max_month) AS maximum_contract_months,
         spr.created_at
     </sql>
 
@@ -395,17 +389,17 @@
         JOIN simulation s ON s.simul_id = sr.simul_id
         JOIN kb_product_version pv ON pv.kb_product_version_id = spr.kb_product_version_id
         JOIN kb_product p ON p.product_id = pv.product_id
+        LEFT JOIN deposit d ON d.kb_product_version_id = pv.kb_product_version_id
         LEFT JOIN savings sv ON sv.kb_product_version_id = pv.kb_product_version_id
         LEFT JOIN etf e ON e.kb_product_version_id = pv.kb_product_version_id
         LEFT JOIN base_interest_rate br
                ON br.kb_product_version_id = pv.kb_product_version_id
-              AND br.min_month &lt;= s.investment_period_months
-              AND (br.max_month IS NULL OR br.max_month &gt;= s.investment_period_months)
         WHERE sr.simul_id = #{simulationId}
         GROUP BY spr.simulation_product_id, spr.simul_portfolio_id,
                  spr.kb_product_version_id, p.product_id, p.product_code,
                  pv.product_name, p.product_type, sv.savings_category,
-                 e.etf_category, e.annual_return_5y, spr.is_selected,
+                 e.etf_category, e.annual_return_5y, d.min_month, d.max_month,
+                 sv.min_month, sv.max_month, spr.is_selected,
                  spr.allocated_amount, spr.applied_annual_rate,
                  spr.expected_future_value, spr.created_at
         ORDER BY spr.simul_portfolio_id, p.product_type, spr.expected_future_value DESC
@@ -420,17 +414,17 @@
         JOIN simulation s ON s.simul_id = sr.simul_id
         JOIN kb_product_version pv ON pv.kb_product_version_id = spr.kb_product_version_id
         JOIN kb_product p ON p.product_id = pv.product_id
+        LEFT JOIN deposit d ON d.kb_product_version_id = pv.kb_product_version_id
         LEFT JOIN savings sv ON sv.kb_product_version_id = pv.kb_product_version_id
         LEFT JOIN etf e ON e.kb_product_version_id = pv.kb_product_version_id
         LEFT JOIN base_interest_rate br
                ON br.kb_product_version_id = pv.kb_product_version_id
-              AND br.min_month &lt;= s.investment_period_months
-              AND (br.max_month IS NULL OR br.max_month &gt;= s.investment_period_months)
         WHERE spr.simul_portfolio_id = #{portfolioId}
         GROUP BY spr.simulation_product_id, spr.simul_portfolio_id,
                  spr.kb_product_version_id, p.product_id, p.product_code,
                  pv.product_name, p.product_type, sv.savings_category,
-                 e.etf_category, e.annual_return_5y, spr.is_selected,
+                 e.etf_category, e.annual_return_5y, d.min_month, d.max_month,
+                 sv.min_month, sv.max_month, spr.is_selected,
                  spr.allocated_amount, spr.applied_annual_rate,
                  spr.expected_future_value, spr.created_at
         ORDER BY p.product_type, spr.expected_future_value DESC
@@ -445,17 +439,17 @@
         JOIN simulation s ON s.simul_id = sr.simul_id
         JOIN kb_product_version pv ON pv.kb_product_version_id = spr.kb_product_version_id
         JOIN kb_product p ON p.product_id = pv.product_id
+        LEFT JOIN deposit d ON d.kb_product_version_id = pv.kb_product_version_id
         LEFT JOIN savings sv ON sv.kb_product_version_id = pv.kb_product_version_id
         LEFT JOIN etf e ON e.kb_product_version_id = pv.kb_product_version_id
         LEFT JOIN base_interest_rate br
                ON br.kb_product_version_id = pv.kb_product_version_id
-              AND br.min_month &lt;= s.investment_period_months
-              AND (br.max_month IS NULL OR br.max_month &gt;= s.investment_period_months)
         WHERE spr.simulation_product_id = #{simulationProductId}
         GROUP BY spr.simulation_product_id, spr.simul_portfolio_id,
                  spr.kb_product_version_id, p.product_id, p.product_code,
                  pv.product_name, p.product_type, sv.savings_category,
-                 e.etf_category, e.annual_return_5y, spr.is_selected,
+                 e.etf_category, e.annual_return_5y, d.min_month, d.max_month,
+                 sv.min_month, sv.max_month, spr.is_selected,
                  spr.allocated_amount, spr.applied_annual_rate,
                  spr.expected_future_value, spr.created_at
     </select>

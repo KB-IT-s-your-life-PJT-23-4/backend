@@ -46,6 +46,38 @@ class SimulationCalculatorTest {
     }
 
     @Test
+    @DisplayName("예금은 만기 원리금을 동일 상품에 재가입해 전체 운용 기간을 채운다")
+    void calculateDepositWithUnlimitedReinvestment() {
+        long result = calculator.calculateReinvestedProductFutureValue(
+                CalculationType.SIMPLE_INTEREST,
+                100_000_000L,
+                new BigDecimal("3.4"),
+                36,
+                12,
+                12
+        );
+
+        assertEquals(110_550_730L, result);
+        assertEquals(List.of(12, 12, 12),
+                calculator.reinvestmentPeriods(36, 12, 12));
+    }
+
+    @Test
+    @DisplayName("가입 기간을 조합해 운용 기간을 정확히 채울 수 있다")
+    void distributeContractMonthsAcrossReenrollments() {
+        assertEquals(
+                List.of(12, 12, 11),
+                calculator.reinvestmentPeriods(35, 6, 12)
+        );
+    }
+
+    @Test
+    @DisplayName("재가입을 반복해도 운용 기간을 정확히 채울 수 없으면 제외한다")
+    void rejectProductWhenContractTermsCannotCoverInvestmentPeriod() {
+        assertTrue(calculator.reinvestmentPeriods(35, 12, 12).isEmpty());
+    }
+
+    @Test
     @DisplayName("표시 금리가 높아도 월 적립식 실수익이 예금 단리보다 낮을 수 있다")
     void compareEffectiveReturnsUsingProductSpecificFormula() {
         long depositValue = calculator.calculateProductFutureValue(
