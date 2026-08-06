@@ -28,6 +28,60 @@
         <result property="deductionRenewalDate" column="deduction_renewal_date" javaType="java.time.LocalDate"/>
     </resultMap>
 
+<!--    AI 상담 유형 저장-->
+    <insert id="insertAIConsultationEvent"
+            parameterType="com.example.project.consultation.domain.AiConsultationEventVO"
+            useGeneratedKeys="true"
+            keyProperty="aiConsultationEventId"
+            keyColumn="ai_consultation_event_id">
+
+        INSERT INTO ai_consultation_event (
+            conversation_id,
+            user_id,
+            intent,
+            response_status,
+            question_excerpt,
+            occurred_at
+        ) VALUES (
+            #{conversationId},
+            #{userId},
+            #{intent},
+            #{responseStatus},
+            #{questionExcerpt},
+            #{occurredAt}
+        )
+    </insert>
+
+<!--    AI 상담 신고 저장-->
+    <insert id="insertAIReport"
+            parameterType="com.example.project.consultation.domain.AiSafetyReportVO">
+        INSERT INTO ai_safety_report (
+            report_key,
+            report_type,
+            status,
+            user_id,
+            trigger_event_id,
+            occurrence_count,
+            count_window_started_at,
+            count_window_ended_at
+        ) VALUES (
+            #{reportKey},
+            #{reportType},
+            #{status},
+            #{userId},
+            #{triggerEventId},
+            #{occurrenceCount},
+            #{countWindowStartedAt},
+            #{countWindowEndedAt}
+        )
+        ON  DUPLICATE KEY UPDATE
+            occurrence_count = GREATEST(
+                occurrence_count,
+                VALUES(occurrence_count)
+            ),
+            updated_at = CURRENT_TIMESTAMP(6)
+    </insert>
+
     <!--
         인증된 사용자가 등록한 모든 가족의 과거 증여 정보를 조회한다.
         가족별로 한 행씩 반환한다.

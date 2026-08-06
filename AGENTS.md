@@ -264,7 +264,7 @@ Methods and variables use camelCase.
 Constants use UPPER_SNAKE_CASE.
 Prefer constructor injection.
 Use Lombok only where it is already supported and improves consistency.
-Use records for immutable DTOs when consistent with the surrounding domain.
+Do not use Java records for new DTOs, VOs, domain objects, cache keys, or internal state holders. Implement new Java types as regular classes.
 Do not convert existing DTOs or domain objects between records and Lombok classes as unrelated cleanup.
 Keep controllers thin.
 Avoid duplicated validation and calculation logic.
@@ -687,6 +687,7 @@ Java 17에서 지원하는 문법만 사용한다.
 상수는 UPPER_SNAKE_CASE를 사용한다.
 생성자 주입을 우선한다.
 주변 코드와 일치하는 경우에만 Lombok을 사용한다.
+새 DTO, VO, 도메인 객체, 캐시 키, 내부 상태 객체는 Java `record`로 작성하지 않고 일반 `class`로 작성한다.
 기존 DTO를 관련 없는 작업에서 record나 Lombok 클래스로 일괄 변환하지 않는다.
 중복된 검증 및 계산 로직을 만들지 않는다.
 애플리케이션 로그는 Log4j2를 사용한다.

@@ -1,9 +1,7 @@
 package com.example.project.consultation.mapper;
 
 
-import com.example.project.consultation.domain.EtfVO;
-import com.example.project.consultation.domain.FamilyPreviousGiftVO;
-import com.example.project.consultation.domain.ProductVO;
+import com.example.project.consultation.domain.*;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -22,4 +20,8 @@ public interface ConsultationMapper {
     );
     List<ProductVO> selectAllOnSaleProducts();
     List<EtfVO> selectAllOnSaleEtfProducts();
+
+    int insertAIConsultationEvent(AiConsultationEventVO aiConsultationEventVO);
+
+    int insertAIReport(AiSafetyReportVO aiSafetyReportVO);
 }

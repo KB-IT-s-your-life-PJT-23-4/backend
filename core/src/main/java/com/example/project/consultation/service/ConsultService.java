@@ -19,6 +19,8 @@ import reactor.core.scheduler.Schedulers;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+
 @Log4j2
 @Service
 @RequiredArgsConstructor
@@ -36,6 +38,7 @@ public class ConsultService {
 
     private final FastApiClient fastApiClient;
     private final ConsultationMapper consultationMapper;
+    private final AiSafetyService aiSafetyService;
 
     // 최초 질문
     //public ConsultResponse consult(String question, Long userId) { // 동기 처리
@@ -54,6 +57,14 @@ public class ConsultService {
         return ConsultResponse.from(response);*/
         return fetchFamiliesAsync(userId)
                 .flatMap(families -> {
+                    List<String> familyNames = families.stream()
+                            .map(FamilyData::getName)
+                            .filter(Objects::nonNull)
+                            .map(String::trim)
+                            .filter(name -> !name.isBlank())
+                            .distinct()
+                            .toList();
+
                     ChatRequest request = new ChatRequest(
                             null, // 최초 요청은 conversation_id가 null
                             question,
@@ -62,7 +73,15 @@ public class ConsultService {
                             fetchAllEtfProducts(),
                             INITIAL_FACTS
                     );
-                    return fastApiClient.startChat(request);
+                    return fastApiClient.startChat(request)
+                            .flatMap(response ->
+                                    aiSafetyService.process(
+                                            userId,
+                                            question,
+                                            familyNames,
+                                            response
+                                    ).thenReturn(response)
+                            );
                 })
                 .map(ConsultResponse::from);
     }
@@ -217,4 +236,5 @@ public class ConsultService {
                         .build())
                 .toList();
     }
+
 }
