@@ -53,11 +53,29 @@ public class DeductionResponse {
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = DATE_FORMAT)
     private LocalDate nextRenewalDate;
 
+    /**
+     * nextRenewalDate 를 끌어낸 증여의 id. 창에서 이 증여가 빠지는 날이 곧 갱신일이다.
+     * 갱신일 리마인더를 "(gift_id, type)" 한 쌍으로 식별하기 위해 함께 내려준다.
+     * nextRenewalDate 가 null 이면 이것도 null.
+     */
+    private Long renewalGiftId;
+
+    /**
+     * 갱신일에 늘어나는 공제 여력. "그날 얼마가 다시 생기나"를 그대로 보여주려고 서버가 계산한다.
+     *
+     * <p>창에서 빠지는 증여액과 같지 않다. 이미 한도를 넘긴 상태면 빠지는 금액 중 일부는
+     * 초과분을 메우는 데 쓰이고 나머지만 여력이 된다. 그래서 갱신 후 잔여에서 지금 잔여를 뺀 값이다.
+     * nextRenewalDate 가 null 이면 이것도 null.
+     */
+    private Long renewalAmount;
+
     /** nextRenewalDate 는 10년 창 규칙을 쥔 서비스가 계산해 넘긴다. 확정 증여가 없으면 null. */
     public static DeductionResponse from(DeductionVO deduction,
                                          LocalDate windowStartDate,
                                          LocalDate baseDate,
-                                         LocalDate nextRenewalDate) {
+                                         LocalDate nextRenewalDate,
+                                         Long renewalGiftId,
+                                         Long renewalAmount) {
         Long limit = deduction.getDeductionLimit();
         long used = deduction.getUsedAmount() == null ? 0L : deduction.getUsedAmount();
         long planned = deduction.getPlannedAmount() == null ? 0L : deduction.getPlannedAmount();
@@ -75,7 +93,9 @@ public class DeductionResponse {
                 remaining(limit, used),
                 remaining(limit, used + planned),
                 deduction.getAggregatedCount(),
-                nextRenewalDate
+                nextRenewalDate,
+                renewalGiftId,
+                renewalAmount
         );
     }
 
