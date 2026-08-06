@@ -1,10 +1,12 @@
 package com.example.project.common.api;
 
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Getter;
 
 @Getter
 @AllArgsConstructor
+@Builder
 public class Pagination {
 
     private final int page;

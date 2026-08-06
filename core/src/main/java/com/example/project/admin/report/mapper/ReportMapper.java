@@ -8,5 +8,7 @@ import java.util.List;
 @Mapper
 public interface ReportMapper {
 
-    List<AiSafetyReportVO> selectAiReportsPage(int page);
+    List<AiSafetyReportVO> selectAiReportsPage(String status, String reportType, long offset, int page);
+
+    int countAiReports(String status, String reportType);
 }
