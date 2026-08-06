@@ -945,12 +945,9 @@ public class SimulationService {
             ProductCandidate savingsCandidate,
             LocalDate investmentEndDate
     ) {
-        Map<ProductType, Long> amounts = new EnumMap<>(ProductType.class);
-        long deposit = ratioAmount(principal, ratios.get(ProductType.DEPOSIT));
-        long savings = ratioAmount(principal, ratios.get(ProductType.SAVINGS));
-        long etf = Math.max(0, principal - deposit - savings);
+        long savingsCapacity = Long.MAX_VALUE;
         if (savingsCandidate.getMonthlyMaxAmount() != null) {
-            long capacity = tranches.stream()
+            savingsCapacity = tranches.stream()
                     .filter(item -> item.getInvestmentAmount() > 0)
                     .mapToLong(item -> safeMultiply(
                             savingsCandidate.getMonthlyMaxAmount(),
@@ -960,15 +957,12 @@ public class SimulationService {
                             )
                     ))
                     .sum();
-            if (savings > capacity) {
-                deposit += savings - capacity;
-                savings = capacity;
-            }
         }
-        amounts.put(ProductType.DEPOSIT, deposit);
-        amounts.put(ProductType.SAVINGS, savings);
-        amounts.put(ProductType.ETF, etf);
-        return amounts;
+        return PortfolioPolicy.allocateSavingsFirst(
+                principal,
+                ratios,
+                savingsCapacity
+        );
     }
 
     private SimulationProductRecord toSnapshot(
@@ -1991,13 +1985,6 @@ public class SimulationService {
                     }
                 }
         );
-    }
-
-    private long ratioAmount(long principal, BigDecimal ratio) {
-        return BigDecimal.valueOf(principal)
-                .multiply(ratio)
-                .divide(ONE_HUNDRED, 0, RoundingMode.HALF_UP)
-                .longValue();
     }
 
     private long divideCeiling(long amount, int divisor) {

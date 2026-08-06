@@ -22,19 +22,40 @@ public final class PortfolioPolicy {
         Map<RiskProfile, Map<ProductType, BigDecimal>> result = new EnumMap<>(RiskProfile.class);
 
         if (years <= 3) {
-            result.put(RiskProfile.CONSERVATIVE, ratios(45, 45, 10));
-            result.put(RiskProfile.BALANCED, ratios(40, 40, 20));
-            result.put(RiskProfile.AGGRESSIVE, ratios(35, 35, 30));
+            result.put(RiskProfile.CONSERVATIVE, ratios(0, 90, 10));
+            result.put(RiskProfile.BALANCED, ratios(0, 80, 20));
+            result.put(RiskProfile.AGGRESSIVE, ratios(0, 60, 40));
         } else if (years < 10) {
-            result.put(RiskProfile.CONSERVATIVE, ratios(40, 40, 20));
-            result.put(RiskProfile.BALANCED, ratios(35, 35, 30));
-            result.put(RiskProfile.AGGRESSIVE, ratios(25, 25, 50));
+            result.put(RiskProfile.CONSERVATIVE, ratios(0, 80, 20));
+            result.put(RiskProfile.BALANCED, ratios(0, 70, 30));
+            result.put(RiskProfile.AGGRESSIVE, ratios(0, 50, 50));
         } else {
-            result.put(RiskProfile.CONSERVATIVE, ratios(40, 40, 20));
-            result.put(RiskProfile.BALANCED, ratios(30, 30, 40));
-            result.put(RiskProfile.AGGRESSIVE, ratios(20, 20, 60));
+            result.put(RiskProfile.CONSERVATIVE, ratios(0, 80, 20));
+            result.put(RiskProfile.BALANCED, ratios(0, 60, 40));
+            result.put(RiskProfile.AGGRESSIVE, ratios(0, 40, 60));
         }
 
+        return result;
+    }
+
+    static Map<ProductType, Long> allocateSavingsFirst(
+            long investmentPrincipal,
+            Map<ProductType, BigDecimal> targetRatios,
+            long savingsCapacity
+    ) {
+        long principal = Math.max(0, investmentPrincipal);
+        long etfAmount = ratioAmount(
+                principal,
+                targetRatios.getOrDefault(ProductType.ETF, BigDecimal.ZERO)
+        );
+        long safeAssetAmount = Math.max(0, principal - etfAmount);
+        long savingsAmount = Math.min(safeAssetAmount, Math.max(0, savingsCapacity));
+        long depositAmount = safeAssetAmount - savingsAmount;
+
+        Map<ProductType, Long> result = new EnumMap<>(ProductType.class);
+        result.put(ProductType.DEPOSIT, depositAmount);
+        result.put(ProductType.SAVINGS, savingsAmount);
+        result.put(ProductType.ETF, etfAmount);
         return result;
     }
 
@@ -90,6 +111,13 @@ public final class PortfolioPolicy {
         return BigDecimal.valueOf(amount)
                 .multiply(BigDecimal.valueOf(100))
                 .divide(BigDecimal.valueOf(principal), 4, RoundingMode.HALF_UP);
+    }
+
+    private static long ratioAmount(long principal, BigDecimal ratio) {
+        return BigDecimal.valueOf(principal)
+                .multiply(ratio)
+                .divide(BigDecimal.valueOf(100), 0, RoundingMode.HALF_UP)
+                .longValue();
     }
 
     private static Map<ProductType, BigDecimal> ratios(int deposit, int savings, int etf) {

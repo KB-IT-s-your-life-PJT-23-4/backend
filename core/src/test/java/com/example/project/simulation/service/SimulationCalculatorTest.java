@@ -91,7 +91,7 @@ class SimulationCalculatorTest {
     }
 
     @Test
-    @DisplayName("운용 기간별 균형형 비중은 예금·적금·ETF 합계가 100이다")
+    @DisplayName("단기 균형형은 안전자산 80%와 ETF 20%를 적용하고 적금을 우선한다")
     void balancedPortfolioTotalsOneHundred() {
         Map<ProductType, BigDecimal> balanced =
                 PortfolioPolicy.allocations(36).get(RiskProfile.BALANCED);
@@ -100,9 +100,43 @@ class SimulationCalculatorTest {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         assertEquals(new BigDecimal("100"), total);
-        assertEquals(new BigDecimal("40"), balanced.get(ProductType.DEPOSIT));
-        assertEquals(new BigDecimal("40"), balanced.get(ProductType.SAVINGS));
+        assertEquals(BigDecimal.ZERO, balanced.get(ProductType.DEPOSIT));
+        assertEquals(new BigDecimal("80"), balanced.get(ProductType.SAVINGS));
         assertEquals(new BigDecimal("20"), balanced.get(ProductType.ETF));
+    }
+
+    @Test
+    @DisplayName("적금 배분 한도를 먼저 채우고 남은 안전자산은 예금에 배분한다")
+    void allocateSavingsFirstAndMoveRemainderToDeposit() {
+        Map<ProductType, BigDecimal> balanced =
+                PortfolioPolicy.allocations(36).get(RiskProfile.BALANCED);
+
+        Map<ProductType, Long> allocation = PortfolioPolicy.allocateSavingsFirst(
+                100_000_000L,
+                balanced,
+                18_000_000L
+        );
+
+        assertEquals(62_000_000L, allocation.get(ProductType.DEPOSIT));
+        assertEquals(18_000_000L, allocation.get(ProductType.SAVINGS));
+        assertEquals(20_000_000L, allocation.get(ProductType.ETF));
+    }
+
+    @Test
+    @DisplayName("적금 한도가 충분하면 안전자산 전액을 적금에 우선 배분한다")
+    void allocateAllSafeAssetsToSavingsWhenCapacityIsEnough() {
+        Map<ProductType, BigDecimal> balanced =
+                PortfolioPolicy.allocations(36).get(RiskProfile.BALANCED);
+
+        Map<ProductType, Long> allocation = PortfolioPolicy.allocateSavingsFirst(
+                100_000_000L,
+                balanced,
+                100_000_000L
+        );
+
+        assertEquals(0L, allocation.get(ProductType.DEPOSIT));
+        assertEquals(80_000_000L, allocation.get(ProductType.SAVINGS));
+        assertEquals(20_000_000L, allocation.get(ProductType.ETF));
     }
 
     private List<TaxBracket> brackets() {
