@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class SimulationCalculatorTest {
 
@@ -42,6 +43,25 @@ class SimulationCalculatorTest {
         );
 
         assertEquals(38_012_140L, result);
+    }
+
+    @Test
+    @DisplayName("표시 금리가 높아도 월 적립식 실수익이 예금 단리보다 낮을 수 있다")
+    void compareEffectiveReturnsUsingProductSpecificFormula() {
+        long depositValue = calculator.calculateProductFutureValue(
+                CalculationType.SIMPLE_INTEREST,
+                100_000_000L,
+                new BigDecimal("3.2"),
+                36
+        );
+        long savingsValue = calculator.calculateProductFutureValue(
+                CalculationType.MONTHLY_INSTALLMENT,
+                100_000_000L,
+                new BigDecimal("4.0"),
+                36
+        );
+
+        assertTrue(depositValue > savingsValue);
     }
 
     @Test
@@ -91,7 +111,7 @@ class SimulationCalculatorTest {
     }
 
     @Test
-    @DisplayName("단기 균형형은 안전자산 80%와 ETF 20%를 적용하고 적금을 우선한다")
+    @DisplayName("단기 균형형은 안전자산 80%와 ETF 20%를 적용한다")
     void balancedPortfolioTotalsOneHundred() {
         Map<ProductType, BigDecimal> balanced =
                 PortfolioPolicy.allocations(36).get(RiskProfile.BALANCED);
@@ -106,15 +126,17 @@ class SimulationCalculatorTest {
     }
 
     @Test
-    @DisplayName("적금 배분 한도를 먼저 채우고 남은 안전자산은 예금에 배분한다")
-    void allocateSavingsFirstAndMoveRemainderToDeposit() {
+    @DisplayName("적금 실수익률이 더 높으면 납입 한도까지 적금에 배분한다")
+    void allocateSavingsWhenEffectiveReturnIsHigher() {
         Map<ProductType, BigDecimal> balanced =
                 PortfolioPolicy.allocations(36).get(RiskProfile.BALANCED);
 
-        Map<ProductType, Long> allocation = PortfolioPolicy.allocateSavingsFirst(
+        Map<ProductType, Long> allocation = PortfolioPolicy.allocateByEffectiveReturn(
                 100_000_000L,
                 balanced,
-                18_000_000L
+                18_000_000L,
+                103_000_000L,
+                106_000_000L
         );
 
         assertEquals(62_000_000L, allocation.get(ProductType.DEPOSIT));
@@ -123,19 +145,21 @@ class SimulationCalculatorTest {
     }
 
     @Test
-    @DisplayName("적금 한도가 충분하면 안전자산 전액을 적금에 우선 배분한다")
-    void allocateAllSafeAssetsToSavingsWhenCapacityIsEnough() {
+    @DisplayName("예금 실수익률이 같거나 더 높으면 안전자산 전액을 예금에 배분한다")
+    void allocateSafeAssetsToDepositWhenEffectiveReturnIsNotLower() {
         Map<ProductType, BigDecimal> balanced =
                 PortfolioPolicy.allocations(36).get(RiskProfile.BALANCED);
 
-        Map<ProductType, Long> allocation = PortfolioPolicy.allocateSavingsFirst(
+        Map<ProductType, Long> allocation = PortfolioPolicy.allocateByEffectiveReturn(
                 100_000_000L,
                 balanced,
-                100_000_000L
+                100_000_000L,
+                110_000_000L,
+                106_000_000L
         );
 
-        assertEquals(0L, allocation.get(ProductType.DEPOSIT));
-        assertEquals(80_000_000L, allocation.get(ProductType.SAVINGS));
+        assertEquals(80_000_000L, allocation.get(ProductType.DEPOSIT));
+        assertEquals(0L, allocation.get(ProductType.SAVINGS));
         assertEquals(20_000_000L, allocation.get(ProductType.ETF));
     }
 

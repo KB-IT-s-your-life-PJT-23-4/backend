@@ -38,10 +38,12 @@ public final class PortfolioPolicy {
         return result;
     }
 
-    static Map<ProductType, Long> allocateSavingsFirst(
+    static Map<ProductType, Long> allocateByEffectiveReturn(
             long investmentPrincipal,
             Map<ProductType, BigDecimal> targetRatios,
-            long savingsCapacity
+            long savingsCapacity,
+            long depositProjectedValue,
+            long savingsProjectedValue
     ) {
         long principal = Math.max(0, investmentPrincipal);
         long etfAmount = ratioAmount(
@@ -49,7 +51,10 @@ public final class PortfolioPolicy {
                 targetRatios.getOrDefault(ProductType.ETF, BigDecimal.ZERO)
         );
         long safeAssetAmount = Math.max(0, principal - etfAmount);
-        long savingsAmount = Math.min(safeAssetAmount, Math.max(0, savingsCapacity));
+        boolean savingsPreferred = savingsProjectedValue > depositProjectedValue;
+        long savingsAmount = savingsPreferred
+                ? Math.min(safeAssetAmount, Math.max(0, savingsCapacity))
+                : 0L;
         long depositAmount = safeAssetAmount - savingsAmount;
 
         Map<ProductType, Long> result = new EnumMap<>(ProductType.class);

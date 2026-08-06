@@ -679,6 +679,7 @@ public class SimulationService {
                     result.getInvestmentPrincipal(),
                     ratios,
                     aggregate.tranches(),
+                    safeCandidates.get(ProductType.DEPOSIT).get(0),
                     safeCandidates.get(ProductType.SAVINGS).get(0),
                     investmentEndDate
             );
@@ -942,6 +943,7 @@ public class SimulationService {
             long principal,
             Map<ProductType, BigDecimal> ratios,
             List<SimulationTrancheRecord> tranches,
+            ProductCandidate depositCandidate,
             ProductCandidate savingsCandidate,
             LocalDate investmentEndDate
     ) {
@@ -958,10 +960,42 @@ public class SimulationService {
                     ))
                     .sum();
         }
-        return PortfolioPolicy.allocateSavingsFirst(
+        long depositProjectedValue = projectedCandidateValue(
+                depositCandidate,
+                principal,
+                tranches,
+                investmentEndDate
+        );
+        long savingsProjectedValue = projectedCandidateValue(
+                savingsCandidate,
+                principal,
+                tranches,
+                investmentEndDate
+        );
+        return PortfolioPolicy.allocateByEffectiveReturn(
                 principal,
                 ratios,
-                savingsCapacity
+                savingsCapacity,
+                depositProjectedValue,
+                savingsProjectedValue
+        );
+    }
+
+    private long projectedCandidateValue(
+            ProductCandidate candidate,
+            long principal,
+            List<SimulationTrancheRecord> tranches,
+            LocalDate investmentEndDate
+    ) {
+        SimulationProductRecord product = new SimulationProductRecord();
+        product.setProductType(candidate.getProductType());
+        product.setAppliedAnnualRatePercent(candidate.getAppliedAnnualRatePercent());
+        return calculator.calculateSelectedProductValue(
+                product,
+                principal,
+                tranches,
+                principal,
+                investmentEndDate
         );
     }
 
