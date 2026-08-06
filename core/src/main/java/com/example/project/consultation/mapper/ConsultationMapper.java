@@ -21,7 +21,7 @@ public interface ConsultationMapper {
     List<ProductVO> selectAllOnSaleProducts();
     List<EtfVO> selectAllOnSaleEtfProducts();
 
-    int insertAIConsultationEvent(AiConsultationEventVO aiConsultationEventVO);
+    int insertAIConsultationEvent(TempConsultationEventVO aiConsultationEventVO);
 
     int insertAIReport(AiSafetyReportVO aiSafetyReportVO);
 }

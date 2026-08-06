@@ -11,7 +11,7 @@ import java.time.LocalDateTime;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class AiConsultationEventVO {
+public class TempConsultationEventVO {
 
     //AI 상담 분류 이밴트 ID
     private Long aiConsultationEventId;
