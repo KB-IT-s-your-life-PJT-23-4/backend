@@ -142,19 +142,18 @@ public class SimulationHistoryService {
             List<SimulationRecord> simulations,
             Map<Long, SimulationResultRecord> resultById
     ) {
-        List<SimulationRecord> savedSimulations = simulations.stream()
-                .filter(simulation -> simulation.getStatus() == SimulationStatus.SAVED)
+        List<SimulationRecord> selectedSimulations = simulations.stream()
+                .filter(simulation -> simulation.getSelectedPortfolioId() != null)
                 .toList();
-        if (savedSimulations.isEmpty()) {
+        if (selectedSimulations.isEmpty()) {
             return Map.of();
         }
 
-        List<Long> selectedPortfolioIds = savedSimulations.stream()
+        List<Long> selectedPortfolioIds = selectedSimulations.stream()
                 .map(SimulationRecord::getSelectedPortfolioId)
-                .filter(Objects::nonNull)
                 .distinct()
                 .toList();
-        if (selectedPortfolioIds.size() != savedSimulations.size()) {
+        if (selectedPortfolioIds.size() != selectedSimulations.size()) {
             throw new SimulationException(SimulationError.SIMULATION_HISTORY_INCOMPLETE);
         }
 
@@ -178,7 +177,7 @@ public class SimulationHistoryService {
         ));
 
         Map<Long, SimulationHistoryResponse.SelectionSummary> selections = new HashMap<>();
-        for (SimulationRecord simulation : savedSimulations) {
+        for (SimulationRecord simulation : selectedSimulations) {
             SimulationPortfolioRecord portfolio = portfolioById.get(
                     simulation.getSelectedPortfolioId()
             );
@@ -270,7 +269,7 @@ public class SimulationHistoryService {
                         simulation.getInvestmentEndDate()
                 ),
                 returnRange,
-                simulation.getStatus() == SimulationStatus.DRAFT ? null : selection,
+                selection,
                 simulation.getCreatedAt(),
                 simulation.getUpdatedAt(),
                 simulation.getSavedAt(),

@@ -27,16 +27,19 @@ import java.lang.reflect.Proxy;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class SimulationServiceSaveTest {
 
     private static final long USER_ID = 7L;
+    private static final long PREVIOUS_SIMULATION_ID = 9_000L;
     private static final long SIMULATION_ID = 9_001L;
     private static final long PORTFOLIO_ID = 101L;
     private static final long PRODUCT_ID = 1_001L;
@@ -122,6 +125,33 @@ class SimulationServiceSaveTest {
         assertEquals(0, fixture.saveCount.get());
     }
 
+    @Test
+    @DisplayName("새 결과로 교체해도 기존 저장 이력의 선택 결과는 보존한다")
+    void preservePreviousSavedSelectionWhenReplacing() {
+        Fixture fixture = new Fixture();
+        fixture.activeSaved = previousSavedSimulation();
+        SimulationSaveRequest request = fixture.request();
+        request.setReplaceExistingSaved(true);
+        request.setExpectedExistingSavedSimulationId(PREVIOUS_SIMULATION_ID);
+
+        SimulationSaveResponse response = fixture.service().save(
+                SIMULATION_ID,
+                request,
+                USER_ID,
+                "replace-save-request"
+        );
+
+        assertTrue(response.replacement().replaced());
+        assertEquals(
+                PREVIOUS_SIMULATION_ID,
+                response.replacement().previousSimulation().simulationId()
+        );
+        assertEquals(List.of(PREVIOUS_SIMULATION_ID), fixture.resetSimulationIds);
+        assertEquals(List.of(SIMULATION_ID), fixture.clearedSimulationIds);
+        assertEquals(List.of(SIMULATION_ID), fixture.deletedConditionSimulationIds);
+        assertEquals(List.of(PRODUCT_ID), fixture.restoredProductIds);
+    }
+
     private static final class Fixture {
         private final SimulationRecord simulation = simulation();
         private final FamilySnapshot family = family();
@@ -133,6 +163,11 @@ class SimulationServiceSaveTest {
         private final PreferentialRateRecord preferentialRate = preferentialRate();
         private final AtomicInteger saveCount = new AtomicInteger();
         private final AtomicInteger markSelectedCount = new AtomicInteger();
+        private final List<Long> resetSimulationIds = new ArrayList<>();
+        private final List<Long> clearedSimulationIds = new ArrayList<>();
+        private final List<Long> deletedConditionSimulationIds = new ArrayList<>();
+        private final List<Long> restoredProductIds = new ArrayList<>();
+        private SimulationRecord activeSaved;
         private int markSelectedResult = 1;
 
         private SimulationSaveRequest request() {
@@ -156,7 +191,7 @@ class SimulationServiceSaveTest {
                     (proxy, method, args) -> switch (method.getName()) {
                         case "selectSimulation" -> simulation;
                         case "lockFamily" -> family;
-                        case "selectSavedSimulationByFamily" -> null;
+                        case "selectSavedSimulationByFamily" -> activeSaved;
                         case "selectPortfolio" -> portfolio;
                         case "selectPortfolioProducts" -> List.of(product);
                         case "selectProductVersionDetail" -> detail;
@@ -165,10 +200,23 @@ class SimulationServiceSaveTest {
                         case "selectPortfolios" -> List.of(portfolio);
                         case "selectResults" -> List.of(result);
                         case "selectTranches" -> List.of(tranche);
-                        case "restoreSimulationProduct",
-                             "clearSimulationSelections",
-                             "deleteSimulationPreferentialConditions",
-                             "insertSelectedPreferentialCondition" -> 1;
+                        case "restoreSimulationProduct" -> {
+                            restoredProductIds.add((Long) args[0]);
+                            yield 1;
+                        }
+                        case "clearSimulationSelections" -> {
+                            clearedSimulationIds.add((Long) args[0]);
+                            yield 1;
+                        }
+                        case "deleteSimulationPreferentialConditions" -> {
+                            deletedConditionSimulationIds.add((Long) args[0]);
+                            yield 1;
+                        }
+                        case "insertSelectedPreferentialCondition" -> 1;
+                        case "resetSavedSimulation" -> {
+                            resetSimulationIds.add((Long) args[0]);
+                            yield 1;
+                        }
                         case "markSimulationProductSelected" -> {
                             markSelectedCount.incrementAndGet();
                             yield markSelectedResult;
@@ -225,6 +273,18 @@ class SimulationServiceSaveTest {
         family.setFamilyId(3L);
         family.setUserId(USER_ID);
         return family;
+    }
+
+    private static SimulationRecord previousSavedSimulation() {
+        SimulationRecord simulation = simulation();
+        simulation.setSimulationId(PREVIOUS_SIMULATION_ID);
+        simulation.setStatus(SimulationStatus.SAVED);
+        simulation.setSelectedPortfolioId(91L);
+        simulation.setVersion(4L);
+        simulation.setSavedAt(LocalDateTime.of(2026, 8, 1, 9, 30));
+        simulation.setUpdatedAt(LocalDateTime.of(2026, 8, 1, 9, 30));
+        simulation.setExpiredAt(null);
+        return simulation;
     }
 
     private static SimulationPortfolioRecord portfolio() {

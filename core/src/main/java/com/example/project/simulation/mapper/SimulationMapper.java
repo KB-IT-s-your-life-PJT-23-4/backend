@@ -196,7 +196,6 @@ public interface SimulationMapper {
 
     int resetSavedSimulation(
             @Param("simulationId") Long simulationId,
-            @Param("expiredAt") LocalDateTime expiredAt,
-            @Param("updatedAt") LocalDateTime updatedAt
+            @Param("expiredAt") LocalDateTime expiredAt
     );
 }

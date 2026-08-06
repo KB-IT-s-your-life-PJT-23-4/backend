@@ -731,10 +731,8 @@
     <update id="resetSavedSimulation">
         UPDATE simulation
         SET status = 'DRAFT',
-            selected_portfolio_id = NULL,
             saved_at = NULL,
             expired_at = #{expiredAt},
-            updated_at = #{updatedAt},
             version = version + 1
         WHERE simul_id = #{simulationId}
           AND status = 'SAVED'
