@@ -12,6 +12,8 @@ import com.example.project.simulation.domain.SimulationTrancheRecord;
 
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDateTime;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -93,6 +95,14 @@ class SimulationMapperXmlTest {
                 namespace + "selectEtfHoldings",
                 java.util.Map.of("productVersionId", 1L, "limit", 10)
         );
+        String resetSavedSimulation = sql(
+                configuration,
+                namespace + "resetSavedSimulation",
+                Map.of(
+                        "simulationId", 1L,
+                        "expiredAt", LocalDateTime.of(2026, 9, 6, 13, 15)
+                )
+        );
 
         assertFalse(insertSimulation.contains("age_at_simulation"));
         assertTrue(insertSimulation.contains("previous_gift_amount"));
@@ -127,6 +137,11 @@ class SimulationMapperXmlTest {
                 "kb_product_version_id AS product_version_id"));
         assertTrue(selectEtfHoldings.contains("holding_rank"));
         assertFalse(selectEtfHoldings.contains("holding_rank AS `rank`"));
+        assertTrue(resetSavedSimulation.contains("status = 'DRAFT'"));
+        assertTrue(resetSavedSimulation.contains("saved_at = NULL"));
+        assertTrue(resetSavedSimulation.contains("expired_at = ?"));
+        assertFalse(resetSavedSimulation.contains("selected_portfolio_id"));
+        assertFalse(resetSavedSimulation.contains("updated_at"));
     }
 
     private String sql(Configuration configuration, String statement, Object parameter) {

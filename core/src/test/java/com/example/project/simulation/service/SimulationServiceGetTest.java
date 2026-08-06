@@ -169,6 +169,25 @@ class SimulationServiceGetTest {
     }
 
     @Test
+    @DisplayName("이전에 저장된 DRAFT 단건 조회도 보존된 선택 결과를 복원한다")
+    void getPreviouslySavedDraftSelection() {
+        Fixture fixture = new Fixture();
+        SimulationPortfolioRecord selectedPortfolio = fixture.portfolios.get(0);
+        fixture.simulation.setSelectedPortfolioId(selectedPortfolio.getPortfolioId());
+        fixture.products.get(0).setSelected(true);
+
+        SimulationResponse response = fixture.service().get(SIMULATION_ID, USER_ID);
+
+        assertEquals(SimulationStatus.DRAFT, response.status());
+        assertEquals(
+                selectedPortfolio.getPortfolioId(),
+                response.selection().selectedPortfolioId()
+        );
+        assertEquals(1, response.selection().selectedProducts().size());
+        assertEquals(100L, response.selection().estimatedGiftTax());
+    }
+
+    @Test
     @DisplayName("SAVED 선택 상품의 배분액이 포트폴리오와 다르면 충돌로 처리한다")
     void rejectIncompleteSavedSelection() {
         Fixture fixture = new Fixture();
