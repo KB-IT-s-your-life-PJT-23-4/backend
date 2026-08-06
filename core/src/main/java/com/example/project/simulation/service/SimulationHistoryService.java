@@ -1,10 +1,13 @@
 package com.example.project.simulation.service;
 
 import com.example.project.simulation.domain.ProductType;
+import com.example.project.simulation.domain.RiskProfile;
+import com.example.project.simulation.domain.SimulationPortfolioRecord;
+import com.example.project.simulation.domain.SimulationProductRecord;
 import com.example.project.simulation.domain.SimulationRecord;
+import com.example.project.simulation.domain.SimulationResultRecord;
 import com.example.project.simulation.domain.SimulationStatus;
 import com.example.project.simulation.dto.response.SimulationHistoryResponse;
-import com.example.project.simulation.dto.response.SimulationResponse;
 import com.example.project.simulation.exception.SimulationError;
 import com.example.project.simulation.exception.SimulationException;
 import com.example.project.simulation.mapper.SimulationMapper;
@@ -16,10 +19,15 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.EnumMap;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -30,6 +38,7 @@ public class SimulationHistoryService {
 
     private static final int DEFAULT_SIZE = 10;
     private static final int MAX_SIZE = 50;
+    private static final String RETURN_RANGE_BASIS = "RECOMMENDED_PORTFOLIOS";
 
     private final SimulationMapper simulationMapper;
     private final SimulationService simulationService;
@@ -47,67 +56,81 @@ public class SimulationHistoryService {
             SimulationStatus status = parseStatus(statusValue);
             int page = pageValue == null ? 0 : pageValue;
             int size = sizeValue == null ? DEFAULT_SIZE : sizeValue;
-            if (page < 0 || size < 1 || size > MAX_SIZE) {
-                throw new SimulationException(
-                        SimulationError.INVALID_PAGE_REQUEST);
-            }
-            if (familyId != null) {
-                if (familyId <= 0) {
-                    throw new SimulationException(SimulationError.INVALID_FAMILY_ID);
-                }
-                var family = simulationMapper.selectFamily(familyId);
-                if (family == null) {
-                    throw new SimulationException(SimulationError.FAMILY_NOT_FOUND);
-                }
-                if (!Objects.equals(family.getUserId(), userId)) {
-                    throw new SimulationException(
-                            SimulationError.FAMILY_ACCESS_DENIED);
-                }
-            }
+            validateRequest(userId, familyId, page, size);
 
             LocalDateTime now = LocalDateTime.now();
-            long total = simulationMapper.countSimulations(
+            long totalElements = simulationMapper.countSimulations(
                     userId,
                     status,
                     familyId,
                     now
             );
-            List<SimulationRecord> simulations = simulationMapper.selectSimulationPage(
-                    userId,
-                    status,
-                    familyId,
-                    now,
-                    (long) page * size,
-                    size
+            List<SimulationRecord> simulations = safeList(
+                    simulationMapper.selectSimulationPage(
+                            userId,
+                            status,
+                            familyId,
+                            now,
+                            (long) page * size,
+                            size
+                    )
             );
-            List<SimulationHistoryResponse.Item> items =
-                    (simulations == null ? List.<SimulationRecord>of() : simulations)
-                            .stream()
-                            .map(simulationService::buildResponse)
-                            .map(this::toItem)
-                            .toList();
-            int totalPages = total == 0 ? 0
-                    : (int) Math.ceil(total / (double) size);
-            boolean first = page == 0;
-            boolean last = totalPages == 0 || page >= totalPages - 1;
+            if (simulations.isEmpty()) {
+                return new SimulationHistoryResponse(
+                        List.of(),
+                        pagination(page, size, totalElements, 0)
+                );
+            }
+
+            List<Long> simulationIds = simulations.stream()
+                    .map(SimulationRecord::getSimulationId)
+                    .toList();
+            List<SimulationResultRecord> results = safeList(
+                    simulationMapper.selectResultsBySimulationIds(simulationIds)
+            );
+            List<SimulationPortfolioRecord> recommendations = safeList(
+                    simulationMapper.selectRecommendedPortfoliosBySimulationIds(
+                            simulationIds
+                    )
+            );
+
+            Map<Long, SimulationResultRecord> resultById = results.stream()
+                    .collect(Collectors.toMap(
+                            SimulationResultRecord::getResultId,
+                            Function.identity(),
+                            (first, duplicate) -> {
+                                throw new SimulationException(
+                                        SimulationError.SIMULATION_HISTORY_INCOMPLETE
+                                );
+                            }
+                    ));
+            Map<Long, List<SimulationPortfolioRecord>> recommendationsBySimulation =
+                    recommendations.stream().collect(Collectors.groupingBy(
+                            SimulationPortfolioRecord::getSimulationId
+                    ));
+            Map<Long, SimulationHistoryResponse.SelectionSummary> selections =
+                    loadSelections(simulations, resultById);
+
+            List<SimulationHistoryResponse.Item> items = simulations.stream()
+                    .map(simulation -> toItem(
+                            simulation,
+                            recommendationsBySimulation.getOrDefault(
+                                    simulation.getSimulationId(),
+                                    List.of()
+                            ),
+                            resultById,
+                            selections.get(simulation.getSimulationId())
+                    ))
+                    .toList();
+
             return new SimulationHistoryResponse(
                     items,
-                    new SimulationHistoryResponse.Pagination(
-                            page,
-                            size,
-                            total,
-                            totalPages,
-                            items.size(),
-                            first,
-                            last,
-                            !last,
-                            !first
-                    )
+                    pagination(page, size, totalElements, items.size())
             );
         } catch (SimulationException exception) {
             throw exception;
         } catch (RuntimeException exception) {
-            log.error("Simulation history read failed", exception);
+            log.error("Simulation history read failed. userId={}", userId, exception);
             throw new SimulationException(
                     SimulationError.SIMULATION_HISTORY_READ_FAILED,
                     exception
@@ -115,131 +138,356 @@ public class SimulationHistoryService {
         }
     }
 
-    private SimulationHistoryResponse.Item toItem(SimulationResponse response) {
-        Map<Long, SimulationResponse.Result> resultById = response.results().stream()
-                .collect(Collectors.toMap(
-                        SimulationResponse.Result::resultId,
-                        Function.identity()
-                ));
-        Map<Long, SimulationResponse.Portfolio> portfolioById =
-                response.results().stream()
-                        .flatMap(result -> result.portfolios().stream())
-                        .collect(Collectors.toMap(
-                                SimulationResponse.Portfolio::portfolioId,
-                                Function.identity()
-                        ));
-        List<SimulationHistoryResponse.ReturnPoint> points =
-                response.recommendations().stream()
-                        .map(recommendation -> {
-                            SimulationResponse.Result result =
-                                    resultById.get(recommendation.resultId());
-                            SimulationResponse.Portfolio portfolio =
-                                    portfolioById.get(recommendation.portfolioId());
-                            if (result == null || portfolio == null
-                                    || result.investmentPrincipal() == null
-                                    || result.investmentPrincipal() <= 0) {
-                                throw new SimulationException(
-                                        SimulationError.SIMULATION_RETURN_CALCULATION_INVALID);
-                            }
-                            long profit = portfolio.expectedFutureValue()
-                                    - result.investmentPrincipal();
-                            return new SimulationHistoryResponse.ReturnPoint(
-                                    recommendation.portfolioType(),
-                                    recommendation.scenarioType(),
-                                    result.investmentPrincipal(),
-                                    portfolio.expectedFutureValue(),
-                                    profit,
-                                    returnRate(profit, result.investmentPrincipal())
-                            );
-                        })
-                        .toList();
-        if (points.size() != 3) {
-            throw new SimulationException(
-                    SimulationError.SIMULATION_RECOMMENDATION_INCOMPLETE);
+    private Map<Long, SimulationHistoryResponse.SelectionSummary> loadSelections(
+            List<SimulationRecord> simulations,
+            Map<Long, SimulationResultRecord> resultById
+    ) {
+        List<SimulationRecord> savedSimulations = simulations.stream()
+                .filter(simulation -> simulation.getStatus() == SimulationStatus.SAVED)
+                .toList();
+        if (savedSimulations.isEmpty()) {
+            return Map.of();
         }
-        Comparator<SimulationHistoryResponse.ReturnPoint> comparator =
+
+        List<Long> selectedPortfolioIds = savedSimulations.stream()
+                .map(SimulationRecord::getSelectedPortfolioId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        if (selectedPortfolioIds.size() != savedSimulations.size()) {
+            throw new SimulationException(SimulationError.SIMULATION_HISTORY_INCOMPLETE);
+        }
+
+        Map<Long, SimulationPortfolioRecord> portfolioById = safeList(
+                simulationMapper.selectPortfoliosByIds(selectedPortfolioIds)
+        ).stream().collect(Collectors.toMap(
+                SimulationPortfolioRecord::getPortfolioId,
+                Function.identity(),
+                (first, duplicate) -> {
+                    throw new SimulationException(
+                            SimulationError.SIMULATION_HISTORY_INCOMPLETE
+                    );
+                }
+        ));
+        Map<Long, List<SimulationProductRecord>> productsByPortfolio = safeList(
+                simulationMapper.selectSelectedProductsByPortfolioIds(
+                        selectedPortfolioIds
+                )
+        ).stream().collect(Collectors.groupingBy(
+                SimulationProductRecord::getPortfolioId
+        ));
+
+        Map<Long, SimulationHistoryResponse.SelectionSummary> selections = new HashMap<>();
+        for (SimulationRecord simulation : savedSimulations) {
+            SimulationPortfolioRecord portfolio = portfolioById.get(
+                    simulation.getSelectedPortfolioId()
+            );
+            if (portfolio == null) {
+                throw new SimulationException(
+                        SimulationError.SIMULATION_HISTORY_INCOMPLETE
+                );
+            }
+            if (!Objects.equals(
+                    simulation.getSimulationId(),
+                    portfolio.getSimulationId()
+            )) {
+                throw new SimulationException(
+                        SimulationError.SELECTED_PORTFOLIO_MISMATCH
+                );
+            }
+
+            SimulationResultRecord result = resultById.get(portfolio.getResultId());
+            List<SimulationProductRecord> products = productsByPortfolio.getOrDefault(
+                    portfolio.getPortfolioId(),
+                    List.of()
+            );
+            validateSelection(portfolio, result, products);
+
+            long expectedFutureValue = sumExpectedFutureValue(products);
+            long expectedProfit = subtractMoney(
+                    expectedFutureValue,
+                    result.getInvestmentPrincipal()
+            );
+            Set<ProductType> productTypes = new LinkedHashSet<>();
+            for (SimulationProductRecord product : products) {
+                if (product.getProductType() == null) {
+                    throw new SimulationException(
+                            SimulationError.SIMULATION_HISTORY_INCOMPLETE
+                    );
+                }
+                productTypes.add(product.getProductType());
+            }
+
+            selections.put(
+                    simulation.getSimulationId(),
+                    new SimulationHistoryResponse.SelectionSummary(
+                            portfolio.getPortfolioId(),
+                            portfolio.getPortfolioType(),
+                            result.getResultId(),
+                            result.getScenarioType(),
+                            result.getGiftTax(),
+                            result.getInvestmentPrincipal(),
+                            expectedFutureValue,
+                            expectedProfit,
+                            returnRate(expectedProfit, result.getInvestmentPrincipal()),
+                            List.copyOf(productTypes)
+                    )
+            );
+        }
+        return selections;
+    }
+
+    private SimulationHistoryResponse.Item toItem(
+            SimulationRecord simulation,
+            List<SimulationPortfolioRecord> recommendations,
+            Map<Long, SimulationResultRecord> resultById,
+            SimulationHistoryResponse.SelectionSummary selection
+    ) {
+        SimulationHistoryResponse.ExpectedReturnRange returnRange =
+                expectedReturnRange(
+                        simulation.getInvestmentPeriodMonths(),
+                        recommendations,
+                        resultById
+                );
+        if (simulation.getStatus() == SimulationStatus.SAVED && selection == null) {
+            throw new SimulationException(SimulationError.SIMULATION_HISTORY_INCOMPLETE);
+        }
+
+        return new SimulationHistoryResponse.Item(
+                simulation.getSimulationId(),
+                simulation.getStatus(),
+                simulation.getVersion(),
+                new SimulationHistoryResponse.Family(
+                        simulation.getFamilyId(),
+                        simulation.getFamilyName(),
+                        simulation.getRelation()
+                ),
+                new SimulationHistoryResponse.InputSummary(
+                        simulation.getRequestedAmount(),
+                        simulation.getTaxPaymentMethod(),
+                        simulation.getInvestmentPeriodMonths(),
+                        simulation.getAsOfDate(),
+                        simulation.getInvestmentEndDate()
+                ),
+                returnRange,
+                simulation.getStatus() == SimulationStatus.DRAFT ? null : selection,
+                simulation.getCreatedAt(),
+                simulation.getUpdatedAt(),
+                simulation.getSavedAt(),
+                simulation.getExpiredAt()
+        );
+    }
+
+    private SimulationHistoryResponse.ExpectedReturnRange expectedReturnRange(
+            Integer investmentPeriodMonths,
+            List<SimulationPortfolioRecord> recommendations,
+            Map<Long, SimulationResultRecord> resultById
+    ) {
+        Map<RiskProfile, List<SimulationPortfolioRecord>> byPortfolioType =
+                recommendations.stream()
+                        .filter(portfolio -> portfolio.getPortfolioType() != null)
+                        .collect(Collectors.groupingBy(
+                                SimulationPortfolioRecord::getPortfolioType,
+                                () -> new EnumMap<>(RiskProfile.class),
+                                Collectors.toList()
+                        ));
+        boolean complete = recommendations.size() == RiskProfile.values().length;
+        for (RiskProfile type : RiskProfile.values()) {
+            complete &= byPortfolioType.getOrDefault(type, List.of()).size() == 1;
+        }
+        if (!complete) {
+            throw new SimulationException(
+                    SimulationError.SIMULATION_RECOMMENDATION_INCOMPLETE
+            );
+        }
+
+        List<SimulationHistoryResponse.ReturnPoint> points = new ArrayList<>();
+        for (RiskProfile type : RiskProfile.values()) {
+            SimulationPortfolioRecord portfolio = byPortfolioType.get(type).get(0);
+            SimulationResultRecord result = resultById.get(portfolio.getResultId());
+            if (result == null
+                    || result.getScenarioType() == null
+                    || portfolio.getExpectedFutureValue() == null) {
+                throw new SimulationException(
+                        SimulationError.SIMULATION_RECOMMENDATION_INCOMPLETE
+                );
+            }
+            long expectedProfit = subtractMoney(
+                    portfolio.getExpectedFutureValue(),
+                    result.getInvestmentPrincipal()
+            );
+            points.add(new SimulationHistoryResponse.ReturnPoint(
+                    portfolio.getPortfolioType(),
+                    result.getScenarioType(),
+                    result.getInvestmentPrincipal(),
+                    portfolio.getExpectedFutureValue(),
+                    expectedProfit,
+                    returnRate(expectedProfit, result.getInvestmentPrincipal())
+            ));
+        }
+
+        Comparator<SimulationHistoryResponse.ReturnPoint> ascending =
                 Comparator.comparing(
                                 SimulationHistoryResponse.ReturnPoint
                                         ::expectedReturnRatePercent
                         )
-                        .thenComparing(point -> point.portfolioType().ordinal());
-        SimulationHistoryResponse.ReturnPoint minimum =
-                points.stream().min(comparator).orElseThrow();
-        SimulationHistoryResponse.ReturnPoint maximum =
-                points.stream().max(comparator).orElseThrow();
+                        .thenComparingInt(point -> point.portfolioType().ordinal());
+        SimulationHistoryResponse.ReturnPoint minimum = points.stream()
+                .min(ascending)
+                .orElseThrow();
+        SimulationHistoryResponse.ReturnPoint maximum = points.stream()
+                .sorted(
+                        Comparator.comparing(
+                                        SimulationHistoryResponse.ReturnPoint
+                                                ::expectedReturnRatePercent,
+                                        Comparator.reverseOrder()
+                                )
+                                .thenComparingInt(
+                                        point -> point.portfolioType().ordinal()
+                                )
+                )
+                .findFirst()
+                .orElseThrow();
 
-        SimulationHistoryResponse.SelectionSummary selection = null;
-        if (response.selection() != null) {
-            SimulationResponse.Selection selected = response.selection();
-            long profit = selected.expectedFutureValue()
-                    - selected.investmentPrincipal();
-            List<ProductType> productTypes = selected.selectedProducts().stream()
-                    .map(SimulationResponse.Product::productType)
-                    .distinct()
-                    .toList();
-            selection = new SimulationHistoryResponse.SelectionSummary(
-                    selected.selectedPortfolioId(),
-                    selected.portfolioType(),
-                    selected.resultId(),
-                    selected.scenarioType(),
-                    selected.estimatedGiftTax(),
-                    selected.investmentPrincipal(),
-                    selected.expectedFutureValue(),
-                    profit,
-                    returnRate(profit, selected.investmentPrincipal()),
-                    productTypes
-            );
-        }
-
-        return new SimulationHistoryResponse.Item(
-                response.simulationId(),
-                response.status(),
-                response.version(),
-                new SimulationHistoryResponse.Family(
-                        response.family().familyId(),
-                        response.family().recipientName(),
-                        response.family().relation()
-                ),
-                new SimulationHistoryResponse.InputSummary(
-                        response.input().requestedAmount(),
-                        response.input().taxPaymentMethod(),
-                        response.input().investmentPeriodMonths(),
-                        response.input().asOfDate(),
-                        response.input().investmentEndDate()
-                ),
-                new SimulationHistoryResponse.ExpectedReturnRange(
-                        "RECOMMENDED_PORTFOLIOS",
-                        response.input().investmentPeriodMonths(),
-                        minimum,
-                        maximum
-                ),
-                selection,
-                response.createdAt(),
-                response.updatedAt(),
-                response.savedAt(),
-                response.expiresAt()
+        return new SimulationHistoryResponse.ExpectedReturnRange(
+                RETURN_RANGE_BASIS,
+                investmentPeriodMonths,
+                minimum,
+                maximum
         );
     }
 
-    private SimulationStatus parseStatus(String status) {
-        if (status == null || status.isBlank()) {
-            return null;
+    private void validateRequest(Long userId, Long familyId, int page, int size) {
+        if (page < 0 || size < 1 || size > MAX_SIZE) {
+            throw new SimulationException(SimulationError.INVALID_PAGE_REQUEST);
         }
-        try {
-            return SimulationStatus.valueOf(status.trim().toUpperCase());
-        } catch (IllegalArgumentException exception) {
-            throw new SimulationException(
-                    SimulationError.INVALID_SIMULATION_STATUS_FILTER);
+        if (familyId == null) {
+            return;
+        }
+        if (familyId <= 0) {
+            throw new SimulationException(SimulationError.INVALID_FAMILY_ID);
+        }
+        var family = simulationMapper.selectFamily(familyId);
+        if (family == null) {
+            throw new SimulationException(SimulationError.FAMILY_NOT_FOUND);
+        }
+        if (!Objects.equals(family.getUserId(), userId)) {
+            throw new SimulationException(SimulationError.FAMILY_ACCESS_DENIED);
         }
     }
 
-    private BigDecimal returnRate(long profit, long principal) {
-        if (principal <= 0) {
-            throw new SimulationException(
-                    SimulationError.SIMULATION_RETURN_CALCULATION_INVALID);
+    private void validateSelection(
+            SimulationPortfolioRecord portfolio,
+            SimulationResultRecord result,
+            List<SimulationProductRecord> products
+    ) {
+        if (portfolio.getPortfolioType() == null
+                || result == null
+                || result.getScenarioType() == null
+                || result.getGiftTax() == null
+                || result.getInvestmentPrincipal() == null
+                || products.isEmpty()) {
+            throw new SimulationException(SimulationError.SIMULATION_HISTORY_INCOMPLETE);
         }
-        return BigDecimal.valueOf(profit)
+        long allocatedAmount = sumAllocatedAmount(products);
+        if (allocatedAmount != result.getInvestmentPrincipal()) {
+            throw new SimulationException(SimulationError.SIMULATION_HISTORY_INCOMPLETE);
+        }
+    }
+
+    private SimulationStatus parseStatus(String status) {
+        if (status == null) {
+            return null;
+        }
+        try {
+            return SimulationStatus.valueOf(status);
+        } catch (IllegalArgumentException exception) {
+            throw new SimulationException(
+                    SimulationError.INVALID_SIMULATION_STATUS_FILTER
+            );
+        }
+    }
+
+    private SimulationHistoryResponse.Pagination pagination(
+            int page,
+            int size,
+            long totalElements,
+            int numberOfElements
+    ) {
+        long pages = totalElements / size + (totalElements % size == 0 ? 0 : 1);
+        int totalPages = pages > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) pages;
+        boolean hasNext = page + 1L < pages;
+        return new SimulationHistoryResponse.Pagination(
+                page,
+                size,
+                totalElements,
+                totalPages,
+                numberOfElements,
+                page == 0,
+                !hasNext,
+                hasNext,
+                page > 0
+        );
+    }
+
+    private BigDecimal returnRate(long expectedProfit, Long investmentPrincipal) {
+        if (investmentPrincipal == null || investmentPrincipal <= 0) {
+            throw new SimulationException(
+                    SimulationError.SIMULATION_RETURN_CALCULATION_INVALID
+            );
+        }
+        return BigDecimal.valueOf(expectedProfit)
                 .multiply(BigDecimal.valueOf(100))
-                .divide(BigDecimal.valueOf(principal), 2, RoundingMode.HALF_UP);
+                .divide(BigDecimal.valueOf(investmentPrincipal), 2, RoundingMode.HALF_UP);
+    }
+
+    private long subtractMoney(Long minuend, Long subtrahend) {
+        if (minuend == null || subtrahend == null) {
+            throw new SimulationException(
+                    SimulationError.SIMULATION_RETURN_CALCULATION_INVALID
+            );
+        }
+        try {
+            return Math.subtractExact(minuend, subtrahend);
+        } catch (ArithmeticException exception) {
+            throw new SimulationException(
+                    SimulationError.SIMULATION_RETURN_CALCULATION_INVALID,
+                    exception
+            );
+        }
+    }
+
+    private long sumAllocatedAmount(List<SimulationProductRecord> products) {
+        try {
+            long total = 0;
+            for (SimulationProductRecord product : products) {
+                total = Math.addExact(total, product.getAllocatedAmount());
+            }
+            return total;
+        } catch (NullPointerException | ArithmeticException exception) {
+            throw new SimulationException(
+                    SimulationError.SIMULATION_HISTORY_INCOMPLETE,
+                    exception
+            );
+        }
+    }
+
+    private long sumExpectedFutureValue(List<SimulationProductRecord> products) {
+        try {
+            long total = 0;
+            for (SimulationProductRecord product : products) {
+                total = Math.addExact(total, product.getExpectedFutureValue());
+            }
+            return total;
+        } catch (NullPointerException | ArithmeticException exception) {
+            throw new SimulationException(
+                    SimulationError.SIMULATION_HISTORY_INCOMPLETE,
+                    exception
+            );
+        }
+    }
+
+    private <T> List<T> safeList(List<T> values) {
+        return values == null ? List.of() : values;
     }
 }

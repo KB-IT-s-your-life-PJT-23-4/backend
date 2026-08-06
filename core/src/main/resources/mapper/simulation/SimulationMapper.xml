@@ -587,6 +587,86 @@
         LIMIT #{size} OFFSET #{offset}
     </select>
 
+    <select id="selectResultsBySimulationIds"
+            resultType="com.example.project.simulation.domain.SimulationResultRecord">
+        SELECT simul_result_id AS result_id,
+               simul_id AS simulation_id,
+               scenario_type,
+               deduction_amount,
+               taxable_amount,
+               gift_tax,
+               donor_required_amount,
+               post_tax_amount,
+               investment_principal,
+               created_at
+        FROM simulation_result
+        WHERE simul_id IN
+        <foreach collection="simulationIds" item="simulationId"
+                 open="(" separator="," close=")">
+            #{simulationId}
+        </foreach>
+        ORDER BY simul_id, simul_result_id
+    </select>
+
+    <select id="selectRecommendedPortfoliosBySimulationIds"
+            resultType="com.example.project.simulation.domain.SimulationPortfolioRecord">
+        SELECT <include refid="portfolioSelectColumns"/>
+        FROM simulation_portfolio sp
+        JOIN simulation_result sr
+          ON sr.simul_result_id = sp.simul_result_id
+        WHERE sr.simul_id IN
+        <foreach collection="simulationIds" item="simulationId"
+                 open="(" separator="," close=")">
+            #{simulationId}
+        </foreach>
+          AND sp.is_recommended = 1
+        ORDER BY sr.simul_id,
+                 FIELD(
+                     sp.portfolio_type,
+                     'CONSERVATIVE',
+                     'BALANCED',
+                     'AGGRESSIVE'
+                 )
+    </select>
+
+    <select id="selectPortfoliosByIds"
+            resultType="com.example.project.simulation.domain.SimulationPortfolioRecord">
+        SELECT <include refid="portfolioSelectColumns"/>
+        FROM simulation_portfolio sp
+        JOIN simulation_result sr
+          ON sr.simul_result_id = sp.simul_result_id
+        WHERE sp.simul_portfolio_id IN
+        <foreach collection="portfolioIds" item="portfolioId"
+                 open="(" separator="," close=")">
+            #{portfolioId}
+        </foreach>
+        ORDER BY sp.simul_portfolio_id
+    </select>
+
+    <select id="selectSelectedProductsByPortfolioIds"
+            resultType="com.example.project.simulation.domain.SimulationProductRecord">
+        SELECT spr.simulation_product_id,
+               spr.simul_portfolio_id AS portfolio_id,
+               spr.kb_product_version_id AS product_version_id,
+               p.product_type,
+               spr.is_selected AS selected,
+               spr.allocated_amount,
+               spr.expected_future_value
+        FROM simulation_product spr
+        JOIN kb_product_version pv
+          ON pv.kb_product_version_id = spr.kb_product_version_id
+        JOIN kb_product p ON p.product_id = pv.product_id
+        WHERE spr.simul_portfolio_id IN
+        <foreach collection="portfolioIds" item="portfolioId"
+                 open="(" separator="," close=")">
+            #{portfolioId}
+        </foreach>
+          AND spr.is_selected = 1
+        ORDER BY spr.simul_portfolio_id,
+                 FIELD(p.product_type, 'DEPOSIT', 'SAVINGS', 'ETF'),
+                 spr.simulation_product_id
+    </select>
+
     <select id="countSimulations" resultType="long">
         SELECT COUNT(*)
         FROM simulation s

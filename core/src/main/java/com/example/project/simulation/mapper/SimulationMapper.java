@@ -143,6 +143,22 @@ public interface SimulationMapper {
             @Param("size") int size
     );
 
+    List<SimulationResultRecord> selectResultsBySimulationIds(
+            @Param("simulationIds") List<Long> simulationIds
+    );
+
+    List<SimulationPortfolioRecord> selectRecommendedPortfoliosBySimulationIds(
+            @Param("simulationIds") List<Long> simulationIds
+    );
+
+    List<SimulationPortfolioRecord> selectPortfoliosByIds(
+            @Param("portfolioIds") List<Long> portfolioIds
+    );
+
+    List<SimulationProductRecord> selectSelectedProductsByPortfolioIds(
+            @Param("portfolioIds") List<Long> portfolioIds
+    );
+
     long countSimulations(
             @Param("userId") Long userId,
             @Param("status") SimulationStatus status,
