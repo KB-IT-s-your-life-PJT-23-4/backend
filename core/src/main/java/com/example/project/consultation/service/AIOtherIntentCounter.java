@@ -2,14 +2,12 @@ package com.example.project.consultation.service;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
 
 @Component
@@ -17,32 +15,81 @@ public class AIOtherIntentCounter {
 
     private static final ZoneId SERVICE_ZONE = ZoneId.of("Asia/Seoul");
 
-    private final Cache<Key, Integer> counters =
+    private static final int TRIGGER_COUNT = 11;
+
+    private final Cache<Key, CounterState> counters =
             Caffeine.newBuilder()
                     .maximumSize(100_000)
                     .expireAfterWrite(Duration.ofDays(2))
                     .build();
 
-    public int increment(Long userId) {
-        LocalDate date = LocalDate.now(SERVICE_ZONE);
+    public CounterSnapshot increment(Long userId) {
+        if (userId == null) {
+            throw new IllegalArgumentException("userId는 null일 수 없습니다.");
+        }
+
+        LocalDateTime now = LocalDateTime.now(SERVICE_ZONE);
         Key key = Key.builder()
                 .userId(userId)
-                .date(date)
+                .date(now.toLocalDate())
                 .build();
 
-        return counters.asMap().merge(
-                key,
-                1,
-                Integer::sum
-        );
+        CounterState state = counters.asMap()
+                .compute(key, (ignored, existing) -> {
+                    if (existing == null) {
+                        return new CounterState(
+                                1,
+                                now,
+                                null
+                        );
+                    }
+
+                    int nextCount = existing.getCount() + 1;
+
+                    LocalDateTime thresholdReachedAt = existing.getThresholdReachedAt();
+
+                    if (thresholdReachedAt == null && nextCount >= TRIGGER_COUNT) {
+                        thresholdReachedAt = now;
+                    }
+
+                    return new CounterState(
+                            nextCount,
+                            existing.getFirstDetectedAt(),
+                            thresholdReachedAt
+                    );
+                });
+
+        return CounterSnapshot.builder()
+                .count(state.getCount())
+                .firstDetectedAt(state.getFirstDetectedAt())
+                .thresholdReachedAt(state.getThresholdReachedAt())
+                .build();
     }
 
     @Data
+    @EqualsAndHashCode
     @Builder
     @AllArgsConstructor
-    @NoArgsConstructor
-    private class Key{
-        Long userId;
-        LocalDate date;
+    private static final class Key{
+        private final Long userId;
+        private final LocalDate date;
+    }
+
+    @Data
+    @AllArgsConstructor
+    @Builder
+    private static final class CounterState{
+        private final int count;
+        private final LocalDateTime firstDetectedAt;
+        private final LocalDateTime thresholdReachedAt;
+    }
+
+    @Data
+    @AllArgsConstructor
+    @Builder
+    public static final class CounterSnapshot{
+        private final int count;
+        private final LocalDateTime firstDetectedAt;
+        private final LocalDateTime thresholdReachedAt;
     }
 }

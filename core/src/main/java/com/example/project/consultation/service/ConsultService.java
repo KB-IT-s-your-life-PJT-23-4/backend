@@ -33,11 +33,11 @@ public class ConsultService {
             "residency", "국내 거주자",
             "use_latest_tax_rate", true
     );
-    private static final int OTHER_REPORT_THRESHOLD = 10;
 
     private final FastApiClient fastApiClient;
     private final ConsultationMapper consultationMapper;
     private final AIOtherIntentCounter aiOtherIntentCounter;
+    private final AiSafetyService aiSafetyService;
 
     // 최초 질문
     //public ConsultResponse consult(String question, Long userId) { // 동기 처리
@@ -66,6 +66,13 @@ public class ConsultService {
                     );
                     return fastApiClient.startChat(request);
                 })
+                .flatMap(response ->
+                        aiSafetyService.process(
+                                userId,
+                                question,
+                                response
+                        ).thenReturn(response)
+                )
                 .map(ConsultResponse::from);
     }
 
@@ -220,18 +227,4 @@ public class ConsultService {
                 .toList();
     }
 
-    // 상담 분류 확인 및 후처리
-    private void processSafetyIntent(Long userId, ChatResponse response){
-        if("jailbreak".equals(response.intent())){
-            createJailbreakReport(userId, response);
-            return;
-        }
-        if("other".equalsIgnoreCase(response.intent())){
-            int count = aiOtherIntentCounter.increment(userId);
-
-            if(count >= OTHER_REPORT_THRESHOLD) {
-                createOtherReportIfAbsent(userId, response, count);
-            }
-        }
-    }
 }

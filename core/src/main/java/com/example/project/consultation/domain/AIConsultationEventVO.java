@@ -11,12 +11,12 @@ import java.time.LocalDateTime;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class AIConsultationEventVO {
+public class AiConsultationEventVO {
 
     //AI 상담 분류 이밴트 ID
-    private int aiConsultationEventId;
+    private Long aiConsultationEventId;
     //상담 요청 유저 ID
-    private int userId;
+    private Long userId;
     //FastAPI에서 생성한 상담 ID
     private String conversationId;
     //Fast API가 분류한 질문 유형
