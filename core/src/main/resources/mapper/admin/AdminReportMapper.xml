@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.example.project.admin.report.mapper.ReportMapper">
+
+    <sql id="reportFilters">
+        <where>
+            <if test="status != null">
+                status = #{status}
+            </if>
+            <if test="reportType != null">
+                AND report_type = #{reportType}
+            </if>
+        </where>
+    </sql>
+
+    <select id="selectAiReportsPage"
+            resultType="com.example.project.consultation.domain.AiSafetyReportVO">
+        SELECT ai_safety_report_id,
+               report_key,
+               status,
+               report_type,
+               user_id,
+               trigger_event_id,
+               occurrence_count,
+               count_window_started_at,
+               count_window_ended_at,
+               assigned_admin_id,
+               resolution_note,
+               reviewed_at,
+               created_at,
+               updated_at
+        FROM ai_safety_report
+        <include refid="reportFilters"/>
+        ORDER BY created_at DESC,
+                 ai_safety_report_id DESC
+        LIMIT #{size} OFFSET #{offset}
+    </select>
+
+    <select id="countAiReports" resultType="long">
+        SELECT COUNT(*)
+        FROM ai_safety_report
+        <include refid="reportFilters"/>
+    </select>
+
+</mapper>

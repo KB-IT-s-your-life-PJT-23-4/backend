@@ -1,22 +1,22 @@
 package com.example.project.admin.report.dto.response;
 
 import com.example.project.consultation.domain.AiSafetyReportVO;
-import com.example.project.simulation.dto.response.SimulationHistoryResponse;
-import lombok.*;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
 
 import java.util.List;
 
-@Data
+@Getter
 @AllArgsConstructor
-@Builder
 public class AdminReportPageResponse {
-    private final List<AiSafetyReportVO> reports;
-    private final;
 
+    private final List<AiSafetyReportVO> reports;
+    private final Pagination pagination;
 
     @Getter
     @AllArgsConstructor
     public static class Pagination {
+
         private final int page;
         private final int size;
         private final long totalElements;
