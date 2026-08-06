@@ -30,6 +30,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -254,9 +256,10 @@ public class SimulationService {
             validateUser(userId);
             validateSaveRequest(simulationId, request);
             String fingerprint = saveFingerprint(simulationId, request);
+            String operation = "PATCH:/api/gs/" + simulationId + "/save";
             var cached = idempotencyStore.find(
                     userId,
-                    "PUT:/api/gs/" + simulationId + "/save",
+                    operation,
                     idempotencyKey,
                     fingerprint,
                     SimulationSaveResponse.class
@@ -266,16 +269,26 @@ public class SimulationService {
             }
 
             SimulationRecord target = requireSimulation(simulationId, userId);
+            FamilySnapshot lockedFamily = simulationMapper.lockFamily(target.getFamilyId());
+            if (lockedFamily == null || !Objects.equals(lockedFamily.getUserId(), userId)) {
+                throw new SimulationException(SimulationError.SIMULATION_ACCESS_DENIED);
+            }
+            cached = idempotencyStore.find(
+                    userId,
+                    operation,
+                    idempotencyKey,
+                    fingerprint,
+                    SimulationSaveResponse.class
+            );
+            if (cached.isPresent()) {
+                return cached.get();
+            }
+            target = requireSimulation(simulationId, userId);
             if (!Objects.equals(target.getVersion(), request.getVersion())) {
                 throw new SimulationException(
                         SimulationError.SIMULATION_VERSION_CONFLICT,
                         versionConflictData(request.getVersion(), target.getVersion())
                 );
-            }
-
-            FamilySnapshot lockedFamily = simulationMapper.lockFamily(target.getFamilyId());
-            if (lockedFamily == null || !Objects.equals(lockedFamily.getUserId(), userId)) {
-                throw new SimulationException(SimulationError.SIMULATION_ACCESS_DENIED);
             }
             SimulationRecord activeSaved =
                     simulationMapper.selectSavedSimulationByFamily(target.getFamilyId());
@@ -310,6 +323,30 @@ public class SimulationService {
                 throw new SimulationException(SimulationError.CALCULATION_VERSION_CONFLICT);
             }
 
+            List<SimulationTrancheRecord> selectedTranches =
+                    safeList(simulationMapper.selectTranches(simulationId)).stream()
+                            .filter(item -> Objects.equals(
+                                    item.getResultId(),
+                                    selectedPortfolio.getResultId()
+                            ))
+                            .toList();
+            SimulationResultRecord selectedResult =
+                    safeList(simulationMapper.selectResults(simulationId)).stream()
+                            .filter(item -> Objects.equals(
+                                    item.getResultId(),
+                                    selectedPortfolio.getResultId()
+                            ))
+                            .findFirst()
+                            .orElseThrow(() -> new SimulationException(
+                                    SimulationError.SIMULATION_RESULT_INCOMPLETE));
+            long allocatedAmount = value(selectedPortfolio.getDepositAmount())
+                    + value(selectedPortfolio.getSavingsAmount())
+                    + value(selectedPortfolio.getEtfAmount());
+            if (allocatedAmount != value(selectedResult.getInvestmentPrincipal())) {
+                throw new SimulationException(
+                        SimulationError.PORTFOLIO_ALLOCATION_MISMATCH);
+            }
+
             SimulationSaveResponse.PreviousSimulation previousSimulation = null;
             LocalDateTime now = LocalDateTime.now();
             if (replacingAnother) {
@@ -341,23 +378,6 @@ public class SimulationService {
             simulationMapper.deleteSimulationPreferentialConditions(simulationId);
             simulationMapper.clearSimulationSelections(simulationId);
 
-            List<SimulationTrancheRecord> selectedTranches =
-                    safeList(simulationMapper.selectTranches(simulationId)).stream()
-                            .filter(item -> Objects.equals(
-                                    item.getResultId(),
-                                    selectedPortfolio.getResultId()
-                            ))
-                            .toList();
-            SimulationResultRecord selectedResult =
-                    safeList(simulationMapper.selectResults(simulationId)).stream()
-                            .filter(item -> Objects.equals(
-                                    item.getResultId(),
-                                    selectedPortfolio.getResultId()
-                            ))
-                            .findFirst()
-                            .orElseThrow(() -> new SimulationException(
-                                    SimulationError.SIMULATION_RESULT_INCOMPLETE));
-
             long serverFutureValue = 0;
             List<SimulationProductRecord> selectedProducts = new ArrayList<>();
             for (SelectedProductPlan productPlan : selectionPlan.products()) {
@@ -377,16 +397,24 @@ public class SimulationService {
                 product.setSelected(true);
                 product.setExpectedFutureValue(futureValue);
                 product.setSelectedPreferentialConditions(productPlan.preferentialRates());
-                simulationMapper.markSimulationProductSelected(
+                int selected = simulationMapper.markSimulationProductSelected(
                         product.getSimulationProductId(),
                         appliedRate,
                         futureValue
                 );
+                if (selected != 1) {
+                    throw new SimulationException(
+                            SimulationError.SIMULATION_SAVE_FAILED);
+                }
                 for (PreferentialRateRecord rate : productPlan.preferentialRates()) {
-                    simulationMapper.insertSelectedPreferentialCondition(
+                    int inserted = simulationMapper.insertSelectedPreferentialCondition(
                             product.getSimulationProductId(),
                             rate.getPreferentialInterestRateId()
                     );
+                    if (inserted != 1) {
+                        throw new SimulationException(
+                                SimulationError.SIMULATION_SAVE_FAILED);
+                    }
                 }
                 selectedProducts.add(product);
                 serverFutureValue += futureValue;
@@ -443,13 +471,8 @@ public class SimulationService {
                     now,
                     null
             );
-            idempotencyStore.remember(
-                    userId,
-                    "PUT:/api/gs/" + simulationId + "/save",
-                    idempotencyKey,
-                    fingerprint,
-                    response
-            );
+            rememberSaveAfterCommit(
+                    userId, operation, idempotencyKey, fingerprint, response);
             return response;
         } catch (SimulationException exception) {
             throw exception;
@@ -1032,7 +1055,11 @@ public class SimulationService {
                 throw new SimulationException(
                         SimulationError.INVALID_PREFERENTIAL_CONDITION);
             }
-            validateProductLimits(product, simulation.getInvestmentPeriodMonths());
+            validateProductLimits(
+                    product,
+                    simulation.getProductDataVersionId(),
+                    simulation.getInvestmentPeriodMonths()
+            );
             plans.add(new SelectedProductPlan(product, rates));
         }
 
@@ -1066,11 +1093,13 @@ public class SimulationService {
 
     private void validateProductLimits(
             SimulationProductRecord product,
+            Long productDataVersionId,
             int investmentPeriodMonths
     ) {
         ProductVersionDetailRecord detail =
                 simulationMapper.selectProductVersionDetail(product.getProductVersionId());
-        if (detail == null) {
+        if (detail == null || !Objects.equals(
+                detail.getProductDataVersionId(), productDataVersionId)) {
             throw new SimulationException(
                     SimulationError.PRODUCT_DATA_VERSION_MISMATCH);
         }
@@ -1154,11 +1183,15 @@ public class SimulationService {
                         result.getInvestmentPrincipal(),
                         simulation.getInvestmentEndDate()
                 );
-                simulationMapper.restoreSimulationProduct(
+                int restored = simulationMapper.restoreSimulationProduct(
                         product.getSimulationProductId(),
                         baseRate,
                         value
                 );
+                if (restored != 1) {
+                    throw new SimulationException(
+                            SimulationError.SIMULATION_SAVE_FAILED);
+                }
             }
         }
     }
@@ -1270,6 +1303,11 @@ public class SimulationService {
                 result.getGiftTax(),
                 result.getDonorRequiredAmount(),
                 result.getInvestmentPrincipal(),
+                new SimulationResponse.Allocation(
+                        portfolio.getDepositAmount(),
+                        portfolio.getSavingsAmount(),
+                        portfolio.getEtfAmount()
+                ),
                 futureValue,
                 futureValue - result.getInvestmentPrincipal(),
                 selectedProducts.stream()
@@ -1821,10 +1859,20 @@ public class SimulationService {
                 : simulationMapper.selectPortfolio(activeSaved.getSelectedPortfolioId());
         saved.put("portfolioType", selected == null ? null : selected.getPortfolioType());
         saved.put("scenarioType", selected == null ? null : selected.getScenarioType());
-        saved.put(
-                "expectedFutureValue",
-                selected == null ? null : selected.getExpectedFutureValue()
-        );
+        Long expectedFutureValue = null;
+        if (selected != null) {
+            List<SimulationProductRecord> selectedProducts = safeList(
+                    simulationMapper.selectPortfolioProducts(selected.getPortfolioId())
+            ).stream().filter(SimulationProductRecord::isSelected).toList();
+            expectedFutureValue = selectedProducts.isEmpty()
+                    ? selected.getExpectedFutureValue()
+                    : selectedProducts.stream()
+                    .map(SimulationProductRecord::getExpectedFutureValue)
+                    .filter(Objects::nonNull)
+                    .mapToLong(Long::longValue)
+                    .sum();
+        }
+        saved.put("expectedFutureValue", expectedFutureValue);
         saved.put("savedAt", activeSaved.getSavedAt());
 
         Map<String, Object> data = new LinkedHashMap<>();
@@ -1920,6 +1968,29 @@ public class SimulationService {
                 : request.getClientCalculation().getFormulaVersion() + ":"
                 + request.getClientCalculation().getExpectedFutureValue() + ":"
                 + request.getClientCalculation().getExpectedProfit());
+    }
+
+    private void rememberSaveAfterCommit(
+            Long userId,
+            String operation,
+            String idempotencyKey,
+            String fingerprint,
+            SimulationSaveResponse response
+    ) {
+        Runnable remember = () -> idempotencyStore.remember(
+                userId, operation, idempotencyKey, fingerprint, response);
+        if (!TransactionSynchronizationManager.isActualTransactionActive()) {
+            remember.run();
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(
+                new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        remember.run();
+                    }
+                }
+        );
     }
 
     private long ratioAmount(long principal, BigDecimal ratio) {

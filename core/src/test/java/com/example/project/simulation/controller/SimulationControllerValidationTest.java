@@ -23,8 +23,8 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.setup.MockMvcBuilders.standaloneSetup;
 
@@ -130,7 +130,7 @@ class SimulationControllerValidationTest {
     void invalidSaveRequest() throws Exception {
         authenticate();
 
-        MvcResult result = mockMvc.perform(put("/api/gs/1/save")
+        MvcResult result = mockMvc.perform(patch("/api/gs/1/save")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
