@@ -3,6 +3,7 @@ package com.example.project.admin.report.controller;
 import com.example.project.admin.report.dto.response.AdminReportPageResponse;
 import com.example.project.admin.report.service.AdminReportService;
 import com.example.project.common.api.ApiResponse;
+import com.example.project.common.api.ResponseCode;
 import com.example.project.common.logging.ApiLog;
 import com.example.project.consultation.domain.AiSafetyReportVO;
 import io.swagger.annotations.Api;
@@ -25,7 +26,7 @@ public class AdminReportController {
     private final AdminReportService adminReportService;
 
     @GetMapping
-    public ApiResponse<List<AiSafetyReportVO>> getPageReportList(
+    public ApiResponse<AdminReportPageResponse> getPageReportList(
             @RequestParam(defaultValue = "0")
             @Min(0)
             Integer page,
@@ -44,8 +45,13 @@ public class AdminReportController {
             @AuthenticationPrincipal String principal,
             HttpServletRequest httpRequest
     ){
-        AdminReportPageResponse response =
+        AdminReportPageResponse response = adminReportService.getPageReportList(
+                page,
+                size,
+                status,
+                reportType
+        );
 
-        return ApiResponse
+        return ApiResponse.success(ResponseCode.SUCCESS, httpRequest.getRequestURI(), response);
     }
 }
