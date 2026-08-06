@@ -4,7 +4,7 @@
   "description": "프로젝트의 백엔드 애플리케이션 저장소입니다.",
   "main": "index.js",
   "scripts": {
-    "test": "gradlew.bat test",
+    "test": "node scripts/run-gradle-tests.js",
     "prepare": "husky"
   },
   "repository": {
