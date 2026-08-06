@@ -30,7 +30,7 @@
 
 <!--    AI 상담 유형 저장-->
     <insert id="insertAIConsultationEvent"
-            parameterType="com.example.project.consultation.domain.TempConsultationEventVO"
+            parameterType="com.example.project.consultation.domain.AiConsultationEventVO"
             useGeneratedKeys="true"
             keyProperty="aiConsultationEventId"
             keyColumn="ai_consultation_event_id">

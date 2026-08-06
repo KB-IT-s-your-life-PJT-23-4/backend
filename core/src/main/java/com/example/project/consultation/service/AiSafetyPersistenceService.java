@@ -2,7 +2,7 @@ package com.example.project.consultation.service;
 
 import com.example.project.common.api.ResponseCode;
 import com.example.project.common.exception.ServiceException;
-import com.example.project.consultation.domain.TempConsultationEventVO;
+import com.example.project.consultation.domain.AiConsultationEventVO;
 import com.example.project.consultation.domain.AiSafetyReportVO;
 import com.example.project.consultation.dto.fastapi.ChatResponse;
 import com.example.project.consultation.mapper.ConsultationMapper;
@@ -50,7 +50,7 @@ public class AiSafetyPersistenceService {
 
         LocalDateTime now = LocalDateTime.now();
 
-        TempConsultationEventVO event = createEvent(userId, question, familyNames, response, now);
+        AiConsultationEventVO event = createEvent(userId, question, familyNames, response, now);
 
         int insertedEventCount = consultationMapper.insertAIConsultationEvent(event);
 
@@ -81,7 +81,7 @@ public class AiSafetyPersistenceService {
         }
     }
 
-    private TempConsultationEventVO createEvent(
+    private AiConsultationEventVO createEvent(
             Long userId,
             String question,
             List<String> familyNames,
@@ -90,7 +90,7 @@ public class AiSafetyPersistenceService {
     ) {
         String maskedExcerpt = questionExcerptMasker.mask(question, familyNames);
 
-        return TempConsultationEventVO.builder()
+        return AiConsultationEventVO.builder()
                 .userId(userId)
                 .conversationId(response.conversationId())
                 .intent(response.intent())

@@ -1,7 +1,7 @@
 package com.example.project.consultation.service;
 
 import com.example.project.common.exception.ServiceException;
-import com.example.project.consultation.domain.TempConsultationEventVO;
+import com.example.project.consultation.domain.AiConsultationEventVO;
 import com.example.project.consultation.domain.AiSafetyReportVO;
 import com.example.project.consultation.domain.EtfVO;
 import com.example.project.consultation.domain.FamilyPreviousGiftVO;
@@ -44,7 +44,7 @@ class AiSafetyPersistenceServiceTest {
         assertEquals(1, mapper.events.size());
         assertEquals(1, mapper.reports.size());
 
-        TempConsultationEventVO event = mapper.events.get(0);
+        AiConsultationEventVO event = mapper.events.get(0);
         AiSafetyReportVO report = mapper.reports.get(0);
 
         assertEquals("conversation-1", event.getConversationId());
@@ -252,7 +252,7 @@ class AiSafetyPersistenceServiceTest {
     private static final class FakeConsultationMapper
             implements ConsultationMapper {
 
-        private final List<TempConsultationEventVO> events =
+        private final List<AiConsultationEventVO> events =
                 new ArrayList<>();
 
         private final List<AiSafetyReportVO> reports =
@@ -289,7 +289,7 @@ class AiSafetyPersistenceServiceTest {
 
         @Override
         public int insertAIConsultationEvent(
-                TempConsultationEventVO event
+                AiConsultationEventVO event
         ) {
             if (eventInsertResult != 1) {
                 return eventInsertResult;
