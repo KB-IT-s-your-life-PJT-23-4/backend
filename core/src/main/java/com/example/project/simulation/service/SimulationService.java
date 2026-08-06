@@ -350,16 +350,10 @@ public class SimulationService {
             SimulationSaveResponse.PreviousSimulation previousSimulation = null;
             LocalDateTime now = LocalDateTime.now();
             if (replacingAnother) {
-                restoreSimulationProducts(activeSaved);
-                simulationMapper.deleteSimulationPreferentialConditions(
-                        activeSaved.getSimulationId()
-                );
-                simulationMapper.clearSimulationSelections(activeSaved.getSimulationId());
                 LocalDateTime previousExpiry = now.plus(DRAFT_RETENTION);
                 int reset = simulationMapper.resetSavedSimulation(
                         activeSaved.getSimulationId(),
-                        previousExpiry,
-                        now
+                        previousExpiry
                 );
                 if (reset != 1) {
                     throw new SimulationException(
@@ -506,6 +500,7 @@ public class SimulationService {
                 productDataVersion
         );
         if (simulation.getStatus() == SimulationStatus.DRAFT
+                && simulation.getSelectedPortfolioId() == null
                 && products.stream().anyMatch(SimulationProductRecord::isSelected)) {
             throw incompleteSnapshot();
         }
@@ -570,7 +565,7 @@ public class SimulationService {
                 .toList();
 
         SimulationResponse.Selection selection = null;
-        if (simulation.getStatus() == SimulationStatus.SAVED) {
+        if (simulation.getSelectedPortfolioId() != null) {
             SimulationPortfolioRecord selectedPortfolio = portfolios.stream()
                     .filter(item -> Objects.equals(
                             item.getPortfolioId(),
@@ -1747,8 +1742,7 @@ public class SimulationService {
             throw new SimulationException(SimulationError.SIMULATION_EXPIRED);
         }
         if (simulation.getStatus() == SimulationStatus.DRAFT
-                && (simulation.getSelectedPortfolioId() != null
-                || simulation.getSavedAt() != null)) {
+                && simulation.getSavedAt() != null) {
             throw incompleteSnapshot();
         }
         if (simulation.getStatus() == SimulationStatus.SAVED
