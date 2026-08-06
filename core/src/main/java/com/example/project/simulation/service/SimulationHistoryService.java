@@ -25,6 +25,7 @@ import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -396,11 +397,11 @@ public class SimulationHistoryService {
     }
 
     private SimulationStatus parseStatus(String status) {
-        if (status == null) {
+        if (status == null || status.isBlank()) {
             return null;
         }
         try {
-            return SimulationStatus.valueOf(status);
+            return SimulationStatus.valueOf(status.trim().toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException exception) {
             throw new SimulationException(
                     SimulationError.INVALID_SIMULATION_STATUS_FILTER
