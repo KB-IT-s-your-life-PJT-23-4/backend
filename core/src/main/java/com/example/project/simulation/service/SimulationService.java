@@ -57,7 +57,7 @@ import java.util.stream.Collectors;
 public class SimulationService {
 
     public static final String FORMULA_VERSION = "INVESTMENT_V1";
-    public static final String CALCULATION_VERSION = "GIFT_SIM_V2";
+    public static final String CALCULATION_VERSION = "GIFT_SIM_V3";
 
     private static final int DEDUCTION_WINDOW_YEARS = 10;
     private static final int MAX_PRODUCT_CANDIDATES = 3;
