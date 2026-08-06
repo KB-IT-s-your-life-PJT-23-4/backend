@@ -3,6 +3,7 @@ package com.example.project.gift.service;
 import com.example.project.common.api.ResponseCode;
 import com.example.project.common.exception.ServiceException;
 import com.example.project.gift.domain.DeductionVO;
+import com.example.project.gift.domain.FilingDeadline;
 import com.example.project.gift.domain.GiftVO;
 import com.example.project.gift.domain.Status;
 import com.example.project.gift.domain.TaxBracketVO;
@@ -17,7 +18,6 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.time.temporal.TemporalAdjusters;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -27,7 +27,6 @@ import java.util.stream.Collectors;
 public class GiftService {
 
     private static final int DEDUCTION_WINDOW_YEARS = 10;
-    private static final int FILING_DUE_MONTH = 3;
     private static final BigDecimal FILING_CREDIT_RATE = new BigDecimal("0.03");
 
     private final GiftMapper giftMapper;
@@ -104,9 +103,17 @@ public class GiftService {
                 .collect(Collectors.groupingBy(GiftVO::getFamilyId));
 
         return giftMapper.selectDeduction(familyId, userId, windowStartDate, baseDate, null).stream()
-                .map(deduction -> DeductionResponse.from(
-                        deduction, windowStartDate, baseDate,
-                        nextRenewalDate(deduction, windowGiftsByFamily)))
+                .map(deduction -> {
+                    GiftVO renewalGift = renewalGift(deduction, windowGiftsByFamily);
+
+                    return DeductionResponse.from(
+                            deduction, windowStartDate, baseDate,
+                            renewalGift == null
+                                    ? null
+                                    : renewalGift.getGiftDate().plusYears(DEDUCTION_WINDOW_YEARS),
+                            renewalGift == null ? null : renewalGift.getGiftId(),
+                            renewalAmount(deduction, windowGiftsByFamily, renewalGift));
+                })
                 .toList();
     }
 
@@ -143,7 +150,7 @@ public class GiftService {
         filingInfo.setStatus(gift.getStatus().name());
         filingInfo.setEstimated(gift.getStatus() == Status.PLANNED);
         filingInfo.setGiftAmount(giftAmount);
-        filingInfo.setFilingDueDate(filingDueDate(baseDate));
+        filingInfo.setFilingDueDate(FilingDeadline.of(baseDate));
         filingInfo.setWindowStartDate(windowStartDate);
         filingInfo.setBaseDate(baseDate);
         filingInfo.setPriorGiftAmount(priorGiftAmount);
@@ -185,15 +192,6 @@ public class GiftService {
         return filingInfo;
     }
 
-    /**
-     * 신고기한 = 증여일이 속하는 달의 말일부터 3개월(상증법 제68조).
-     * 초일불산입이라 "말일 + 3개월"이 아니라 3개월 뒤 달의 말일이 된다.
-     * 예) 4/10 증여 -> 7/31 (4/30 에 3개월을 더한 7/30 이 아니다)
-     */
-    private LocalDate filingDueDate(LocalDate giftDate) {
-        return giftDate.plusMonths(FILING_DUE_MONTH).with(TemporalAdjusters.lastDayOfMonth());
-    }
-
     public void deleteGift(Long giftId, Long userId) {
         GiftVO gift = findOwnerGift(giftId, userId);
 
@@ -212,13 +210,17 @@ public class GiftService {
      * 예) 한도 5,000만 / 창 안 8,250만(3,000 + 1,500 + 3,000 + 750)
      * → 3,000만이 빠져도 5,250만으로 여전히 초과. 1,500만까지 빠져 3,750만이 되는 날이 갱신일이다.
      *
-     * <p>그래서 오래된 순으로 하나씩 걷어내며 남은 합이 한도 밑으로 내려가는 첫 증여를 찾고,
-     * 그 증여일 + 10년을 돌려준다. 이미 여력이 있는 경우에는 첫 증여에서 바로 조건이 성립해
+     * <p>그래서 오래된 순으로 하나씩 걷어내며 남은 합이 한도 밑으로 내려가는 첫 증여를 찾아
+     * <b>그 증여를</b> 돌려준다. 갱신일은 여기서 나온 증여일 + 10년이다.
+     * 이미 여력이 있는 경우에는 첫 증여에서 바로 조건이 성립해
      * "가장 오래된 증여가 빠지는 날"이 그대로 나온다.
+     *
+     * <p>날짜가 아니라 증여를 돌려주는 이유는 리마인더가 갱신일 알림을 "(gift_id, type)" 으로
+     * 식별하기 때문이다. 어느 증여가 갱신을 끄는지 알아야 읽음 기록을 붙일 수 있다.
      *
      * <p>확정 증여가 없거나 한도 행이 없는 관계면 갱신할 것도 없어 null.
      */
-    private LocalDate nextRenewalDate(DeductionVO deduction, Map<Long, List<GiftVO>> windowGiftsByFamily) {
+    private GiftVO renewalGift(DeductionVO deduction, Map<Long, List<GiftVO>> windowGiftsByFamily) {
         Long deductionLimit = deduction.getDeductionLimit();
         List<GiftVO> windowGifts = windowGiftsByFamily.getOrDefault(deduction.getFamilyId(), List.of());
 
@@ -232,12 +234,41 @@ public class GiftService {
             remaining -= gift.getAmount();
 
             if (remaining < deductionLimit) {
-                return gift.getGiftDate().plusYears(DEDUCTION_WINDOW_YEARS);
+                return gift;
             }
         }
 
         // 전부 걷어내면 remaining 이 0 이라 한도가 0 이 아닌 한 위에서 반환된다.
         return null;
+    }
+
+    /**
+     * 갱신일에 늘어나는 공제 여력.
+     *
+     * <p>"창에서 빠지는 증여액"과 헷갈리기 쉬운데 다르다. 이미 한도를 넘긴 상태라면 빠지는 금액 중
+     * 일부는 초과분을 메우는 데 먼저 쓰이고 남는 만큼만 실제 여력이 된다.
+     * 예) 한도 5,000만 / 창 안 8,250만에서 3,000만이 빠져도 5,250만이라 여력은 여전히 0이다.
+     * 그래서 "갱신 후 잔여 - 지금 잔여"로 잡는다.
+     *
+     * <p>갱신일에는 그 증여만 빠지는 게 아니라 <b>같은 날짜의 증여가 모두</b> 함께 빠진다.
+     * 그래서 남는 합은 갱신 증여일보다 뒤인 증여만 더한다.
+     */
+    private Long renewalAmount(DeductionVO deduction,
+                               Map<Long, List<GiftVO>> windowGiftsByFamily,
+                               GiftVO renewalGift) {
+        Long deductionLimit = deduction.getDeductionLimit();
+
+        if (renewalGift == null || deductionLimit == null) {
+            return null;
+        }
+
+        long usedNow = deduction.getUsedAmount() == null ? 0L : deduction.getUsedAmount();
+        long usedAfter = windowGiftsByFamily.getOrDefault(deduction.getFamilyId(), List.of()).stream()
+                .filter(gift -> gift.getGiftDate().isAfter(renewalGift.getGiftDate()))
+                .mapToLong(GiftVO::getAmount)
+                .sum();
+
+        return Math.max(0L, deductionLimit - usedAfter) - Math.max(0L, deductionLimit - usedNow);
     }
 
     private void validate(GiftRequest giftRequest) {

@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.example.project.reminder.mapper.ReminderMapper">
+    <resultMap id="reminderReadResultMap" type="com.example.project.reminder.domain.ReminderReadVO">
+        <result property="giftId" column="gift_id"/>
+        <result property="reminderType" column="reminder_type"/>
+        <result property="readAt" column="read_at"/>
+    </resultMap>
+
+    <!--
+      리마인더는 조회 시점에 계산하므로 이 테이블에는 읽은 것만 행이 생긴다.
+      target_date 가 NOT NULL 이라 함께 넣는데, 갱신일이 바뀌면 기존 행의 날짜도 맞춰 준다.
+      status 는 발송 상태라 여기서 건드리지 않는다(발송 전이므로 PENDING 이 맞다).
+    -->
+    <insert id="upsertRead">
+        INSERT INTO reminder (
+        gift_id, reminder_type, target_date, read_at
+        ) VALUES (
+        #{giftId}, #{reminderType}, #{targetDate}, #{readAt}
+        )
+        ON DUPLICATE KEY UPDATE
+        target_date = #{targetDate},
+        read_at = #{readAt}
+    </insert>
+
+    <!-- family 조인으로 남의 읽음 기록은 걸러진다. -->
+    <select id="selectReads" resultMap="reminderReadResultMap">
+        SELECT
+        r.gift_id,
+        r.reminder_type,
+        r.read_at
+        FROM reminder r
+        JOIN gift g ON g.gift_id = r.gift_id
+        JOIN family f ON f.family_id = g.family_id
+        WHERE f.user_id = #{userId}
+        AND r.read_at IS NOT NULL
+    </select>
+</mapper>
