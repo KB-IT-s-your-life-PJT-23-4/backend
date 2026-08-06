@@ -196,6 +196,7 @@ class SimulationHistoryServiceTest {
         simulation.setTaxPaymentMethod(TaxPaymentMethod.RECIPIENT_PAYS);
         simulation.setInvestmentPeriodMonths(36);
         simulation.setAsOfDate(LocalDate.of(2026, 8, 6));
+        simulation.setGiftDate(LocalDate.of(2026, 8, 6));
         simulation.setInvestmentEndDate(LocalDate.of(2029, 8, 6));
         simulation.setSelectedPortfolioId(selectedPortfolioId);
         simulation.setVersion(1L);

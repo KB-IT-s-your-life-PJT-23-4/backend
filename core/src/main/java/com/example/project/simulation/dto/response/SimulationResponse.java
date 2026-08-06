@@ -47,6 +47,7 @@ public record SimulationResponse(
             TaxPaymentMethod taxPaymentMethod,
             Integer investmentPeriodMonths,
             LocalDate asOfDate,
+            LocalDate giftDate,
             LocalDate investmentEndDate
     ) {
     }

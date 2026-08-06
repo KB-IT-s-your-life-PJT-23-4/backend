@@ -8,6 +8,7 @@ public enum SimulationError {
     INVALID_SIMULATION_REQUEST(HttpStatus.BAD_REQUEST, "INVALID_SIMULATION_REQUEST", "유효하지 않은 시뮬레이션 요청입니다."),
     INVALID_REQUESTED_AMOUNT(HttpStatus.BAD_REQUEST, "INVALID_REQUESTED_AMOUNT", "증여 예정 금액은 1원 이상이어야 합니다."),
     INVALID_INVESTMENT_PERIOD(HttpStatus.BAD_REQUEST, "INVALID_INVESTMENT_PERIOD", "운용 기간은 1~240개월이어야 합니다."),
+    INVALID_GIFT_DATE(HttpStatus.BAD_REQUEST, "INVALID_GIFT_DATE", "증여 예정일은 오늘 또는 이후 날짜여야 합니다."),
     INVALID_TAX_PAYMENT_METHOD(HttpStatus.BAD_REQUEST, "INVALID_TAX_PAYMENT_METHOD", "지원하지 않는 증여세 납부 방식입니다."),
     INVALID_SIMULATION_ID(HttpStatus.BAD_REQUEST, "INVALID_SIMULATION_ID", "유효하지 않은 시뮬레이션 ID입니다."),
     INVALID_PRODUCT_VERSION_ID(HttpStatus.BAD_REQUEST, "INVALID_PRODUCT_VERSION_ID", "유효하지 않은 상품 버전 ID입니다."),

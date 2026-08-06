@@ -82,6 +82,7 @@ public class SimulationService {
             validateUser(userId);
             validateExecuteRequest(request);
             LocalDate asOfDate = LocalDate.now();
+            LocalDate giftDate = request.getGiftDate();
             String fingerprint = executeFingerprint(request, asOfDate);
             var cached = idempotencyStore.find(
                     userId,
@@ -95,7 +96,7 @@ public class SimulationService {
             }
 
             FamilySnapshot family = requireFamily(request.getFamilyId(), userId);
-            int age = Period.between(family.getBirthDate(), asOfDate).getYears();
+            int age = Period.between(family.getBirthDate(), giftDate).getYears();
             boolean minor = age < 19;
             DeductionRule rule = simulationMapper.selectDeductionRule(
                     family.getRelation(),
@@ -106,12 +107,12 @@ public class SimulationService {
                 throw new SimulationException(SimulationError.DEDUCTION_RULE_NOT_FOUND);
             }
 
-            LocalDate lookbackStart = asOfDate.minusYears(DEDUCTION_WINDOW_YEARS);
+            LocalDate lookbackStart = giftDate.minusYears(DEDUCTION_WINDOW_YEARS);
             List<GiftHistoryRecord> completedGifts = safeList(
                     simulationMapper.selectCompletedGifts(
                             family.getFamilyId(),
                             lookbackStart,
-                            asOfDate
+                            giftDate
                     )
             );
             long previousGiftAmount = completedGifts.stream()
@@ -120,7 +121,7 @@ public class SimulationService {
             long deductionLimit = rule.getDeductionLimit();
             long usedDeduction = Math.min(previousGiftAmount, deductionLimit);
             long remainingDeduction = Math.max(0, deductionLimit - usedDeduction);
-            LocalDate renewalDate = resolveDeductionRenewalDate(completedGifts, asOfDate);
+            LocalDate renewalDate = resolveDeductionRenewalDate(completedGifts, giftDate);
 
             List<TaxBracket> taxBrackets = safeList(simulationMapper.selectTaxBrackets(asOfDate));
             if (taxBrackets.isEmpty()) {
@@ -142,19 +143,19 @@ public class SimulationService {
                     loadEtfCandidates(productDataVersion.getProductDataVersionId());
 
             LocalDate investmentEndDate =
-                    asOfDate.plusMonths(request.getInvestmentPeriodMonths());
+                    giftDate.plusMonths(request.getInvestmentPeriodMonths());
             ScenarioAggregate immediate = immediateScenario(
                     request,
                     remainingDeduction,
                     taxBrackets,
-                    asOfDate
+                    giftDate
             );
             ScenarioAggregate optimized = optimizedScenario(
                     request,
                     remainingDeduction,
                     deductionLimit,
                     taxBrackets,
-                    asOfDate,
+                    giftDate,
                     renewalDate,
                     completedGifts,
                     investmentEndDate
@@ -169,6 +170,7 @@ public class SimulationService {
             simulation.setTaxPaymentMethod(request.getTaxPaymentMethod());
             simulation.setInvestmentPeriodMonths(request.getInvestmentPeriodMonths());
             simulation.setAsOfDate(asOfDate);
+            simulation.setGiftDate(giftDate);
             simulation.setInvestmentEndDate(investmentEndDate);
             simulation.setCalculationVersion(CALCULATION_VERSION);
             simulation.setFormulaVersion(FORMULA_VERSION);
@@ -629,6 +631,7 @@ public class SimulationService {
                         simulation.getTaxPaymentMethod(),
                         simulation.getInvestmentPeriodMonths(),
                         simulation.getAsOfDate(),
+                        simulation.getGiftDate(),
                         simulation.getInvestmentEndDate()
                 ),
                 new SimulationResponse.GiftHistorySummary(
@@ -1652,7 +1655,7 @@ public class SimulationService {
             if (tranche.getTrancheId() == null
                     || !Objects.equals(tranche.getSequenceNo(), index + 1)
                     || tranche.getGiftDate() == null
-                    || tranche.getGiftDate().isBefore(simulation.getAsOfDate())
+                    || tranche.getGiftDate().isBefore(simulation.getGiftDate())
                     || previousDate != null && tranche.getGiftDate().isBefore(previousDate)
                     || value(tranche.getGiftAmount()) <= 0
                     || tranche.getEstimatedGiftTax() == null
@@ -1687,7 +1690,7 @@ public class SimulationService {
                 result.getScenarioType() != ScenarioType.IMMEDIATE
                         || tranches.size() == 1
                         && Objects.equals(
-                        tranches.get(0).getGiftDate(), simulation.getAsOfDate())
+                        tranches.get(0).getGiftDate(), simulation.getGiftDate())
                         && Objects.equals(
                         tranches.get(0).getGiftAmount(), simulation.getRequestedAmount());
 
@@ -1901,6 +1904,7 @@ public class SimulationService {
             SimulationRecord simulation
     ) {
         if (simulation.getAsOfDate() == null
+                || simulation.getGiftDate() == null
                 || simulation.getBirthDate() == null
                 || simulation.getRequestedAmount() == null
                 || simulation.getRequestedAmount() <= 0
@@ -1913,14 +1917,14 @@ public class SimulationService {
         }
 
         int ageAtSimulation = Period.between(
-                simulation.getBirthDate(), simulation.getAsOfDate()).getYears();
+                simulation.getBirthDate(), simulation.getGiftDate()).getYears();
         long previousGiftAmount = simulation.getPreviousGiftAmount();
         long deductionLimit = simulation.getDeductionLimit();
         long usedDeductionAmount = Math.min(previousGiftAmount, deductionLimit);
         return new SnapshotDerivedValues(
                 ageAtSimulation,
                 ageAtSimulation < 19,
-                simulation.getAsOfDate().minusYears(DEDUCTION_WINDOW_YEARS),
+                simulation.getGiftDate().minusYears(DEDUCTION_WINDOW_YEARS),
                 previousGiftAmount,
                 deductionLimit,
                 usedDeductionAmount,
@@ -1964,7 +1968,8 @@ public class SimulationService {
                 || request.getFamilyId() <= 0
                 || request.getRequestedAmount() == null
                 || request.getTaxPaymentMethod() == null
-                || request.getInvestmentPeriodMonths() == null) {
+                || request.getInvestmentPeriodMonths() == null
+                || request.getGiftDate() == null) {
             throw new SimulationException(
                     SimulationError.INVALID_SIMULATION_REQUEST);
         }
@@ -1976,6 +1981,9 @@ public class SimulationService {
                 || request.getInvestmentPeriodMonths() > MAX_INVESTMENT_MONTHS) {
             throw new SimulationException(
                     SimulationError.INVALID_INVESTMENT_PERIOD);
+        }
+        if (request.getGiftDate().isBefore(LocalDate.now())) {
+            throw new SimulationException(SimulationError.INVALID_GIFT_DATE);
         }
     }
 
@@ -2137,6 +2145,7 @@ public class SimulationService {
                 + request.getRequestedAmount() + "|"
                 + request.getTaxPaymentMethod() + "|"
                 + request.getInvestmentPeriodMonths() + "|"
+                + request.getGiftDate() + "|"
                 + asOfDate;
     }
 

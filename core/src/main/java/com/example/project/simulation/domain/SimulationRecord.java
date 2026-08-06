@@ -19,6 +19,7 @@ public class SimulationRecord {
     private TaxPaymentMethod taxPaymentMethod;
     private Integer investmentPeriodMonths;
     private LocalDate asOfDate;
+    private LocalDate giftDate;
     private LocalDate investmentEndDate;
     private Long selectedPortfolioId;
     private Long previousGiftAmount;

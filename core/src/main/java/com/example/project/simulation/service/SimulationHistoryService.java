@@ -268,6 +268,7 @@ public class SimulationHistoryService {
                         simulation.getTaxPaymentMethod(),
                         simulation.getInvestmentPeriodMonths(),
                         simulation.getAsOfDate(),
+                        simulation.getGiftDate(),
                         simulation.getInvestmentEndDate()
                 ),
                 returnRange,

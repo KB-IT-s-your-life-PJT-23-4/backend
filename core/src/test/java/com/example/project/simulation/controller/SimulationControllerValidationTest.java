@@ -110,6 +110,31 @@ class SimulationControllerValidationTest {
     }
 
     @Test
+    @DisplayName("과거 증여 예정일은 INVALID_SIMULATION_REQUEST를 반환한다")
+    void rejectPastGiftDate() throws Exception {
+        authenticate();
+
+        MvcResult result = mockMvc.perform(post("/api/gs")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "familyId": 31,
+                                  "requestedAmount": 100000000,
+                                  "taxPaymentMethod": "RECIPIENT_PAYS",
+                                  "investmentPeriodMonths": 120,
+                                  "giftDate": "2000-01-01"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andReturn();
+
+        assertEquals(
+                "INVALID_SIMULATION_REQUEST",
+                body(result).get("error").asText()
+        );
+    }
+
+    @Test
     @DisplayName("상품 버전 ID 형식이 잘못되면 INVALID_PRODUCT_VERSION_ID를 반환한다")
     void invalidProductVersionId() throws Exception {
         authenticate();
