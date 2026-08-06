@@ -142,6 +142,7 @@ public class SimulationProductService {
                 rates.summary(),
                 rates.tiers(),
                 rates.conditions(),
+                reinvestmentPolicy(),
                 new ProductDetailResponse.CalculationPolicy(
                         product.getProductType() == ProductType.DEPOSIT
                                 ? com.example.project.simulation.domain.CalculationType.SIMPLE_INTEREST
@@ -180,6 +181,7 @@ public class SimulationProductService {
                 rates.summary(),
                 rates.tiers(),
                 rates.conditions(),
+                reinvestmentPolicy(),
                 new ProductDetailResponse.CalculationPolicy(
                         com.example.project.simulation.domain.CalculationType.MONTHLY_INSTALLMENT,
                         simulation.getFormulaVersion(),
@@ -289,6 +291,14 @@ public class SimulationProductService {
                                 item.getAdditionalRatePercent()
                         ))
                         .toList()
+        );
+    }
+
+    private ProductDetailResponse.ReinvestmentPolicy reinvestmentPolicy() {
+        return new ProductDetailResponse.ReinvestmentPolicy(
+                true,
+                true,
+                "REINVEST_PRINCIPAL_AND_INTEREST"
         );
     }
 

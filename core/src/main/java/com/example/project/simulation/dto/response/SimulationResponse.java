@@ -135,7 +135,18 @@ public record SimulationResponse(
             Long expectedFutureValue,
             Long expectedProfit,
             boolean isSelected,
+            Integer minimumContractMonths,
+            Integer maximumContractMonths,
+            List<Reinvestment> reinvestmentSchedule,
             List<SelectedPreferentialCondition> selectedPreferentialConditions
+    ) {
+    }
+
+    public record Reinvestment(
+            Integer trancheSequenceNo,
+            Integer renewalSequenceNo,
+            LocalDate renewalDate,
+            Integer completedContractMonths
     ) {
     }
 
@@ -175,7 +186,15 @@ public record SimulationResponse(
             Map<ProductType, CalculationType> methods,
             String savingsPaymentTiming,
             String etfReturnBasis,
+            ReinvestmentPolicy reinvestmentPolicy,
             Map<RiskProfile, Map<ProductType, BigDecimal>> portfolioAllocations
+    ) {
+    }
+
+    public record ReinvestmentPolicy(
+            boolean enabledForDepositAndSavings,
+            boolean unlimitedReenrollment,
+            String maturityValueTreatment
     ) {
     }
 }

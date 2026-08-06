@@ -112,6 +112,92 @@ public class SimulationCalculator {
         };
     }
 
+    public boolean canCoverWithReinvestment(
+            int totalMonths,
+            Integer minimumContractMonths,
+            Integer maximumContractMonths
+    ) {
+        return !reinvestmentPeriods(
+                totalMonths,
+                minimumContractMonths,
+                maximumContractMonths
+        ).isEmpty();
+    }
+
+    public List<Integer> reinvestmentPeriods(
+            int totalMonths,
+            Integer minimumContractMonths,
+            Integer maximumContractMonths
+    ) {
+        if (totalMonths <= 0
+                || minimumContractMonths == null
+                || maximumContractMonths == null
+                || minimumContractMonths <= 0
+                || maximumContractMonths < minimumContractMonths) {
+            return List.of();
+        }
+
+        int minimumContractCount =
+                (totalMonths + maximumContractMonths - 1) / maximumContractMonths;
+        int maximumContractCount = totalMonths / minimumContractMonths;
+        if (minimumContractCount > maximumContractCount) {
+            return List.of();
+        }
+
+        int contractCount = minimumContractCount;
+        int baseMonths = totalMonths / contractCount;
+        int remainder = totalMonths % contractCount;
+        if (baseMonths < minimumContractMonths
+                || baseMonths > maximumContractMonths
+                || (remainder > 0 && baseMonths + 1 > maximumContractMonths)) {
+            return List.of();
+        }
+
+        List<Integer> periods = new ArrayList<>(contractCount);
+        for (int index = 0; index < contractCount; index++) {
+            periods.add(baseMonths + (index < remainder ? 1 : 0));
+        }
+        return List.copyOf(periods);
+    }
+
+    public long calculateReinvestedProductFutureValue(
+            CalculationType calculationType,
+            long principal,
+            BigDecimal annualRatePercent,
+            int totalMonths,
+            Integer minimumContractMonths,
+            Integer maximumContractMonths
+    ) {
+        if (calculationType == CalculationType.COMPOUND_RETURN) {
+            return calculateProductFutureValue(
+                    calculationType,
+                    principal,
+                    annualRatePercent,
+                    totalMonths
+            );
+        }
+
+        List<Integer> periods = reinvestmentPeriods(
+                totalMonths,
+                minimumContractMonths,
+                maximumContractMonths
+        );
+        if (periods.isEmpty()) {
+            throw new SimulationException(SimulationError.PRODUCT_LIMIT_EXCEEDED);
+        }
+
+        long maturityValue = principal;
+        for (Integer period : periods) {
+            maturityValue = calculateProductFutureValue(
+                    calculationType,
+                    maturityValue,
+                    annualRatePercent,
+                    period
+            );
+        }
+        return maturityValue;
+    }
+
     public long calculateSelectedProductValue(
             SimulationProductRecord product,
             long allocatedAmount,
@@ -132,11 +218,13 @@ public class SimulationCalculator {
                 continue;
             }
             int months = remainingMonths(tranche.getGiftDate(), evaluationDate);
-            total += calculateProductFutureValue(
+            total += calculateReinvestedProductFutureValue(
                     product.calculationType(),
                     portions.get(index),
                     product.getAppliedAnnualRatePercent(),
-                    months
+                    months,
+                    product.getMinimumContractMonths(),
+                    product.getMaximumContractMonths()
             );
         }
 
@@ -175,6 +263,8 @@ public class SimulationCalculator {
             SimulationProductRecord snapshot = new SimulationProductRecord();
             snapshot.setProductType(type);
             snapshot.setAppliedAnnualRatePercent(product.getAppliedAnnualRatePercent());
+            snapshot.setMinimumContractMonths(product.getMinMonth());
+            snapshot.setMaximumContractMonths(product.getMaxMonth());
             total += calculateSelectedProductValue(
                     snapshot,
                     allocatedAmount,

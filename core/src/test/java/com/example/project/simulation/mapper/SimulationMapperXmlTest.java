@@ -209,4 +209,28 @@ class SimulationMapperXmlTest {
                 "s.kb_product_data_version_id AS product_data_version_id"
         ));
     }
+
+    @Test
+    @DisplayName("예금과 적금 후보는 전체 운용 기간이 단일 가입 기간을 넘더라도 조회한다")
+    void allowDepositAndSavingsCandidatesForReinvestment() throws Exception {
+        String resource = "mapper/simulation/SimulationMapper.xml";
+        String xml;
+
+        try (InputStream inputStream = Resources.getResourceAsStream(resource)) {
+            xml = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
+        }
+
+        assertFalse(xml.contains(
+                "d.max_month &gt;= #{investmentPeriodMonths}"
+        ));
+        assertFalse(xml.contains(
+                "s.max_month &gt;= #{investmentPeriodMonths}"
+        ));
+        assertTrue(xml.contains(
+                "COALESCE(d.min_month, sv.min_month) AS minimum_contract_months"
+        ));
+        assertTrue(xml.contains(
+                "COALESCE(d.max_month, sv.max_month) AS maximum_contract_months"
+        ));
+    }
 }
