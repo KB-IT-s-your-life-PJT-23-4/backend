@@ -7,13 +7,15 @@ import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Scheduler;
 import reactor.core.scheduler.Schedulers;
 
+import java.util.List;
+
 @Service
 @RequiredArgsConstructor
 public class AiSafetyService {
 
     private final AiSafetyPersistenceService persistenceService;
 
-    public Mono<Void> process(Long userId, String question, ChatResponse response) {
+    public Mono<Void> process(Long userId, String question, List<String> familyNames, ChatResponse response) {
         if (!isSafetyIntent(response.intent())) {
             return Mono.empty();
         }
@@ -22,6 +24,7 @@ public class AiSafetyService {
                 persistenceService.process(
                         userId,
                         question,
+                        familyNames,
                         response
                 )
         )

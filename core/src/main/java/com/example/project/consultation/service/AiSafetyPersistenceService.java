@@ -14,6 +14,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -33,12 +34,12 @@ public class AiSafetyPersistenceService {
             "OPEN";
 
 
-    private final AiSafetyService aiSafetyService;
     private final AIOtherIntentCounter aiOtherIntentCounter;
+    private final QuestionExcerptMasker questionExcerptMasker;
     private final ConsultationMapper consultationMapper;
 
     @Transactional
-    public void process(Long userId, String question, ChatResponse response) {
+    public void process(Long userId, String question, List<String> familyNames, ChatResponse response) {
 
         validateArguments(userId, response);
 
@@ -50,7 +51,7 @@ public class AiSafetyPersistenceService {
 
         LocalDateTime now = LocalDateTime.now();
 
-        AiConsultationEventVO event = createEvent(userId, question, response, now);
+        AiConsultationEventVO event = createEvent(userId, question, familyNames, response, now);
 
         int insertedEventCount = consultationMapper.insertAIConsultationEvent(event);
 
@@ -84,14 +85,18 @@ public class AiSafetyPersistenceService {
     private AiConsultationEventVO createEvent(
             Long userId,
             String question,
+            List<String> familyNames,
             ChatResponse response,
             LocalDateTime occurredAt
     ) {
+        String maskedExcerpt = questionExcerptMasker.mask(question, familyNames);
+
         return AiConsultationEventVO.builder()
                 .userId(userId)
                 .conversationId(response.conversationId())
+                .intent(response.intent())
                 .responseStatus(response.status().name())
-                .questionExcerpt(null)
+                .questionExcerpt(maskedExcerpt)
                 .occurredAt(occurredAt)
                 .build();
     }

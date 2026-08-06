@@ -33,10 +33,10 @@
             parameterType="com.example.project.consultation.domain.AiConsultationEventVO"
             useGeneratedKeys="true"
             keyProperty="aiConsultationEventId"
-            keyColumn="ai__consultation_event_id">
+            keyColumn="ai_consultation_event_id">
 
         INSERT INTO ai_consultation_event (
-            conversation_id
+            conversation_id,
             user_id,
             intent,
             response_status,
