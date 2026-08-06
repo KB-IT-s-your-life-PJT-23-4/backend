@@ -19,7 +19,7 @@ ext {
     jjwtVersion = '0.11.5'
     hikariVersion = '5.1.0'
     mysqlConnectorVersion = '8.1.0'
-    caffeineVersion = '3.1.8'
+    caffeineVersion = '3.2.4'
 }
 
 allprojects {

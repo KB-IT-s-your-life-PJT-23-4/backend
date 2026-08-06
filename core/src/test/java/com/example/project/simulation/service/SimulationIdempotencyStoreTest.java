@@ -32,7 +32,7 @@ class SimulationIdempotencyStoreTest {
                 "response"
         );
 
-        ticker.advance(Duration.ofHours(23));
+        ticker.advance(SimulationIdempotencyStore.RETENTION.minusMinutes(1));
 
         assertEquals(
                 Optional.of("response"),
@@ -47,7 +47,7 @@ class SimulationIdempotencyStoreTest {
     }
 
     @Test
-    void expiresResponseAfterTwentyFourHours() {
+    void expiresResponseAfterOneHour() {
         MutableTicker ticker = new MutableTicker();
         SimulationIdempotencyStore store = new SimulationIdempotencyStore(ticker);
         store.remember(

@@ -14,7 +14,7 @@ import java.util.Optional;
 @Component
 public class SimulationIdempotencyStore {
 
-    static final Duration RETENTION = Duration.ofHours(24);
+    static final Duration RETENTION = Duration.ofHours(1);
     static final long MAXIMUM_SIZE = 10_000L;
     private static final int INITIAL_CAPACITY = 100;
 
