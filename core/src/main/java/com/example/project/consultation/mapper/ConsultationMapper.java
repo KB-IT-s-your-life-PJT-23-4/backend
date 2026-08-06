@@ -22,4 +22,6 @@ public interface ConsultationMapper {
     );
     List<ProductVO> selectAllOnSaleProducts();
     List<EtfVO> selectAllOnSaleEtfProducts();
+
+    int insertAIConsultationEvent();
 }

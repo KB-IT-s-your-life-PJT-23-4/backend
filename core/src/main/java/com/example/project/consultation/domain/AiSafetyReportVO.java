@@ -1,0 +1,59 @@
+package com.example.project.consultation.domain;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+
+@Data
+@AllArgsConstructor
+@NoArgsConstructor
+@Builder
+public class AiSafetyReportVO {
+
+    //AI 안전 신고 ID
+    private Long aiSafetyReportId;
+
+    //중복 신고 방지 키
+    private String reportKey;
+
+    //관리자 처리 상태
+    private String status;
+
+    //신고 유형
+    private String reportType;
+
+    //신고 대상 사용자 ID
+    private Long userId;
+
+    //신고를 발생시킨 AI 상담 이벤트 ID
+    private Long triggerEventId;
+
+    //신고 시점 발생 횟수
+    private Integer occurrenceCount;
+
+    //other 발생 횟수 집계 시작 시각
+    private LocalDateTime countWindowStartedAt;
+
+    //other 발생 횟수 집계 종료 시각
+    private LocalDateTime countWindowEndedAt;
+
+    //담장 관리자 ID
+    private Long assignedAdminId;
+
+    //관리자 처리 내용
+    private String resolutionNote;
+
+    //관리자 검토 완료 시각
+    private LocalDateTime reviewedAt;
+
+    //신고 생성 시각
+    private LocalDateTime createdAt;
+
+    //신고 수정 시각
+    private LocalDateTime updatedAt;
+
+}
