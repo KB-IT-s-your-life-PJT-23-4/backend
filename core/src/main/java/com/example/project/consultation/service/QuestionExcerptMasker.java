@@ -37,7 +37,7 @@ public class QuestionExcerptMasker {
 
         masked = RESIDENT_NUMBER.matcher(masked).replaceAll("[주민등록번호]");
 
-        masked = PHONE_NUMBER.matcher(masked).replaceAll("[전화번호");
+        masked = PHONE_NUMBER.matcher(masked).replaceAll("[전화번호]");
 
         masked = EMAIL.matcher(masked).replaceAll("[이메일]");
 

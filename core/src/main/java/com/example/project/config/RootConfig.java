@@ -17,6 +17,8 @@ import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 
 import javax.sql.DataSource;
+import java.time.Clock;
+import java.time.ZoneId;
 
 @Configuration
 @ComponentScan(
@@ -56,5 +58,10 @@ public class RootConfig {
     @Bean
     public DataSourceTransactionManager transactionManager(DataSource dataSource) {
         return new DataSourceTransactionManager(dataSource);
+    }
+
+    @Bean
+    public Clock applicationClock() {
+        return Clock.system(ZoneId.of("Asia/Seoul"));
     }
 }

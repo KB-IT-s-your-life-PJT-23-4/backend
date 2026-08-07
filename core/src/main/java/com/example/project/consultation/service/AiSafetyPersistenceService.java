@@ -19,7 +19,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class AiSafetyPersistenceService {
 
-    private static final int OTHER_REPORT_THRESHOLD = 10;
+    private static final int OTHER_REPORT_THRESHOLD = 11;
     private static final String INTENT_JAILBREAK = "jailbreak";
     private static final String INTENT_OTHER = "other";
 
@@ -57,7 +57,7 @@ public class AiSafetyPersistenceService {
         if(insertedEventCount != 1) {
             throw new ServiceException(ResponseCode.DATABASE_ERROR);
         }
-        Long eventId = (long) event.getAiConsultationEventId();
+        Long eventId = event.getAiConsultationEventId();
 
         if (eventId == null) {
             throw new ServiceException(ResponseCode.DATABASE_ERROR);

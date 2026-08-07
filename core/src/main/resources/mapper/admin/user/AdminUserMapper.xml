@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.example.project.admin.user.mapper.AdminUserMapper">
+
+    <resultMap id="adminUserRecordMap"
+               type="com.example.project.admin.user.domain.AdminUserRecord">
+        <id property="userId" column="user_id"/>
+        <result property="email" column="email"/>
+        <result property="userName" column="user_name"/>
+        <result property="role" column="role"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+        <result property="recipientCount" column="recipient_count"/>
+        <result property="giftCount" column="gift_count"/>
+        <result property="simulationCount" column="simulation_count"/>
+    </resultMap>
+
+    <sql id="userFilters">
+        <if test="userId != null">
+            AND u.user_id = #{userId}
+        </if>
+        <if test="email != null">
+            AND LOWER(u.email) LIKE CONCAT('%', #{email}, '%')
+        </if>
+        <if test="name != null">
+            AND u.user_name LIKE CONCAT('%', #{name}, '%')
+        </if>
+    </sql>
+
+    <sql id="adminUserColumns">
+        u.user_id,
+        u.email,
+        u.user_name,
+        u.role,
+        u.created_at,
+        u.updated_at,
+        COUNT(DISTINCT f.family_id) AS recipient_count,
+        COUNT(DISTINCT g.gift_id) AS gift_count,
+        COUNT(DISTINCT s.simul_id) AS simulation_count
+    </sql>
+
+    <select id="countUsers" resultType="long">
+        SELECT COUNT(*)
+        FROM user u
+        WHERE 1 = 1
+        <include refid="userFilters"/>
+    </select>
+
+    <select id="selectUsers" resultMap="adminUserRecordMap">
+        SELECT <include refid="adminUserColumns"/>
+        FROM user u
+        LEFT JOIN family f ON f.user_id = u.user_id
+        LEFT JOIN gift g ON g.family_id = f.family_id
+        LEFT JOIN simulation s ON s.family_id = f.family_id
+        WHERE 1 = 1
+        <include refid="userFilters"/>
+        GROUP BY u.user_id, u.email, u.user_name, u.role, u.created_at, u.updated_at
+        ORDER BY u.created_at DESC, u.user_id DESC
+        LIMIT #{size} OFFSET #{offset}
+    </select>
+
+    <select id="selectUserById" resultMap="adminUserRecordMap">
+        SELECT <include refid="adminUserColumns"/>
+        FROM user u
+        LEFT JOIN family f ON f.user_id = u.user_id
+        LEFT JOIN gift g ON g.family_id = f.family_id
+        LEFT JOIN simulation s ON s.family_id = f.family_id
+        WHERE u.user_id = #{userId}
+        GROUP BY u.user_id, u.email, u.user_name, u.role, u.created_at, u.updated_at
+    </select>
+
+</mapper>
