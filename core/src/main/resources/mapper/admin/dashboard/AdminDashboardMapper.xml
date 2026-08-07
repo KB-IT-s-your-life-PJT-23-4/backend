@@ -37,6 +37,7 @@
         FROM user
         WHERE created_at &gt;= #{startDateTime}
           AND created_at &lt; #{endDateTime}
+          AND role = 'USER'
         GROUP BY DATE(created_at)
         ORDER BY signup_date ASC
     </select>

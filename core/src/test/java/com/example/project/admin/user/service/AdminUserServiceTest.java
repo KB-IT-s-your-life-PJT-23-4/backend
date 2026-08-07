@@ -4,6 +4,8 @@ import com.example.project.admin.user.domain.AdminUserRecord;
 import com.example.project.admin.user.mapper.AdminUserMapper;
 import com.example.project.common.api.ResponseCode;
 import com.example.project.common.exception.ServiceException;
+import com.example.project.user.mapper.UserMapper;
+import com.example.project.user.service.UserService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -20,12 +22,14 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 class AdminUserServiceTest {
 
     private FakeAdminUserMapper mapper;
+    private FakeUserService userService;
     private AdminUserService service;
 
     @BeforeEach
     void setUp() {
         mapper = new FakeAdminUserMapper();
-        service = new AdminUserService(mapper);
+        userService = new FakeUserService();
+        service = new AdminUserService(mapper, userService);
     }
 
     @Test
@@ -80,6 +84,27 @@ class AdminUserServiceTest {
                         () -> service.getUsers(null, null, null, 0, 101)
                 ).getResponseCode()
         );
+    }
+
+    @Test
+    @DisplayName("회원 삭제는 기존 회원탈퇴 서비스를 그대로 재사용한다")
+    void deleteUserWithExistingWithdrawalService() {
+        service.deleteUser(7L);
+
+        assertEquals(7L, userService.deletedUserId);
+    }
+
+    @Test
+    @DisplayName("회원 삭제 실패는 기존 회원탈퇴 서비스의 응답 코드를 유지한다")
+    void propagateDeleteFailure() {
+        userService.deleteFailure = new ServiceException(ResponseCode.MEMBER_NOT_FOUND);
+
+        ServiceException exception = assertThrows(
+                ServiceException.class,
+                () -> service.deleteUser(99L)
+        );
+
+        assertEquals(ResponseCode.MEMBER_NOT_FOUND, exception.getResponseCode());
     }
 
     private AdminUserRecord user(
@@ -140,6 +165,24 @@ class AdminUserServiceTest {
                     .filter(user -> userId.equals(user.getUserId()))
                     .findFirst()
                     .orElse(null);
+        }
+    }
+
+    private static final class FakeUserService extends UserService {
+
+        private Long deletedUserId;
+        private ServiceException deleteFailure;
+
+        private FakeUserService() {
+            super((UserMapper) null, null);
+        }
+
+        @Override
+        public void deleteUser(Long userId) {
+            if (deleteFailure != null) {
+                throw deleteFailure;
+            }
+            deletedUserId = userId;
         }
     }
 }

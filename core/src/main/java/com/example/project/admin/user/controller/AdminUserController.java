@@ -10,6 +10,7 @@ import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import lombok.RequiredArgsConstructor;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -58,5 +59,18 @@ public class AdminUserController {
     ) {
         AdminUserResponse data = adminUserService.getUser(userId);
         return ApiResponse.success(ResponseCode.SUCCESS, request.getRequestURI(), data);
+    }
+
+    @ApiOperation(
+            value = "관리자 회원 삭제",
+            notes = "기존 회원탈퇴 로직을 재사용하여 회원과 CASCADE 연관 데이터를 삭제합니다."
+    )
+    @DeleteMapping("/{userId}")
+    public ApiResponse<Void> deleteUser(
+            @PathVariable @Min(1) Long userId,
+            HttpServletRequest request
+    ) {
+        adminUserService.deleteUser(userId);
+        return ApiResponse.success(ResponseCode.DELETED, request.getRequestURI(), null);
     }
 }

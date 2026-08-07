@@ -69,6 +69,7 @@ class AdminDashboardMapperXmlTest {
         String simulationSql = sql("selectSimulationCounts", parameters);
 
         assertTrue(signupSql.contains("WHERE created_at >= ? AND created_at < ?"));
+        assertTrue(signupSql.contains("role = 'USER'"));
         assertTrue(signupSql.contains("GROUP BY DATE(created_at)"));
         String signupWhere = signupSql.substring(
                 signupSql.indexOf("WHERE"),
