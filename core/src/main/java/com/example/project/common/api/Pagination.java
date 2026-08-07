@@ -1,9 +1,11 @@
 package com.example.project.common.api;
 
 import com.example.project.common.exception.ServiceException;
+import lombok.Builder;
 import lombok.Getter;
 
 @Getter
+@Builder
 public class Pagination {
 
     public static final int MAX_PAGE_SIZE = 100;
