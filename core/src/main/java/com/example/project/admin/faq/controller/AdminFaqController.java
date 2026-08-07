@@ -1,11 +1,14 @@
 package com.example.project.admin.faq.controller;
 
+import com.example.project.admin.faq.dto.response.AdminFaqCategoriesDto;
 import com.example.project.admin.faq.dto.response.AdminFaqPageResponse;
 import com.example.project.admin.faq.service.AdminFaqService;
 import com.example.project.common.api.ApiResponse;
 import com.example.project.common.api.Pagination;
 import com.example.project.common.api.ResponseCode;
 import com.example.project.common.logging.ApiLog;
+import com.example.project.consultation.domain.FaqCategory;
+import com.example.project.consultation.service.FaqService;
 import io.swagger.annotations.Api;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -51,6 +54,17 @@ public class AdminFaqController {
         AdminFaqPageResponse response = adminFaqService.getFaqPage(
                 page, size, categoryId, keyword
         );
+
+        return ApiResponse.success(ResponseCode.SUCCESS, httpRequest.getRequestURI(), response);
+    }
+
+    @GetMapping("/categories")
+    public ApiResponse<AdminFaqCategoriesDto> getFaqCategories(
+            @AuthenticationPrincipal String principal,
+            HttpServletRequest httpRequest
+    ){
+
+        AdminFaqCategoriesDto response = adminFaqService.getCategories();
 
         return ApiResponse.success(ResponseCode.SUCCESS, httpRequest.getRequestURI(), response);
     }

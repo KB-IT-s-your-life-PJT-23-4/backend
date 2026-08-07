@@ -4,7 +4,6 @@ import com.example.project.admin.faq.dto.response.AdminFaqItemResponse;
 import com.example.project.consultation.domain.Faq;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
-import org.springframework.web.bind.annotation.PathVariable;
 
 import java.util.List;
 
@@ -22,6 +21,8 @@ public interface AdminFaqMapper {
             @Param("categoryId") Long categoryId,
             @Param("keyword") String keyword
     );
+
+    long totalFaqCount(@Param("categoryId") Long categoryId);
 
     Faq findFaqDetail(@Param("faqId") Long faqId);
 }
