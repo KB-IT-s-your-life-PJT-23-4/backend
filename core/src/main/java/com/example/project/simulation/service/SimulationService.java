@@ -539,39 +539,6 @@ public class SimulationService {
                     SimulationError.SIMULATION_RECOMMENDATION_INCOMPLETE);
         }
 
-        List<SimulationResponse.Result> responseResults = results.stream()
-                .map(result -> new SimulationResponse.Result(
-                        result.getResultId(),
-                        result.getScenarioType(),
-                        result.getDeductionAmount(),
-                        result.getTaxableAmount(),
-                        result.getGiftTax(),
-                        result.getDonorRequiredAmount(),
-                        result.getPostTaxAmount(),
-                        result.getInvestmentPrincipal(),
-                        tranchesByResult.getOrDefault(result.getResultId(), List.of())
-                                .stream()
-                                .map(this::toTrancheResponse)
-                                .toList(),
-                        portfoliosByResult.getOrDefault(result.getResultId(), List.of())
-                                .stream()
-                                .map(portfolio -> toPortfolioResponse(
-                                        portfolio,
-                                        result,
-                                        productsByPortfolio.getOrDefault(
-                                                portfolio.getPortfolioId(),
-                                                List.of()
-                                        ),
-                                        tranchesByResult.getOrDefault(
-                                                result.getResultId(),
-                                                List.of()
-                                        ),
-                                        simulation
-                                ))
-                                .toList()
-                ))
-                .toList();
-
         SimulationResponse.Selection selection = null;
         if (simulation.getSelectedPortfolioId() != null) {
             SimulationPortfolioRecord selectedPortfolio = portfolios.stream()
@@ -613,6 +580,42 @@ public class SimulationService {
                     simulation
             );
         }
+
+        // 저장된 우대조건을 선택 상품에 먼저 복원한 뒤 결과 상품 후보 응답을 만든다.
+        // 응답을 먼저 만들면 selection에는 조건이 있어도 productCandidates에는 빠져
+        // 이력의 "결과 다시 보기" 화면에서 체크가 해제되어 보인다.
+        List<SimulationResponse.Result> responseResults = results.stream()
+                .map(result -> new SimulationResponse.Result(
+                        result.getResultId(),
+                        result.getScenarioType(),
+                        result.getDeductionAmount(),
+                        result.getTaxableAmount(),
+                        result.getGiftTax(),
+                        result.getDonorRequiredAmount(),
+                        result.getPostTaxAmount(),
+                        result.getInvestmentPrincipal(),
+                        tranchesByResult.getOrDefault(result.getResultId(), List.of())
+                                .stream()
+                                .map(this::toTrancheResponse)
+                                .toList(),
+                        portfoliosByResult.getOrDefault(result.getResultId(), List.of())
+                                .stream()
+                                .map(portfolio -> toPortfolioResponse(
+                                        portfolio,
+                                        result,
+                                        productsByPortfolio.getOrDefault(
+                                                portfolio.getPortfolioId(),
+                                                List.of()
+                                        ),
+                                        tranchesByResult.getOrDefault(
+                                                result.getResultId(),
+                                                List.of()
+                                        ),
+                                        simulation
+                                ))
+                                .toList()
+                ))
+                .toList();
 
         return new SimulationResponse(
                 simulationId,
