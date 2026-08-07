@@ -1,5 +1,6 @@
 package com.example.project.simulation.service;
 
+import com.example.project.simulation.domain.FamilySnapshot;
 import com.example.project.simulation.domain.ProductType;
 import com.example.project.simulation.domain.RiskProfile;
 import com.example.project.simulation.domain.ScenarioType;
@@ -60,6 +61,18 @@ class SimulationHistoryServiceTest {
         service.getHistory(1L, "   ", null, 0, 10);
 
         assertNull(mapperStub.observedStatus);
+    }
+
+    @Test
+    @DisplayName("SAVED 상태와 수증자 ID를 함께 적용해 현황용 계획을 조회한다")
+    void filterSavedPlansByFamily() {
+        HistoryMapperStub mapperStub = new HistoryMapperStub();
+        mapperStub.family = family(31L, 1L);
+
+        service(mapperStub).getHistory(1L, "SAVED", 31L, 0, 10);
+
+        assertEquals(SimulationStatus.SAVED, mapperStub.observedStatus);
+        assertEquals(31L, mapperStub.observedFamilyId);
     }
 
     @Test
@@ -145,6 +158,17 @@ class SimulationHistoryServiceTest {
         assertEquals(
                 List.of(ProductType.DEPOSIT, ProductType.ETF),
                 savedItem.selection().selectedProductTypes()
+        );
+        assertEquals(
+                List.of("KB Star 정기예금", "KBSTAR 200"),
+                savedItem.selection().selectedProducts().stream()
+                        .map(SimulationHistoryResponse.SelectedProductSummary::getProductName)
+                        .toList()
+        );
+        assertEquals(
+                new BigDecimal("3.50"),
+                savedItem.selection().selectedProducts().get(0)
+                        .getAppliedAnnualRatePercent()
         );
     }
 
@@ -257,10 +281,25 @@ class SimulationHistoryServiceTest {
         SimulationProductRecord product = new SimulationProductRecord();
         product.setPortfolioId(portfolioId);
         product.setProductType(productType);
+        product.setProductName(
+                productType == ProductType.DEPOSIT
+                        ? "KB Star 정기예금"
+                        : "KBSTAR 200"
+        );
         product.setSelected(true);
         product.setAllocatedAmount(allocatedAmount);
+        product.setAppliedAnnualRatePercent(new BigDecimal("3.50"));
         product.setExpectedFutureValue(expectedFutureValue);
         return product;
+    }
+
+    private FamilySnapshot family(Long familyId, Long userId) {
+        FamilySnapshot family = new FamilySnapshot();
+        family.setFamilyId(familyId);
+        family.setUserId(userId);
+        family.setFamilyName("김민준");
+        family.setRelation("LINEAL_DESCENDANT");
+        return family;
     }
 
     private static final class UserValidatedSimulationService extends SimulationService {
@@ -283,7 +322,9 @@ class SimulationHistoryServiceTest {
         private List<SimulationPortfolioRecord> recommendations = List.of();
         private List<SimulationPortfolioRecord> selectedPortfolios = List.of();
         private List<SimulationProductRecord> selectedProducts = List.of();
+        private FamilySnapshot family;
         private SimulationStatus observedStatus;
+        private Long observedFamilyId;
 
         private SimulationMapper mapper() {
             return (SimulationMapper) Proxy.newProxyInstance(
@@ -298,8 +339,10 @@ class SimulationHistoryServiceTest {
             return switch (method.getName()) {
                 case "countSimulations" -> {
                     observedStatus = (SimulationStatus) arguments[1];
+                    observedFamilyId = (Long) arguments[2];
                     yield totalElements;
                 }
+                case "selectFamily" -> family;
                 case "selectSimulationPage" -> simulations;
                 case "selectResultsBySimulationIds" -> results;
                 case "selectRecommendedPortfoliosBySimulationIds" -> recommendations;
