@@ -13,25 +13,24 @@ public class DeductionVO {
     private String relation;
     private LocalDate birthDate;
 
-    /** 조회 시점 기준 만 19세 미만. 한도 행을 고르는 데 쓴 값이라 응답에도 그대로 내보낸다. */
+    /** 성년/미성년 구분 */
     private boolean minor;
 
-    /** 관계·미성년 여부에 해당하는 한도 행이 없으면 null (예: 배우자). */
+    /** 관계·미성년 여부에 해당하는 한도 행이 없으면 null */
     private Long deductionLimit;
 
-    /** 10년 창 안의 COMPLETED 증여 합계. */
+    /** 10년 윈도우 안의 COMPLETED 증여 합계. */
     private Long usedAmount;
 
-    /** 10년 창 안의 PLANNED 증여 합계. 한도 차감에는 넣지 않는다. */
+    /** 10년 윈도우 안의 PLANNED 증여 합계. 한도 차감 x */
     private Long plannedAmount;
 
     /** 합산에 들어간 COMPLETED 증여 건수. */
     private int aggregatedCount;
 
     /**
-     * 창 안에서 가장 오래된 COMPLETED 증여일. 이력이 없으면 null.
-     * 한도 갱신일은 여기서 바로 나오지 않는다. 한 건이 빠져도 여전히 한도 초과일 수 있어
-     * 서비스가 창 안 증여를 낱개로 훑어 계산한다.
+     * 창 안에서 가장 오래된 COMPLETED 증여일, 이력이 없으면 null
+     * 한도 갱신일은 여기서 바로 나오지 않는다. 한 건이 빠져도 여전히 한도 초과일 수 있어 서비스가 윈도우 안 증여를 각각 계산
      */
     private LocalDate oldestGiftDate;
 }
