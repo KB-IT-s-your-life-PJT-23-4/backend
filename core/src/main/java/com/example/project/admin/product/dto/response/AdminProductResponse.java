@@ -5,6 +5,7 @@ import lombok.Getter;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Getter
 @Builder
@@ -26,6 +27,7 @@ public class AdminProductResponse {
     private final Integer maxMonth;
     private final BigDecimal minBaseRatePercent;
     private final BigDecimal maxRatePercent;
+    private final List<AdminProductRateTierResponse> rateTiers;
 
     private final String savingsCategory;
     private final Long monthlyMinAmount;

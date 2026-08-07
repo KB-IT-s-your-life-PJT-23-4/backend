@@ -3,13 +3,20 @@ package com.example.project.admin.product.dto.request;
 import lombok.Data;
 
 import javax.validation.constraints.DecimalMin;
-import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.Size;
+import javax.validation.constraints.NotBlank;
 import java.math.BigDecimal;
 import java.util.List;
 
 @Data
-public class AdminProductUpdateRequest {
+public class AdminProductCreateRequest {
+
+    @NotBlank
+    @Size(max = 50)
+    private String productCode;
+
+    @NotBlank
+    private String productType; // DEPOSIT / SAVINGS / ETF
 
     @NotBlank
     @Size(max = 200)
@@ -24,27 +31,23 @@ public class AdminProductUpdateRequest {
     @NotBlank
     private String salesStatus;
 
-    // deposit / savings 공통
     private Long minAmount;
     private Long maxAmount;
     private Integer minMonth;
     private Integer maxMonth;
 
-    // savings 전용
     private String savingsCategory;
     private Long monthlyMinAmount;
     private Long monthlyMaxAmount;
 
-    // etf 전용
     private String stockCode;
     private String etfCategory;
     private String trackingIndex;
     @DecimalMin(value = "0", inclusive = true)
+    private BigDecimal annualReturn5yPercent;
+    @DecimalMin(value = "0", inclusive = true)
     private BigDecimal bondRatioPercent;
     private String riskLevel;
-    @DecimalMin(value = "0", inclusive = true)
-    private BigDecimal annualReturn5yPercent;
 
-    // deposit/savings 금리 구간 전체 목록. null이면 금리는 건드리지 않음.
     private List<AdminProductRateTierRequest> rateTiers;
 }

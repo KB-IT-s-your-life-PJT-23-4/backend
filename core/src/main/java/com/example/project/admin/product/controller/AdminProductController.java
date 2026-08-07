@@ -1,6 +1,6 @@
-package com.example.project.admin.product.contoroller;
+package com.example.project.admin.product.controller;
 
-import com.example.project.admin.product.dto.request.AdminProductDataVersionCreateRequest;
+import com.example.project.admin.product.dto.request.AdminProductCreateRequest;
 import com.example.project.admin.product.dto.request.AdminProductUpdateRequest;
 import com.example.project.admin.product.dto.response.AdminProductResponse;
 import com.example.project.admin.product.dto.response.AdminProductVersionResponse;
@@ -36,14 +36,23 @@ public class AdminProductController {
     }
 
     @PostMapping("/versions")
-    public ApiResponse<AdminProductVersionResponse> createProductDataVersion(
-            @Valid @RequestBody AdminProductDataVersionCreateRequest createRequest,
+    public ApiResponse<AdminProductVersionResponse> createDraftVersion(
+            @AuthenticationPrincipal String principal,
+            HttpServletRequest request
+    ) {
+        AdminProductVersionResponse data = adminProductService.createDraftVersionFromLatest();
+        return ApiResponse.success(ResponseCode.CREATED, request.getRequestURI(), data);
+    }
+
+    @PatchMapping("/versions/{productDataVersionId}/complete")
+    public ApiResponse<AdminProductVersionResponse> completeProductDataVersion(
+            @PathVariable Long productDataVersionId,
             @AuthenticationPrincipal String principal,
             HttpServletRequest request
     ) {
         AdminProductVersionResponse data =
-                adminProductService.createProductDataVersion(createRequest);
-        return ApiResponse.success(ResponseCode.CREATED, request.getRequestURI(), data);
+                adminProductService.completeProductDataVersion(productDataVersionId);
+        return ApiResponse.success(ResponseCode.UPDATED, request.getRequestURI(), data);
     }
 
     @GetMapping("/versions/{productDataVersionId}/products")
@@ -56,6 +65,18 @@ public class AdminProductController {
         List<AdminProductResponse> data =
                 adminProductService.getProducts(productDataVersionId, type);
         return ApiResponse.success(ResponseCode.SUCCESS, request.getRequestURI(), data);
+    }
+
+    @PostMapping("/versions/{productDataVersionId}/products")
+    public ApiResponse<AdminProductResponse> createProduct(
+            @PathVariable Long productDataVersionId,
+            @Valid @RequestBody AdminProductCreateRequest createRequest,
+            @AuthenticationPrincipal String principal,
+            HttpServletRequest request
+    ) {
+        AdminProductResponse data =
+                adminProductService.createProduct(productDataVersionId, createRequest);
+        return ApiResponse.success(ResponseCode.CREATED, request.getRequestURI(), data);
     }
 
     @PatchMapping("/versions/{productDataVersionId}/products/{productVersionId}")
