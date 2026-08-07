@@ -564,6 +564,17 @@
             s.status = 'SAVED'
             OR (s.status = 'DRAFT' AND s.expired_at &gt; #{now})
         )
+        AND EXISTS (
+            SELECT 1
+            FROM simulation_result history_result
+            JOIN simulation_portfolio history_portfolio
+              ON history_portfolio.simul_result_id = history_result.simul_result_id
+            WHERE history_result.simul_id = s.simul_id
+              AND history_portfolio.is_recommended = 1
+            GROUP BY history_result.simul_id
+            HAVING COUNT(*) = 3
+               AND COUNT(DISTINCT history_portfolio.portfolio_type) = 3
+        )
         <if test="status != null">
             AND s.status = #{status}
         </if>
