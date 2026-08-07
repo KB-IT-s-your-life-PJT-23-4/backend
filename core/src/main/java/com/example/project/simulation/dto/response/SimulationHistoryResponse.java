@@ -72,8 +72,52 @@ public record SimulationHistoryResponse(
             Long expectedFutureValue,
             Long expectedProfit,
             BigDecimal expectedReturnRatePercent,
-            List<ProductType> selectedProductTypes
+            List<ProductType> selectedProductTypes,
+            List<SelectedProductSummary> selectedProducts
     ) {
+    }
+
+    public static final class SelectedProductSummary {
+
+        private final String productName;
+        private final ProductType productType;
+        private final Long allocatedAmount;
+        private final BigDecimal appliedAnnualRatePercent;
+        private final Long expectedFutureValue;
+
+        public SelectedProductSummary(
+                String productName,
+                ProductType productType,
+                Long allocatedAmount,
+                BigDecimal appliedAnnualRatePercent,
+                Long expectedFutureValue
+        ) {
+            this.productName = productName;
+            this.productType = productType;
+            this.allocatedAmount = allocatedAmount;
+            this.appliedAnnualRatePercent = appliedAnnualRatePercent;
+            this.expectedFutureValue = expectedFutureValue;
+        }
+
+        public String getProductName() {
+            return productName;
+        }
+
+        public ProductType getProductType() {
+            return productType;
+        }
+
+        public Long getAllocatedAmount() {
+            return allocatedAmount;
+        }
+
+        public BigDecimal getAppliedAnnualRatePercent() {
+            return appliedAnnualRatePercent;
+        }
+
+        public Long getExpectedFutureValue() {
+            return expectedFutureValue;
+        }
     }
 
 }

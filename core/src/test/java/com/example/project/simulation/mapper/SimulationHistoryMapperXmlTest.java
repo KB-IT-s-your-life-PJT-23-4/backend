@@ -40,6 +40,11 @@ class SimulationHistoryMapperXmlTest {
         assertTrue(sql.contains(
                 "s.status = 'SAVED' OR (s.status = 'DRAFT' AND s.expired_at > ?)"
         ));
+        assertTrue(sql.contains("AND history_portfolio.is_recommended = 1"));
+        assertTrue(sql.contains("HAVING COUNT(*) = 3"));
+        assertTrue(sql.contains(
+                "COUNT(DISTINCT history_portfolio.portfolio_type) = 3"
+        ));
         assertTrue(sql.contains("AND s.status = ?"));
         assertTrue(sql.contains("AND s.family_id = ?"));
         assertTrue(sql.contains("ORDER BY s.updated_at DESC, s.simul_id DESC"));
@@ -64,7 +69,31 @@ class SimulationHistoryMapperXmlTest {
         assertTrue(sql.contains(
                 "s.status = 'SAVED' OR (s.status = 'DRAFT' AND s.expired_at > ?)"
         ));
+        assertTrue(sql.contains("AND history_portfolio.is_recommended = 1"));
+        assertTrue(sql.contains("HAVING COUNT(*) = 3"));
+        assertTrue(sql.contains(
+                "COUNT(DISTINCT history_portfolio.portfolio_type) = 3"
+        ));
         assertTrue(sql.contains("AND s.status = ?"));
+    }
+
+    @Test
+    @DisplayName("현황에 필요한 선택 상품명과 적용 수익률을 조회한다")
+    void selectStatusProductDetails() throws Exception {
+        Configuration configuration = configuration();
+        Map<String, Object> parameters = new HashMap<>();
+        parameters.put("portfolioIds", java.util.List.of(101L));
+
+        BoundSql boundSql = configuration.getMappedStatement(
+                NAMESPACE + "selectSelectedProductsByPortfolioIds"
+        ).getBoundSql(parameters);
+        String sql = normalize(boundSql.getSql());
+
+        assertTrue(sql.contains("pv.product_name"));
+        assertTrue(sql.contains(
+                "spr.applied_annual_rate AS applied_annual_rate_percent"
+        ));
+        assertTrue(sql.contains("AND spr.is_selected = 1"));
     }
 
     private Configuration configuration() throws Exception {

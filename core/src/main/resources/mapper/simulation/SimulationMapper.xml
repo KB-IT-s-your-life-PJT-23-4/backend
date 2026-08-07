@@ -564,6 +564,17 @@
             s.status = 'SAVED'
             OR (s.status = 'DRAFT' AND s.expired_at &gt; #{now})
         )
+        AND EXISTS (
+            SELECT 1
+            FROM simulation_result history_result
+            JOIN simulation_portfolio history_portfolio
+              ON history_portfolio.simul_result_id = history_result.simul_result_id
+            WHERE history_result.simul_id = s.simul_id
+              AND history_portfolio.is_recommended = 1
+            GROUP BY history_result.simul_id
+            HAVING COUNT(*) = 3
+               AND COUNT(DISTINCT history_portfolio.portfolio_type) = 3
+        )
         <if test="status != null">
             AND s.status = #{status}
         </if>
@@ -643,9 +654,11 @@
         SELECT spr.simulation_product_id,
                spr.simul_portfolio_id AS portfolio_id,
                spr.kb_product_version_id AS product_version_id,
+               pv.product_name,
                p.product_type,
                spr.is_selected AS selected,
                spr.allocated_amount,
+               spr.applied_annual_rate AS applied_annual_rate_percent,
                spr.expected_future_value
         FROM simulation_product spr
         JOIN kb_product_version pv
