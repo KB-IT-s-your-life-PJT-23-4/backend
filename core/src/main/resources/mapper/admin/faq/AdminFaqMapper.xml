@@ -92,5 +92,28 @@
         WHERE faq_id = #{faqId}
     </select>
 
+    <insert id="createCategory"
+        parameterType="com.example.project.consultation.domain.FaqCategory"
+        useGeneratedKeys="true"
+        keyProperty="categoryId"
+        keyColumn="faq_category_id"
+    >
+        INSERT INTO faq_category (
+        category_name
+        ) VALUES (
+        #{categoryName}
+        )
+    </insert>
 
+    <update id="updateCategory"
+            parameterType="com.example.project.consultation.domain.FaqCategory">
+        UPDATE faq_category
+        SET category_name = #{categoryName}
+        WHERE faq_category_id = #{id}
+    </update>
+
+    <delete id="deleteByCategoryId">
+        DELETE FROM faq_category
+        WHERE faq_category_id = #{categoryId}
+    </delete>
 </mapper>

@@ -2,6 +2,7 @@ package com.example.project.admin.faq.mapper;
 
 import com.example.project.admin.faq.dto.response.AdminFaqItemResponse;
 import com.example.project.consultation.domain.Faq;
+import com.example.project.consultation.domain.FaqCategory;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -25,4 +26,10 @@ public interface AdminFaqMapper {
     long totalFaqCount(@Param("categoryId") Long categoryId);
 
     Faq findFaqDetail(@Param("faqId") Long faqId);
+
+    long createCategory(@Param("categoryName") String categoryName);
+
+    int updateCategory(FaqCategory faqCategory);
+
+    int deleteByCategoryId(@Param("categoryId") long categoryId);
 }
