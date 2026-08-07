@@ -210,6 +210,8 @@ public class SimulationHistoryService {
                     result.getInvestmentPrincipal()
             );
             Set<ProductType> productTypes = new LinkedHashSet<>();
+            List<SimulationHistoryResponse.SelectedProductSummary> selectedProducts =
+                    new ArrayList<>();
             for (SimulationProductRecord product : products) {
                 if (product.getProductType() == null) {
                     throw new SimulationException(
@@ -217,6 +219,15 @@ public class SimulationHistoryService {
                     );
                 }
                 productTypes.add(product.getProductType());
+                selectedProducts.add(
+                        new SimulationHistoryResponse.SelectedProductSummary(
+                                product.getProductName(),
+                                product.getProductType(),
+                                product.getAllocatedAmount(),
+                                product.getAppliedAnnualRatePercent(),
+                                product.getExpectedFutureValue()
+                        )
+                );
             }
 
             selections.put(
@@ -231,7 +242,8 @@ public class SimulationHistoryService {
                             expectedFutureValue,
                             expectedProfit,
                             returnRate(expectedProfit, result.getInvestmentPrincipal()),
-                            List.copyOf(productTypes)
+                            List.copyOf(productTypes),
+                            List.copyOf(selectedProducts)
                     )
             );
         }
