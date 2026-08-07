@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.example.project.admin.product.mapper.AdminProductMapper">
+
+    <select id="selectProductDataVersions"
+            resultType="com.example.project.admin.product.domain.AdminProductVersionRow">
+        SELECT dv.kb_product_data_version_id AS product_data_version_id,
+        dv.version_code,
+        dv.data_date,
+        dv.status,
+        dv.created_at,
+        dv.completed_at,
+        COALESCE(SUM(CASE WHEN p.product_type = 'DEPOSIT' THEN 1 ELSE 0 END), 0) AS deposit_count,
+        COALESCE(SUM(CASE WHEN p.product_type = 'SAVINGS' THEN 1 ELSE 0 END), 0) AS savings_count,
+        COALESCE(SUM(CASE WHEN p.product_type = 'ETF' THEN 1 ELSE 0 END), 0) AS etf_count
+        FROM kb_product_data_version dv
+        LEFT JOIN kb_product_version pv
+        ON pv.kb_product_data_version_id = dv.kb_product_data_version_id
+        LEFT JOIN kb_product p
+        ON p.product_id = pv.product_id
+        GROUP BY dv.kb_product_data_version_id, dv.version_code, dv.data_date,
+        dv.status, dv.created_at, dv.completed_at
+        ORDER BY dv.data_date DESC, dv.kb_product_data_version_id DESC
+    </select>
+
+    <select id="selectProductDataVersion"
+            resultType="com.example.project.admin.product.domain.AdminProductVersionRow">
+        SELECT dv.kb_product_data_version_id AS product_data_version_id,
+        dv.version_code, dv.data_date, dv.status, dv.created_at, dv.completed_at,
+        0 AS deposit_count, 0 AS savings_count, 0 AS etf_count
+        FROM kb_product_data_version dv
+        WHERE dv.kb_product_data_version_id = #{productDataVersionId}
+    </select>
+
+    <select id="selectProductDataVersionByCode"
+            resultType="com.example.project.admin.product.domain.AdminProductVersionRow">
+        SELECT dv.kb_product_data_version_id AS product_data_version_id,
+        dv.version_code, dv.data_date, dv.status, dv.created_at, dv.completed_at,
+        0 AS deposit_count, 0 AS savings_count, 0 AS etf_count
+        FROM kb_product_data_version dv
+        WHERE dv.version_code = #{versionCode}
+    </select>
+
+    <select id="selectProductType" resultType="string">
+        SELECT p.product_type
+        FROM kb_product_version pv
+        JOIN kb_product p ON p.product_id = pv.product_id
+        WHERE pv.kb_product_version_id = #{productVersionId}
+    </select>
+
+    <sql id="adminProductColumns">
+        pv.kb_product_version_id AS product_version_id,
+        pv.kb_product_data_version_id AS product_data_version_id,
+        p.product_id,
+        p.product_code,
+        pv.product_name,
+        p.product_type,
+        pv.description,
+        pv.product_url,
+        pv.sales_status,
+        pv.created_at
+    </sql>
+
+    <select id="selectDepositProducts"
+            resultType="com.example.project.admin.product.domain.AdminProductRow">
+        SELECT
+        <include refid="adminProductColumns"/>,
+        d.min_amount, d.max_amount, d.min_month, d.max_month,
+        MIN(br.base_rate_percent) AS min_base_rate_percent,
+        MAX(br.max_rate_percent) AS max_rate_percent
+        FROM kb_product_version pv
+        JOIN kb_product p ON p.product_id = pv.product_id
+        JOIN deposit d ON d.kb_product_version_id = pv.kb_product_version_id
+        LEFT JOIN base_interest_rate br ON br.kb_product_version_id = pv.kb_product_version_id
+        WHERE 1 = 1
+        <if test="productDataVersionId != null">
+            AND pv.kb_product_data_version_id = #{productDataVersionId}
+        </if>
+        <if test="productVersionId != null">
+            AND pv.kb_product_version_id = #{productVersionId}
+        </if>
+        GROUP BY pv.kb_product_version_id, pv.kb_product_data_version_id, p.product_id,
+        p.product_code, pv.product_name, p.product_type, pv.description,
+        pv.product_url, pv.sales_status, pv.created_at,
+        d.min_amount, d.max_amount, d.min_month, d.max_month
+        ORDER BY pv.product_name
+    </select>
+
+    <select id="selectSavingsProducts"
+            resultType="com.example.project.admin.product.domain.AdminProductRow">
+        SELECT
+        <include refid="adminProductColumns"/>,
+        s.savings_category, s.monthly_min_amount, s.monthly_max_amount,
+        s.min_month, s.max_month,
+        MIN(br.base_rate_percent) AS min_base_rate_percent,
+        MAX(br.max_rate_percent) AS max_rate_percent
+        FROM kb_product_version pv
+        JOIN kb_product p ON p.product_id = pv.product_id
+        JOIN savings s ON s.kb_product_version_id = pv.kb_product_version_id
+        LEFT JOIN base_interest_rate br ON br.kb_product_version_id = pv.kb_product_version_id
+        WHERE 1 = 1
+        <if test="productDataVersionId != null">
+            AND pv.kb_product_data_version_id = #{productDataVersionId}
+        </if>
+        <if test="productVersionId != null">
+            AND pv.kb_product_version_id = #{productVersionId}
+        </if>
+        GROUP BY pv.kb_product_version_id, pv.kb_product_data_version_id, p.product_id,
+        p.product_code, pv.product_name, p.product_type, pv.description,
+        pv.product_url, pv.sales_status, pv.created_at,
+        s.savings_category, s.monthly_min_amount, s.monthly_max_amount,
+        s.min_month, s.max_month
+        ORDER BY pv.product_name
+    </select>
+
+    <select id="selectEtfProducts"
+            resultType="com.example.project.admin.product.domain.AdminProductRow">
+        SELECT
+        <include refid="adminProductColumns"/>,
+        e.stock_code, e.etf_category, e.tracking_index,
+        e.annual_return_5y AS annual_return_5y_percent,
+        e.bond_ratio AS bond_ratio_percent,
+        e.risk_level
+        FROM kb_product_version pv
+        JOIN kb_product p ON p.product_id = pv.product_id
+        JOIN etf e ON e.kb_product_version_id = pv.kb_product_version_id
+        WHERE 1 = 1
+        <if test="productDataVersionId != null">
+            AND pv.kb_product_data_version_id = #{productDataVersionId}
+        </if>
+        <if test="productVersionId != null">
+            AND pv.kb_product_version_id = #{productVersionId}
+        </if>
+        ORDER BY pv.product_name
+    </select>
+
+    <update id="updateProductVersion">
+        UPDATE kb_product_version
+        SET product_name = #{productName},
+        description = #{description},
+        product_url = #{productUrl},
+        sales_status = #{salesStatus}
+        WHERE kb_product_version_id = #{productVersionId}
+    </update>
+
+    <insert id="insertProductDataVersion">
+        INSERT INTO kb_product_data_version (version_code, data_date, status)
+        VALUES (#{versionCode}, #{dataDate}, 'LOADING')
+    </insert>
+
+</mapper>
