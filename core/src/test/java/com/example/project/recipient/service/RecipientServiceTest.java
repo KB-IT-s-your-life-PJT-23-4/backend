@@ -384,6 +384,11 @@ class RecipientServiceTest {
         }
 
         @Override
+        public Long selectDeductionLimit(String relation, boolean minor, LocalDate baseDate) {
+            return null;
+        }
+
+        @Override
         public TaxBracketVO selectTaxBracket(LocalDate baseDate, Long taxableBase) {
             return null;
         }

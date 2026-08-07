@@ -9,9 +9,9 @@ public class TaxBracketVO {
 
     private Long bracketId;
 
+    /** 정밀 계산용으로 bigdecimal 씀 */
     private BigDecimal taxRate;
-    // 정밀 계산용으로 bigdecimal 씀
 
+    /** 누진 공제액 */
     private Long progressiveDeduction;
-    // 누진 공제액
 }

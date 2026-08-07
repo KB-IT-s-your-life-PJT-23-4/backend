@@ -25,6 +25,7 @@ import org.springframework.web.context.WebApplicationContext;
 import org.springframework.web.filter.CharacterEncodingFilter;
 
 import javax.sql.DataSource;
+import java.time.LocalDate;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -52,6 +53,12 @@ class GiftDeductionApiTest {
     private static final long ADULT_FAMILY_ID = 999_101L;
     private static final long MINOR_FAMILY_ID = 999_102L;
     private static final long NO_GIFT_FAMILY_ID = 999_103L;
+
+    /** 한도를 넘기지 않았고, 증여가 창에서 빠지기 전에 성년이 되는 수증자. */
+    private static final long YOUNG_MINOR_FAMILY_ID = 999_104L;
+
+    /** 확정 이력을 오늘보다 뒤 날짜로 등록한 수증자. */
+    private static final long FUTURE_GIFT_FAMILY_ID = 999_105L;
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
@@ -99,6 +106,10 @@ class GiftDeductionApiTest {
                 MINOR_FAMILY_ID, USER_ID, "미성년자녀", "LINEAL_DESCENDANT", "2012-05-20");
         jdbc.update("INSERT INTO family (family_id, user_id, family_name, relation, birth_date) VALUES (?,?,?,?,?)",
                 NO_GIFT_FAMILY_ID, USER_ID, "이력없음", "LINEAL_DESCENDANT", "2020-01-01");
+        jdbc.update("INSERT INTO family (family_id, user_id, family_name, relation, birth_date) VALUES (?,?,?,?,?)",
+                YOUNG_MINOR_FAMILY_ID, USER_ID, "성년전환자녀", "LINEAL_DESCENDANT", "2015-08-01");
+        jdbc.update("INSERT INTO family (family_id, user_id, family_name, relation, birth_date) VALUES (?,?,?,?,?)",
+                FUTURE_GIFT_FAMILY_ID, USER_ID, "미래이력자녀", "LINEAL_DESCENDANT", "1995-01-01");
 
         // 성년: 확정 3,000만 + 창 밖 1,000만(제외) + 계획 500만 + 취소 900만(제외)
         insertGift(ADULT_FAMILY_ID, 30_000_000L, "2020-04-01", "COMPLETED");
@@ -108,6 +119,14 @@ class GiftDeductionApiTest {
 
         // 미성년: 한도 2,000만을 넘긴 2,500만
         insertGift(MINOR_FAMILY_ID, 25_000_000L, "2019-06-01", "COMPLETED");
+
+        // 성년 전환이 먼저 오는 미성년: 한도 2,000만 안쪽인 1,700만. 같은 날 2건으로 넣는다.
+        insertGift(YOUNG_MINOR_FAMILY_ID, 15_000_000L, "2026-08-01", "COMPLETED");
+        insertGift(YOUNG_MINOR_FAMILY_ID, 2_000_000L, "2026-08-01", "COMPLETED");
+
+        // 오늘보다 뒤 날짜로 등록된 확정 이력. 등록 자체는 막히지 않는다.
+        insertGift(FUTURE_GIFT_FAMILY_ID, 40_000_000L,
+                LocalDate.now().plusYears(1).toString(), "COMPLETED");
     }
 
     private void insertGift(long familyId, long amount, String giftDate, String status) {
@@ -133,7 +152,7 @@ class GiftDeductionApiTest {
     void deductionResponse() throws Exception {
         JsonNode data = requestDeduction("");
 
-        assertEquals(3, data.size());
+        assertEquals(5, data.size());
 
         // 성년 자녀: 한도 5,000만, 사용 3,000만(창 밖·취소 제외), 잔여 2,000만
         JsonNode adult = data.get(0);
@@ -145,7 +164,9 @@ class GiftDeductionApiTest {
         assertEquals(20_000_000L, adult.get("remainingAmount").asLong());
         assertEquals(15_000_000L, adult.get("remainingAmountIfPlanned").asLong());
         assertEquals(1, adult.get("aggregatedCount").asInt());
-        assertEquals("2030-04-01", adult.get("nextRenewalDate").asText(), "2020-04-01 + 10년");
+        // 창 조건이 소급 10년 되는 날을 포함하므로(gift_date >= baseDate - 10년)
+        // 2030-04-01 까지는 아직 합산에 들어간다. 여력이 실제로 늘어나는 첫 날은 그 다음 날이다.
+        assertEquals("2030-04-02", adult.get("nextRenewalDate").asText(), "2020-04-01 + 10년 + 1일");
 
         // 미성년 자녀: 한도를 넘겨도 잔여는 음수가 아니라 0
         JsonNode minor = data.get(1);
@@ -161,6 +182,49 @@ class GiftDeductionApiTest {
         assertEquals(0, noGift.get("aggregatedCount").asInt());
         assertTrue(noGift.get("nextRenewalDate") == null || noGift.get("nextRenewalDate").isNull(),
                 "확정 증여가 없으면 갱신일도 없다");
+    }
+
+    /**
+     * 갱신일을 "가장 오래된 증여가 창에서 빠지는 날"로만 잡으면 틀리는 경우.
+     * 미성년 수증자는 성년이 되는 날 한도가 2,000만 → 5,000만으로 올라가고, 그게 더 이를 수 있다.
+     */
+    @Test
+    @DisplayName("성년이 되는 날이 증여가 빠지는 날보다 이르면 그날이 갱신일이다")
+    void renewalFollowsAdultTransition() throws Exception {
+        JsonNode row = requestDeduction("?familyId=" + YOUNG_MINOR_FAMILY_ID).get(0);
+
+        assertTrue(row.get("minor").asBoolean(), "2015년생은 미성년");
+        assertEquals(20_000_000L, row.get("deductionLimit").asLong());
+        assertEquals(17_000_000L, row.get("usedAmount").asLong());
+        assertEquals(3_000_000L, row.get("remainingAmount").asLong(), "아직 한도를 넘기지 않았다");
+
+        // 증여가 빠지는 날은 2036-08-02, 성년이 되는 날은 2034-08-01. 이른 쪽이 갱신일이다.
+        assertEquals("2034-08-01", row.get("nextRenewalDate").asText(), "2015-08-01 + 19년");
+
+        // 성년 한도 5,000만 - 창에 남은 1,700만 = 3,300만. 지금 여력 300만과의 차이가 늘어나는 몫이다.
+        assertEquals(30_000_000L, row.get("renewalAmount").asLong());
+
+        // 성년 전환은 특정 증여가 일으키는 게 아니라 창 안 가장 오래된 증여를 알림 키로 쓴다.
+        assertFalse(row.get("renewalGiftId").isNull(), "리마인더 식별용 giftId 는 있어야 한다");
+    }
+
+    /**
+     * 미래 날짜로 등록된 확정 이력은 합산에서 빠진다. 창 조건이 {@code gift_date <= 오늘} 이라
+     * 아직 일어나지 않은 증여가 "이미 증여한 금액"에 잡히지 않는다.
+     *
+     * <p>다만 등록 자체는 막히지 않고 증여 목록에는 그대로 나오므로,
+     * 화면에는 이력으로 보이는데 누적 증여액에는 안 잡히는 상태가 된다.
+     */
+    @Test
+    @DisplayName("오늘보다 뒤 날짜의 확정 이력은 10년 합산에 들어가지 않는다")
+    void futureDatedGiftIsExcluded() throws Exception {
+        JsonNode row = requestDeduction("?familyId=" + FUTURE_GIFT_FAMILY_ID).get(0);
+
+        assertEquals(0L, row.get("usedAmount").asLong(), "미래 증여는 누적 증여액에 안 잡힌다");
+        assertEquals(0, row.get("aggregatedCount").asInt());
+        assertEquals(50_000_000L, row.get("remainingAmount").asLong(), "한도 전액이 남는다");
+        assertTrue(row.get("nextRenewalDate") == null || row.get("nextRenewalDate").isNull(),
+                "합산에 들어간 증여가 없으면 갱신할 것도 없다");
     }
 
     @Test

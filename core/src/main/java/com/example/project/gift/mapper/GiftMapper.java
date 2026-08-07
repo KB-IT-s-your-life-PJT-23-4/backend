@@ -55,6 +55,15 @@ public interface GiftMapper {
                                    @Param("windowStartDate") LocalDate windowStartDate,
                                    @Param("baseDate") LocalDate baseDate);
 
+    /**
+     * 특정 시점의 공제 한도 (미성년자는 다음 갱신일이 10년 한도 혹은 성년이 되는 날 중 빠른 날로 정해야함)
+     * 해당 관계/미성년 행이 없으면 null
+     *
+     */
+    Long selectDeductionLimit(@Param("relation") String relation,
+                              @Param("minor") boolean minor,
+                              @Param("baseDate") LocalDate baseDate);
+
     TaxBracketVO selectTaxBracket(@Param("baseDate") LocalDate baseDate,
                                   @Param("taxableBase") Long taxableBase);
 

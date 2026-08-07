@@ -64,6 +64,7 @@ public enum ResponseCode {
     EXPERT_REVIEW_REQUIRED(418, "EXPERT_REVIEW_REQUIRED", "전문가의 추가 검토가 필요한 사례입니다"),
     FILE_FORMAT_INVALID(419, "FILE_FORMAT_INVALID", "지원하지 않는 파일 형식입니다"),
     FILE_SIZE_EXCEEDED(420, "FILE_SIZE_EXCEEDED", "첨부파일 허용 용량을 초과합니다"),
+    INVALID_GIFT_DATE(421, "INVALID_GIFT_DATE", "확정된 증여는 오늘 이후 날짜로 기록할 수 없습니다"),
 
     // 500번대: 서버 및 외부 시스템 오류
     INTERNAL_SERVER_ERROR(500, "INTERNAL_SERVER_ERROR", "서버 내부에서 알 수 없는 오류가 발생하였습니다"),

@@ -167,6 +167,19 @@
         FROM gift
         WHERE family_id = #{familyId}
     </select>
+    
+    <!-- effective_to 조건은 반드시 괄호로 묶는다. AND 가 OR 보다 먼저 묶여
+         relation/is_minor 를 무시한 행이 딸려 나온다. -->
+    <select id="selectDeductionLimit" resultType="java.lang.Long">
+        SELECT deduction_limit
+        FROM gift_deduction_limit
+        WHERE relation = #{relation}
+        AND is_minor = #{minor}
+        AND effective_from &lt;= #{baseDate}
+        AND (effective_to IS NULL OR effective_to &gt; #{baseDate})
+        ORDER BY effective_from DESC
+        LIMIT 1
+    </select>
 
     <select id="selectTaxBracket" resultType="com.example.project.gift.domain.TaxBracketVO">
         SELECT bracket_id AS bracketId, tax_rate AS taxRate, progressive_deduction AS progressiveDeduction
