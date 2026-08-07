@@ -63,11 +63,24 @@ public class AdminFaqService {
 
     @Transactional
     public AdminCategoryResponse createCategory(AdminCategoryRequest request){
-        long categoryId = adminFaqMapper.createCategory(request.getCategoryName());
+        if (request == null) {
+            throw new ServiceException(ResponseCode.BAD_REQUEST);
+        }
+
+        String categoryName = normalizeCategoryName(request.getCategoryName());
+        FaqCategory category = FaqCategory.builder()
+                .categoryName(categoryName)
+                .build();
+
+        int insertedRows = adminFaqMapper.createCategory(category);
+        validateAffectedRows(insertedRows);
+        if (category.getId() == null) {
+            throw new ServiceException(ResponseCode.DATABASE_ERROR);
+        }
 
         return AdminCategoryResponse.builder()
-                .categoryId(categoryId)
-                .categoryName(request.getCategoryName())
+                .categoryId(category.getId())
+                .categoryName(categoryName)
                 .build();
     }
 

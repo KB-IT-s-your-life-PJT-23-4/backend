@@ -27,7 +27,7 @@ public interface AdminFaqMapper {
 
     Faq findFaqDetail(@Param("faqId") Long faqId);
 
-    long createCategory(@Param("categoryName") String categoryName);
+    int createCategory(FaqCategory faqCategory);
 
     int updateCategory(FaqCategory faqCategory);
 

@@ -95,7 +95,7 @@
     <insert id="createCategory"
         parameterType="com.example.project.consultation.domain.FaqCategory"
         useGeneratedKeys="true"
-        keyProperty="categoryId"
+        keyProperty="id"
         keyColumn="faq_category_id"
     >
         INSERT INTO faq_category (
