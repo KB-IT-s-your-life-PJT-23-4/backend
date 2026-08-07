@@ -2,6 +2,7 @@ package com.example.project.simulation.service;
 
 import com.example.project.simulation.domain.ProductDataVersionRecord;
 import com.example.project.simulation.domain.ProductType;
+import com.example.project.simulation.domain.PreferentialRateRecord;
 import com.example.project.simulation.domain.RiskProfile;
 import com.example.project.simulation.domain.ScenarioType;
 import com.example.project.simulation.domain.SimulationPortfolioRecord;
@@ -177,12 +178,18 @@ class SimulationServiceGetTest {
         fixture.simulation.setSelectedPortfolioId(selectedPortfolio.getPortfolioId());
         fixture.simulation.setSavedAt(LocalDateTime.now().minusMinutes(1));
         fixture.products.get(0).setSelected(true);
+        fixture.selectedPreferentialRates = List.of(preferentialRate());
 
         SimulationResponse response = fixture.service().get(SIMULATION_ID, USER_ID);
 
         assertEquals(selectedPortfolio.getPortfolioId(), response.selection().selectedPortfolioId());
         assertEquals(1, response.selection().selectedProducts().size());
         assertEquals(900L, response.selection().investmentPrincipal());
+        assertEquals(
+                "SALARY",
+                response.results().get(0).portfolios().get(0).productCandidates().get(0)
+                        .selectedPreferentialConditions().get(0).conditionCode()
+        );
     }
 
     @Test
@@ -240,6 +247,7 @@ class SimulationServiceGetTest {
         private final List<SimulationPortfolioRecord> portfolios = new ArrayList<>();
         private final List<SimulationProductRecord> products = new ArrayList<>();
         private final ProductDataVersionRecord productDataVersion = productDataVersion();
+        private List<PreferentialRateRecord> selectedPreferentialRates = List.of();
 
         private Fixture() {
             addScenario(1L, ScenarioType.IMMEDIATE, 900L, true, 100L);
@@ -308,7 +316,7 @@ class SimulationServiceGetTest {
                         case "selectPortfolios" -> portfolios;
                         case "selectProductSnapshots" -> products;
                         case "selectProductDataVersion" -> productDataVersion;
-                        case "selectSelectedPreferentialRates" -> List.of();
+                        case "selectSelectedPreferentialRates" -> selectedPreferentialRates;
                         case "toString" -> "SimulationMapperFixture";
                         case "hashCode" -> System.identityHashCode(proxy);
                         case "equals" -> proxy == args[0];
@@ -370,6 +378,16 @@ class SimulationServiceGetTest {
         version.setDataDate(LocalDate.of(2026, 8, 4));
         version.setStatus("COMPLETED");
         return version;
+    }
+
+    private static PreferentialRateRecord preferentialRate() {
+        PreferentialRateRecord rate = new PreferentialRateRecord();
+        rate.setPreferentialInterestRateId(601L);
+        rate.setProductVersionId(1_100L);
+        rate.setConditionCode("SALARY");
+        rate.setAdditionalRatePercent(new BigDecimal("0.50"));
+        rate.setDescription("급여 이체");
+        return rate;
     }
 
     private static SimulationProductRecord product(
