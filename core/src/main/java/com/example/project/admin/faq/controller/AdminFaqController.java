@@ -1,20 +1,26 @@
 package com.example.project.admin.faq.controller;
 
+import com.example.project.admin.faq.dto.response.AdminFaqPageResponse;
 import com.example.project.admin.faq.service.AdminFaqService;
 import com.example.project.common.api.ApiResponse;
+import com.example.project.common.api.Pagination;
+import com.example.project.common.api.ResponseCode;
 import com.example.project.common.logging.ApiLog;
 import io.swagger.annotations.Api;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.validation.constraints.Max;
 import javax.validation.constraints.Min;
+import java.util.List;
 
 @RestController
 @Api(tags = "관리자 FAQ 관리 API")
 @ApiLog
+@Validated
 @RequestMapping("/api/admin/faq")
 @RequiredArgsConstructor
 public class AdminFaqController {
@@ -22,23 +28,30 @@ public class AdminFaqController {
     private final AdminFaqService adminFaqService;
 
     @GetMapping
-    public ApiResponse<AdminFaqService> getFaqPage(
+    public ApiResponse<AdminFaqPageResponse> getFaqPage(
             @RequestParam(defaultValue = "0")
             @Min(0)
             Integer page,
 
             @RequestParam(defaultValue = "20")
             @Min(1)
-            @Max(100)
+            @Max(Pagination.MAX_PAGE_SIZE)
             int size,
 
             @RequestParam(required = false)
-            String status,
+            Long categoryId,
 
             @RequestParam(required = false)
-            String reportType,
+            String keyword,
 
             @AuthenticationPrincipal String principal,
             HttpServletRequest httpRequest
-    )
+    ){
+
+        AdminFaqPageResponse response = adminFaqService.getFaqPage(
+                page, size, categoryId, keyword
+        );
+
+        return ApiResponse.success(ResponseCode.SUCCESS, httpRequest.getRequestURI(), response);
+    }
 }

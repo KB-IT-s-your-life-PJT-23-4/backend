@@ -19,8 +19,6 @@ import java.util.Locale;
 @RequiredArgsConstructor
 public class AdminReportService {
 
-    private static final int MAX_PAGE_SIZE = 100;
-
     private static final Set<String> REPORT_STATUSES =
             Set.of(
                     "OPEN",
@@ -44,7 +42,7 @@ public class AdminReportService {
             String statusValue,
             String reportTypeValue
     ) {
-        validatePagination(page, size);
+        long offset = Pagination.calculateOffset(page, size);
 
         String status = normalizeFilter(
                 statusValue,
@@ -61,8 +59,6 @@ public class AdminReportService {
                 reportType
         );
 
-        long offset = (long) page * size;
-
         List<AiSafetyReportVO> items = reportMapper.selectAiReportsPage(
                 status,
                 reportType,
@@ -70,35 +66,18 @@ public class AdminReportService {
                 size
         );
 
-        int totalPages = calculateTotalPages(totalElements, size);
-
-        boolean hasNext = page + 1 < totalPages;
-
-        Pagination pagination = Pagination.builder()
-                .page(page)
-                .size(size)
-                .totalElements(totalElements)
-                .totalPages(totalPages)
-                .numberOfElements(items.size())
-                .first(page == 0)
-                .last(!hasNext)
-                .hasNext(hasNext)
-                .hasPrevious(page > 0)
-                .build();
+        Pagination pagination = Pagination.of(
+                page,
+                size,
+                totalElements,
+                items.size()
+        );
 
         return AdminReportPageResponse.builder()
                 .reports(items)
                 .pagination(pagination)
                 .build();
     }
-    private void validatePagination(int page, int size) {
-        if (page < 0 || size < 1 || size > MAX_PAGE_SIZE) {
-            throw new ServiceException(
-                    ResponseCode.BAD_REQUEST
-            );
-        }
-    }
-
     private String normalizeFilter(
             String value,
             Set<String> allowedValues
@@ -119,16 +98,4 @@ public class AdminReportService {
         return normalized;
     }
 
-    private int calculateTotalPages(
-            long totalElements,
-            int size
-    ) {
-        long pages =
-                totalElements / size
-                        + (totalElements % size == 0 ? 0 : 1);
-
-        return pages > Integer.MAX_VALUE
-                ? Integer.MAX_VALUE
-                : (int) pages;
-    }
 }

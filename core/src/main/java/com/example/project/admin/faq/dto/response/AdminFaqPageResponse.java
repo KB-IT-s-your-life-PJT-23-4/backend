@@ -12,6 +12,6 @@ import java.util.List;
 @AllArgsConstructor
 @Builder
 public class AdminFaqPageResponse {
-    private List<Faq> faqs;
+    private List<AdminFaqPageResponse> faqs;
     private Pagination pagination;
 }
