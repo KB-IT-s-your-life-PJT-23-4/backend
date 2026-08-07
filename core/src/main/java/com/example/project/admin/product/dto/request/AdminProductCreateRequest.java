@@ -6,6 +6,7 @@ import javax.validation.constraints.DecimalMin;
 import javax.validation.constraints.Size;
 import javax.validation.constraints.NotBlank;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 
 @Data
@@ -53,4 +54,6 @@ public class AdminProductCreateRequest {
 
     private List<AdminProductPreferentialConditionRequest> preferentialConditions; // deposit/savings
     private List<AdminProductEtfHoldingRequest> etfHoldings; // etf
+
+    private LocalDate rateBaseDate;
 }

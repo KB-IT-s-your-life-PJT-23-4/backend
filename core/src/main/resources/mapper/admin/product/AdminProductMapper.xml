@@ -336,5 +336,47 @@
     <delete id="deleteEtfHolding">
         DELETE FROM etf_holding WHERE holding_id = #{holdingId}
     </delete>
+    <delete id="deleteEtfHoldingsByDataVersion">
+        DELETE eh FROM etf_holding eh
+        JOIN kb_product_version pv ON pv.kb_product_version_id = eh.kb_product_version_id
+        WHERE pv.kb_product_data_version_id = #{dataVersionId}
+    </delete>
 
+    <delete id="deletePreferentialRatesByDataVersion">
+        DELETE pr FROM preferential_interest_rate pr
+        JOIN kb_product_version pv ON pv.kb_product_version_id = pr.kb_product_version_id
+        WHERE pv.kb_product_data_version_id = #{dataVersionId}
+    </delete>
+
+    <delete id="deleteBaseRatesByDataVersion">
+        DELETE br FROM base_interest_rate br
+        JOIN kb_product_version pv ON pv.kb_product_version_id = br.kb_product_version_id
+        WHERE pv.kb_product_data_version_id = #{dataVersionId}
+    </delete>
+
+    <delete id="deleteEtfByDataVersion">
+        DELETE e FROM etf e
+        JOIN kb_product_version pv ON pv.kb_product_version_id = e.kb_product_version_id
+        WHERE pv.kb_product_data_version_id = #{dataVersionId}
+    </delete>
+
+    <delete id="deleteDepositByDataVersion">
+        DELETE d FROM deposit d
+        JOIN kb_product_version pv ON pv.kb_product_version_id = d.kb_product_version_id
+        WHERE pv.kb_product_data_version_id = #{dataVersionId}
+    </delete>
+
+    <delete id="deleteSavingsByDataVersion">
+        DELETE s FROM savings s
+        JOIN kb_product_version pv ON pv.kb_product_version_id = s.kb_product_version_id
+        WHERE pv.kb_product_data_version_id = #{dataVersionId}
+    </delete>
+
+    <delete id="deleteProductVersionsByDataVersion">
+        DELETE FROM kb_product_version WHERE kb_product_data_version_id = #{dataVersionId}
+    </delete>
+
+    <delete id="deleteProductDataVersion">
+        DELETE FROM kb_product_data_version WHERE kb_product_data_version_id = #{dataVersionId}
+    </delete>
 </mapper>

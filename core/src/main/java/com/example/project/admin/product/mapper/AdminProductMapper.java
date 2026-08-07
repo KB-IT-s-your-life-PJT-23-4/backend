@@ -176,4 +176,13 @@ public interface AdminProductMapper {
             @Param("baseDate") LocalDate baseDate);
 
     int deleteEtfHolding(@Param("holdingId") Long holdingId);
+
+    void deleteEtfHoldingsByDataVersion(@Param("dataVersionId") Long dataVersionId);
+    void deletePreferentialRatesByDataVersion(@Param("dataVersionId") Long dataVersionId);
+    void deleteBaseRatesByDataVersion(@Param("dataVersionId") Long dataVersionId);
+    void deleteEtfByDataVersion(@Param("dataVersionId") Long dataVersionId);
+    void deleteDepositByDataVersion(@Param("dataVersionId") Long dataVersionId);
+    void deleteSavingsByDataVersion(@Param("dataVersionId") Long dataVersionId);
+    void deleteProductVersionsByDataVersion(@Param("dataVersionId") Long dataVersionId);
+    void deleteProductDataVersion(@Param("dataVersionId") Long dataVersionId);
 }

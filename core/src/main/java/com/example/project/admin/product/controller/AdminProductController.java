@@ -92,4 +92,10 @@ public class AdminProductController {
         );
         return ApiResponse.success(ResponseCode.UPDATED, request.getRequestURI(), data);
     }
+
+    @DeleteMapping("/versions/{id}")
+    public ApiResponse<Void> deleteVersion(@PathVariable Long id) {
+        adminProductService.deleteProductDataVersion(id);
+        return ApiResponse.success(ResponseCode.DELETED, ResponseCode.DELETED.getMessage(), null);
+    }
 }

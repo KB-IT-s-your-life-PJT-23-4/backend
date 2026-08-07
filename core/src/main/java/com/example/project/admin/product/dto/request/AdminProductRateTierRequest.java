@@ -17,12 +17,10 @@ public class AdminProductRateTierRequest {
     private Integer maxMonth;
 
     @NotNull
-    @DecimalMin(value = "0", inclusive = true)
+    @DecimalMin("0")
     private BigDecimal baseRatePercent;
 
     @NotNull
-    @DecimalMin(value = "0", inclusive = true)
+    @DecimalMin("0")
     private BigDecimal maxRatePercent;
-
-    private LocalDate baseDate;
 }

@@ -110,7 +110,7 @@ public class AdminProductService {
             }
         }
 
-        applyRateTiers(productType, productVersionId, request.getRateTiers());
+        applyRateTiers(productType, productVersionId, request.getRateTiers(), request.getRateBaseDate());
         applyPreferentialConditions(productType, productVersionId, request.getPreferentialConditions());
         applyEtfHoldings(productType, productVersionId, request.getEtfHoldings());
 
@@ -148,14 +148,14 @@ public class AdminProductService {
             case "DEPOSIT" -> {
                 adminProductMapper.insertDeposit(productVersionId, request.getMinAmount(),
                         request.getMaxAmount(), request.getMinMonth(), request.getMaxMonth());
-                insertRateTiers(productVersionId, request.getRateTiers());
+                insertRateTiers(productVersionId, request.getRateTiers(), request.getRateBaseDate());
                 insertPreferentialConditions(productVersionId, request.getPreferentialConditions());
             }
             case "SAVINGS" -> {
                 adminProductMapper.insertSavings(productVersionId, request.getSavingsCategory(),
                         request.getMonthlyMinAmount(), request.getMonthlyMaxAmount(),
                         request.getMinMonth(), request.getMaxMonth());
-                insertRateTiers(productVersionId, request.getRateTiers());
+                insertRateTiers(productVersionId, request.getRateTiers(), request.getRateBaseDate());
                 insertPreferentialConditions(productVersionId, request.getPreferentialConditions());
             }
             case "ETF" -> {
@@ -172,17 +172,21 @@ public class AdminProductService {
 
     @Transactional
     public AdminProductVersionResponse createDraftVersionFromLatest() {
+        List<AdminProductVersionRow> allVersions = adminProductMapper.selectProductDataVersions();
+        if (!allVersions.isEmpty() && "LOADING".equals(allVersions.get(0).getStatus())) {
+            throw new ServiceException(ResponseCode.CONFLICT);
+        }
+
         String versionCode = generateNextVersionCode();
         adminProductMapper.insertProductDataVersion(versionCode, LocalDate.now());
-        AdminProductVersionRow created = adminProductMapper.selectProductDataVersionByCode(versionCode);
+        Long newDataVersionId = adminProductMapper.selectLastInsertedId();
 
         AdminProductVersionRow latestCompleted = adminProductMapper.selectLatestCompletedDataVersion();
         if (latestCompleted != null) {
-            cloneProducts(latestCompleted.getProductDataVersionId(), created.getProductDataVersionId());
+            cloneProducts(latestCompleted.getProductDataVersionId(), newDataVersionId);
         }
 
-        return toVersionResponse(
-                adminProductMapper.selectProductDataVersion(created.getProductDataVersionId()));
+        return toVersionResponse(adminProductMapper.selectProductDataVersion(newDataVersionId));
     }
 
     @Transactional
@@ -193,6 +197,20 @@ public class AdminProductService {
         }
         adminProductMapper.completeProductDataVersion(productDataVersionId);
         return toVersionResponse(adminProductMapper.selectProductDataVersion(productDataVersionId));
+    }
+
+    @Transactional
+    public void deleteProductDataVersion(Long productDataVersionId) {
+        requireDataVersion(productDataVersionId);
+
+        adminProductMapper.deleteEtfHoldingsByDataVersion(productDataVersionId);
+        adminProductMapper.deletePreferentialRatesByDataVersion(productDataVersionId);
+        adminProductMapper.deleteBaseRatesByDataVersion(productDataVersionId);
+        adminProductMapper.deleteEtfByDataVersion(productDataVersionId);
+        adminProductMapper.deleteDepositByDataVersion(productDataVersionId);
+        adminProductMapper.deleteSavingsByDataVersion(productDataVersionId);
+        adminProductMapper.deleteProductVersionsByDataVersion(productDataVersionId);
+        adminProductMapper.deleteProductDataVersion(productDataVersionId);
     }
 
     private void cloneProducts(Long sourceDataVersionId, Long targetDataVersionId) {
@@ -252,14 +270,18 @@ public class AdminProductService {
         }
     }
 
-    private void insertRateTiers(Long productVersionId, List<AdminProductRateTierRequest> rateTiers) {
-        if (rateTiers == null) return;
-        for (AdminProductRateTierRequest tier : rateTiers) {
+    private void insertRateTiers(Long productVersionId, List<AdminProductRateTierRequest> tiers, LocalDate rateBaseDate) {
+        if (tiers == null) return;
+        LocalDate baseDate = rateBaseDate != null ? rateBaseDate : LocalDate.now();
+        for (AdminProductRateTierRequest tier : tiers) {
             validateTierRange(tier);
-            LocalDate baseDate = tier.getBaseDate() != null ? tier.getBaseDate() : LocalDate.now();
             adminProductMapper.insertBaseInterestRate(
-                    productVersionId, tier.getMinMonth(), tier.getMaxMonth(),
-                    tier.getBaseRatePercent(), tier.getMaxRatePercent(), baseDate);
+                    productVersionId,
+                    tier.getMinMonth(),
+                    tier.getMaxMonth(),
+                    tier.getBaseRatePercent(),
+                    tier.getMaxRatePercent(),
+                    baseDate);
         }
     }
 
@@ -294,31 +316,43 @@ public class AdminProductService {
         }
     }
 
-    private void applyRateTiers(String productType, Long productVersionId, List<AdminProductRateTierRequest> rateTiers) {
+    private void applyRateTiers(
+            String productType, Long productVersionId, List<AdminProductRateTierRequest> tiers, LocalDate rateBaseDate
+    ) {
         if (!"DEPOSIT".equals(productType) && !"SAVINGS".equals(productType)) return;
-        if (rateTiers == null) return;
+        if (tiers == null) return;
 
+        LocalDate baseDate = rateBaseDate != null ? rateBaseDate : LocalDate.now();
         List<AdminBaseRateRow> current = adminProductMapper.selectBaseRateTiers(productVersionId);
-        Set<Long> keepIds = rateTiers.stream()
+        Set<Long> incomingIds = tiers.stream()
                 .map(AdminProductRateTierRequest::getBaseInterestRateId)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
+
         for (AdminBaseRateRow row : current) {
-            if (!keepIds.contains(row.getBaseInterestRateId())) {
+            if (!incomingIds.contains(row.getBaseInterestRateId())) {
                 adminProductMapper.deleteBaseInterestRate(row.getBaseInterestRateId());
             }
         }
-        for (AdminProductRateTierRequest tier : rateTiers) {
+
+        for (AdminProductRateTierRequest tier : tiers) {
             validateTierRange(tier);
-            LocalDate baseDate = tier.getBaseDate() != null ? tier.getBaseDate() : LocalDate.now();
             if (tier.getBaseInterestRateId() != null) {
                 adminProductMapper.updateBaseInterestRate(
-                        tier.getBaseInterestRateId(), tier.getMinMonth(), tier.getMaxMonth(),
-                        tier.getBaseRatePercent(), tier.getMaxRatePercent(), baseDate);
+                        tier.getBaseInterestRateId(),
+                        tier.getMinMonth(),
+                        tier.getMaxMonth(),
+                        tier.getBaseRatePercent(),
+                        tier.getMaxRatePercent(),
+                        baseDate);
             } else {
                 adminProductMapper.insertBaseInterestRate(
-                        productVersionId, tier.getMinMonth(), tier.getMaxMonth(),
-                        tier.getBaseRatePercent(), tier.getMaxRatePercent(), baseDate);
+                        productVersionId,
+                        tier.getMinMonth(),
+                        tier.getMaxMonth(),
+                        tier.getBaseRatePercent(),
+                        tier.getMaxRatePercent(),
+                        baseDate);
             }
         }
     }
