@@ -1,21 +1,19 @@
-package com.example.project.consultation.domain;
+package com.example.project.admin.faq.dto.response;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
+import lombok.Data;
 
-@Getter
+@Data
 @Builder
 @AllArgsConstructor
-@NoArgsConstructor
-public class Faq {
-
-    private Long id;
+public class AdminFaqResponse {
+    private Long faqId;
     private Long categoryId;
     private String question;
     private String prompt;
     private String answer;
     private boolean showBranchButton;
     private boolean showTaxOfficeButton;
+
 }

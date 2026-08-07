@@ -105,6 +105,7 @@
         )
     </insert>
 
+
     <update id="updateCategory"
             parameterType="com.example.project.consultation.domain.FaqCategory">
         UPDATE faq_category
@@ -112,8 +113,48 @@
         WHERE faq_category_id = #{id}
     </update>
 
+
     <delete id="deleteByCategoryId">
         DELETE FROM faq_category
         WHERE faq_category_id = #{categoryId}
+    </delete>
+
+    <insert id="insertFaq"
+            parameterType="com.example.project.consultation.domain.Faq"
+            useGeneratedKeys="true"
+            keyProperty="id"
+            keyColumn="faq_id">
+        INSERT INTO faq (
+            faq_category_id2,
+            question,
+            prompt,
+            answer,
+            show_branch_button,
+            show_tax_office_button
+        ) VALUES (
+            #{categoryId},
+            #{question},
+            #{prompt},
+            #{answer},
+            #{showBranchButton},
+            #{showTaxOfficeButton}
+        )
+    </insert>
+
+    <update id="updateFaq"
+            parameterType="com.example.project.consultation.domain.Faq">
+        UPDATE faq
+        SET faq_category_id2 = #{categoryId},
+            question = #{question},
+            prompt = #{prompt},
+            answer = #{answer},
+            show_branch_button = #{showBranchButton},
+            show_tax_office_button = #{showTaxOfficeButton}
+        WHERE faq_id = #{id}
+    </update>
+
+    <delete id="deleteByFaqId">
+        DELETE FROM faq
+        WHERE faq_id = #{faqId}
     </delete>
 </mapper>

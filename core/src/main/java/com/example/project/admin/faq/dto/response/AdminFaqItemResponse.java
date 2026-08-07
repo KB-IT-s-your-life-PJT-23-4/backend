@@ -1,5 +1,6 @@
 package com.example.project.admin.faq.dto.response;
 
+import com.example.project.consultation.domain.Faq;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;

@@ -32,4 +32,10 @@ public interface AdminFaqMapper {
     int updateCategory(FaqCategory faqCategory);
 
     int deleteByCategoryId(@Param("categoryId") long categoryId);
+
+    int insertFaq(Faq faq);
+
+    int updateFaq(Faq faq);
+
+    int deleteByFaqId(@Param("faqId") long faqId);
 }

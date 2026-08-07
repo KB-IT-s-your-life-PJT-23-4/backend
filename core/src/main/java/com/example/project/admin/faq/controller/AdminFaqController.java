@@ -1,9 +1,8 @@
 package com.example.project.admin.faq.controller;
 
 import com.example.project.admin.faq.dto.request.AdminCategoryRequest;
-import com.example.project.admin.faq.dto.response.AdminCategoryResponse;
-import com.example.project.admin.faq.dto.response.AdminFaqCategoriesDto;
-import com.example.project.admin.faq.dto.response.AdminFaqPageResponse;
+import com.example.project.admin.faq.dto.request.AdminFaqRequest;
+import com.example.project.admin.faq.dto.response.*;
 import com.example.project.admin.faq.service.AdminFaqService;
 import com.example.project.common.api.ApiResponse;
 import com.example.project.common.api.Pagination;
@@ -107,11 +106,36 @@ public class AdminFaqController {
     }
 
     @PostMapping()
+    public ApiResponse<AdminFaqResponse> createFaq(
+            @Valid @RequestBody AdminFaqRequest request,
+            @AuthenticationPrincipal String principal,
+            HttpServletRequest httpRequest
+    ){
+        AdminFaqResponse response = adminFaqService.createFaq(request);
 
+        return ApiResponse.success(ResponseCode.SUCCESS, httpRequest.getRequestURI(), response);
+    }
 
     @PatchMapping("/{faqId}")
+    public ApiResponse<AdminFaqResponse> updateFaq(
+            @PathVariable long faqId,
+            @Valid @RequestBody AdminFaqRequest request,
+            @AuthenticationPrincipal String principal,
+            HttpServletRequest httpRequest
+    ){
+        AdminFaqResponse response = adminFaqService.updateFaq(faqId, request);
 
+        return ApiResponse.success(ResponseCode.SUCCESS, httpRequest.getRequestURI(), response);
+    }
 
     @DeleteMapping("/{faqId}")
+    public ApiResponse<Void> deleteFaq(
+            @Valid @PathVariable long faqId,
+            @AuthenticationPrincipal String principal,
+            HttpServletRequest httpRequest
+    ){
+        adminFaqService.deleteFaq(faqId);
 
+        return ApiResponse.success(ResponseCode.SUCCESS, httpRequest.getRequestURI(), null);
+    }
 }
