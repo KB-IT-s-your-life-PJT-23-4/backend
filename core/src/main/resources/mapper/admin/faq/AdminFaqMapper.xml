@@ -1,0 +1,160 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.example.project.admin.faq.mapper.AdminFaqMapper">
+    <resultMap id="faqResultMap"
+               type="com.example.project.consultation.domain.Faq">
+        <id property="id" column="faq_id"/>
+        <result property="categoryId" column="faq_category_id2"/>
+        <result property="question" column="question"/>
+        <result property="prompt" column="prompt"/>
+        <result property="answer" column="answer"/>
+        <result property="showBranchButton" column="show_branch_button"/>
+        <result property="showTaxOfficeButton" column="show_tax_office_button"/>
+    </resultMap>
+
+    <select id="selectFaqPage" resultType="com.example.project.admin.faq.dto.response.AdminFaqItemResponse">
+        SELECT
+            f.faq_id AS faq_id,
+            f.faq_category_id2 AS category_id,
+            fc.category_name,
+            f.question,
+            f.show_branch_button,
+            f.show_tax_office_button,
+            f.created_at,
+            f.updated_at
+        FROM faq f
+        JOIN faq_category fc
+            ON fc.faq_category_id = f.faq_category_id2
+
+        <where>
+            <if test="categoryId != null">
+                f.faq_category_id2 = #{categoryId}
+            </if>
+
+            <if test="keyword != null and keyword != ''">
+                AND (
+                    f.question LIKE CONCAT('%', #{keyword}, '%')
+                    OR f.prompt LIKE CONCAT('%', #{keyword}, '%')
+                )
+            </if>
+        </where>
+
+        ORDER BY
+            f.updated_at DESC,
+            f.faq_id DESC
+
+        LIMIT #{size}
+        OFFSET #{offset}
+    </select>
+
+    <select id="countFaqs" resultType="long">
+        SELECT COUNT(*)
+        FROM faq f
+
+        <where>
+            <if test="categoryId != null">
+                f.faq_category_id2 = #{categoryId}
+            </if>
+
+            <if test="keyword != null and keyword != ''">
+                AND (
+                    f.question LIKE CONCAT('%', #{keyword}, '%')
+                    OR f.prompt LIKE CONCAT('%', #{keyword}, '%')
+                )
+            </if>
+        </where>
+    </select>
+
+    <select id="totalFaqCount" resultType="long">
+        SELECT COUNT(*)
+        FROM faq
+
+        <where>
+            <if test="categoryId != null">
+                faq_category_id2 = #{categoryId}
+            </if>
+        </where>
+    </select>
+
+    <select id="findFaqDetail" resultMap="faqResultMap">
+        SELECT
+            faq_id,
+            faq_category_id2,
+            question,
+            prompt,
+            answer,
+            show_branch_button,
+            show_tax_office_button
+        FROM faq
+        WHERE faq_id = #{faqId}
+    </select>
+
+    <insert id="createCategory"
+        parameterType="com.example.project.consultation.domain.FaqCategory"
+        useGeneratedKeys="true"
+        keyProperty="id"
+        keyColumn="faq_category_id"
+    >
+        INSERT INTO faq_category (
+        category_name
+        ) VALUES (
+        #{categoryName}
+        )
+    </insert>
+
+
+    <update id="updateCategory"
+            parameterType="com.example.project.consultation.domain.FaqCategory">
+        UPDATE faq_category
+        SET category_name = #{categoryName}
+        WHERE faq_category_id = #{id}
+    </update>
+
+
+    <delete id="deleteByCategoryId">
+        DELETE FROM faq_category
+        WHERE faq_category_id = #{categoryId}
+    </delete>
+
+    <insert id="insertFaq"
+            parameterType="com.example.project.consultation.domain.Faq"
+            useGeneratedKeys="true"
+            keyProperty="id"
+            keyColumn="faq_id">
+        INSERT INTO faq (
+            faq_category_id2,
+            question,
+            prompt,
+            answer,
+            show_branch_button,
+            show_tax_office_button
+        ) VALUES (
+            #{categoryId},
+            #{question},
+            #{prompt},
+            #{answer},
+            #{showBranchButton},
+            #{showTaxOfficeButton}
+        )
+    </insert>
+
+    <update id="updateFaq"
+            parameterType="com.example.project.consultation.domain.Faq">
+        UPDATE faq
+        SET faq_category_id2 = #{categoryId},
+            question = #{question},
+            prompt = #{prompt},
+            answer = #{answer},
+            show_branch_button = #{showBranchButton},
+            show_tax_office_button = #{showTaxOfficeButton}
+        WHERE faq_id = #{id}
+    </update>
+
+    <delete id="deleteByFaqId">
+        DELETE FROM faq
+        WHERE faq_id = #{faqId}
+    </delete>
+</mapper>

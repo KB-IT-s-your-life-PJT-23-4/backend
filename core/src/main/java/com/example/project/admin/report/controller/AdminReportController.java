@@ -3,6 +3,7 @@ package com.example.project.admin.report.controller;
 import com.example.project.admin.report.dto.response.AdminReportPageResponse;
 import com.example.project.admin.report.service.AdminReportService;
 import com.example.project.common.api.ApiResponse;
+import com.example.project.common.api.Pagination;
 import com.example.project.common.api.ResponseCode;
 import com.example.project.common.logging.ApiLog;
 import com.example.project.consultation.domain.AiSafetyReportVO;
@@ -33,7 +34,7 @@ public class AdminReportController {
 
             @RequestParam(defaultValue = "20")
             @Min(1)
-            @Max(100)
+            @Max(Pagination.MAX_PAGE_SIZE)
             int size,
 
             @RequestParam(required = false)

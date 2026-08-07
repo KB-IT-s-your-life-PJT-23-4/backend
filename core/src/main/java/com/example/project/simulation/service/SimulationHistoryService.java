@@ -80,7 +80,7 @@ public class SimulationHistoryService {
             if (simulations.isEmpty()) {
                 return new SimulationHistoryResponse(
                         List.of(),
-                        pagination(page, size, totalElements, 0)
+                        Pagination.of(page, size, totalElements, 0)
                 );
             }
 
@@ -127,7 +127,7 @@ public class SimulationHistoryService {
 
             return new SimulationHistoryResponse(
                     items,
-                    pagination(page, size, totalElements, items.size())
+                    Pagination.of(page, size, totalElements, items.size())
             );
         } catch (SimulationException exception) {
             throw exception;
@@ -420,28 +420,6 @@ public class SimulationHistoryService {
                     SimulationError.INVALID_SIMULATION_STATUS_FILTER
             );
         }
-    }
-
-    private Pagination pagination(
-            int page,
-            int size,
-            long totalElements,
-            int numberOfElements
-    ) {
-        long pages = totalElements / size + (totalElements % size == 0 ? 0 : 1);
-        int totalPages = pages > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) pages;
-        boolean hasNext = page + 1L < pages;
-        return new Pagination(
-                page,
-                size,
-                totalElements,
-                totalPages,
-                numberOfElements,
-                page == 0,
-                !hasNext,
-                hasNext,
-                page > 0
-        );
     }
 
     private BigDecimal returnRate(long expectedProfit, Long investmentPrincipal) {
