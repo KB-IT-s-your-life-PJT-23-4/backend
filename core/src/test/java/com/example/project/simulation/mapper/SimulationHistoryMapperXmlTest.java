@@ -40,6 +40,11 @@ class SimulationHistoryMapperXmlTest {
         assertTrue(sql.contains(
                 "s.status = 'SAVED' OR (s.status = 'DRAFT' AND s.expired_at > ?)"
         ));
+        assertTrue(sql.contains("AND history_portfolio.is_recommended = 1"));
+        assertTrue(sql.contains("HAVING COUNT(*) = 3"));
+        assertTrue(sql.contains(
+                "COUNT(DISTINCT history_portfolio.portfolio_type) = 3"
+        ));
         assertTrue(sql.contains("AND s.status = ?"));
         assertTrue(sql.contains("AND s.family_id = ?"));
         assertTrue(sql.contains("ORDER BY s.updated_at DESC, s.simul_id DESC"));
@@ -63,6 +68,11 @@ class SimulationHistoryMapperXmlTest {
 
         assertTrue(sql.contains(
                 "s.status = 'SAVED' OR (s.status = 'DRAFT' AND s.expired_at > ?)"
+        ));
+        assertTrue(sql.contains("AND history_portfolio.is_recommended = 1"));
+        assertTrue(sql.contains("HAVING COUNT(*) = 3"));
+        assertTrue(sql.contains(
+                "COUNT(DISTINCT history_portfolio.portfolio_type) = 3"
         ));
         assertTrue(sql.contains("AND s.status = ?"));
     }

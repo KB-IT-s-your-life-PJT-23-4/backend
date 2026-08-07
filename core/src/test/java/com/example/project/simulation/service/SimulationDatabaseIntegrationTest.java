@@ -124,7 +124,7 @@ class SimulationDatabaseIntegrationTest {
         factory.setConfigLocation(new ClassPathResource("mybatis-config.xml"));
         factory.setMapperLocations(
                 new PathMatchingResourcePatternResolver().getResources(
-                        "classpath*:mapper/**/*.xml")
+                        "classpath:mapper/**/*Mapper.xml")
         );
         return factory.getObject();
     }
