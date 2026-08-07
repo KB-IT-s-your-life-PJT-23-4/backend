@@ -1,11 +1,17 @@
 package com.example.project.admin.product.service;
 
 import com.example.project.admin.product.domain.AdminBaseRateRow;
+import com.example.project.admin.product.domain.AdminEtfHoldingRow;
+import com.example.project.admin.product.domain.AdminPreferentialRateRow;
 import com.example.project.admin.product.domain.AdminProductRow;
 import com.example.project.admin.product.domain.AdminProductVersionRow;
 import com.example.project.admin.product.dto.request.AdminProductCreateRequest;
+import com.example.project.admin.product.dto.request.AdminProductEtfHoldingRequest;
+import com.example.project.admin.product.dto.request.AdminProductPreferentialConditionRequest;
 import com.example.project.admin.product.dto.request.AdminProductRateTierRequest;
 import com.example.project.admin.product.dto.request.AdminProductUpdateRequest;
+import com.example.project.admin.product.dto.response.AdminProductEtfHoldingResponse;
+import com.example.project.admin.product.dto.response.AdminProductPreferentialConditionResponse;
 import com.example.project.admin.product.dto.response.AdminProductRateTierResponse;
 import com.example.project.admin.product.dto.response.AdminProductResponse;
 import com.example.project.admin.product.dto.response.AdminProductVersionResponse;
@@ -17,7 +23,6 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
@@ -105,7 +110,9 @@ public class AdminProductService {
             }
         }
 
-        applyRateTiers(productType, existing.getProductVersionId(), request.getRateTiers());
+        applyRateTiers(productType, productVersionId, request.getRateTiers());
+        applyPreferentialConditions(productType, productVersionId, request.getPreferentialConditions());
+        applyEtfHoldings(productType, productVersionId, request.getEtfHoldings());
 
         return toProductResponse(fetchSingle(productType, productVersionId));
     }
@@ -142,17 +149,22 @@ public class AdminProductService {
                 adminProductMapper.insertDeposit(productVersionId, request.getMinAmount(),
                         request.getMaxAmount(), request.getMinMonth(), request.getMaxMonth());
                 insertRateTiers(productVersionId, request.getRateTiers());
+                insertPreferentialConditions(productVersionId, request.getPreferentialConditions());
             }
             case "SAVINGS" -> {
                 adminProductMapper.insertSavings(productVersionId, request.getSavingsCategory(),
                         request.getMonthlyMinAmount(), request.getMonthlyMaxAmount(),
                         request.getMinMonth(), request.getMaxMonth());
                 insertRateTiers(productVersionId, request.getRateTiers());
+                insertPreferentialConditions(productVersionId, request.getPreferentialConditions());
             }
-            case "ETF" -> adminProductMapper.insertEtf(productVersionId, request.getStockCode(),
-                    request.getEtfCategory(), request.getTrackingIndex(),
-                    request.getAnnualReturn5yPercent(), request.getBondRatioPercent(),
-                    request.getRiskLevel());
+            case "ETF" -> {
+                adminProductMapper.insertEtf(productVersionId, request.getStockCode(),
+                        request.getEtfCategory(), request.getTrackingIndex(),
+                        request.getAnnualReturn5yPercent(), request.getBondRatioPercent(),
+                        request.getRiskLevel());
+                insertEtfHoldings(productVersionId, request.getEtfHoldings());
+            }
         }
 
         return toProductResponse(fetchSingle(type, productVersionId));
@@ -189,6 +201,7 @@ public class AdminProductService {
             adminProductMapper.insertDeposit(newVersionId, row.getMinAmount(), row.getMaxAmount(),
                     row.getMinMonth(), row.getMaxMonth());
             cloneBaseRates(row.getProductVersionId(), newVersionId);
+            clonePreferentialRates(row.getProductVersionId(), newVersionId);
         }
         for (AdminProductRow row : adminProductMapper.selectSavingsProducts(sourceDataVersionId, null)) {
             Long newVersionId = cloneProductVersion(targetDataVersionId, row);
@@ -196,12 +209,14 @@ public class AdminProductService {
                     row.getMonthlyMinAmount(), row.getMonthlyMaxAmount(),
                     row.getMinMonth(), row.getMaxMonth());
             cloneBaseRates(row.getProductVersionId(), newVersionId);
+            clonePreferentialRates(row.getProductVersionId(), newVersionId);
         }
         for (AdminProductRow row : adminProductMapper.selectEtfProducts(sourceDataVersionId, null)) {
             Long newVersionId = cloneProductVersion(targetDataVersionId, row);
             adminProductMapper.insertEtf(newVersionId, row.getStockCode(), row.getEtfCategory(),
                     row.getTrackingIndex(), row.getAnnualReturn5yPercent(),
                     row.getBondRatioPercent(), row.getRiskLevel());
+            cloneEtfHoldings(row.getProductVersionId(), newVersionId);
         }
     }
 
@@ -213,11 +228,27 @@ public class AdminProductService {
     }
 
     private void cloneBaseRates(Long sourceProductVersionId, Long targetProductVersionId) {
-        List<AdminBaseRateRow> tiers = adminProductMapper.selectBaseRateTiers(sourceProductVersionId);
-        for (AdminBaseRateRow tier : tiers) {
+        for (AdminBaseRateRow tier : adminProductMapper.selectBaseRateTiers(sourceProductVersionId)) {
             adminProductMapper.insertBaseInterestRate(
                     targetProductVersionId, tier.getMinMonth(), tier.getMaxMonth(),
                     tier.getBaseRatePercent(), tier.getMaxRatePercent(), tier.getBaseDate());
+        }
+    }
+
+    private void clonePreferentialRates(Long sourceProductVersionId, Long targetProductVersionId) {
+        for (AdminPreferentialRateRow row : adminProductMapper.selectPreferentialRates(sourceProductVersionId)) {
+            adminProductMapper.insertPreferentialRate(
+                    targetProductVersionId, row.getAdditionalRatePercent(),
+                    row.getConditionCode(), row.getPreferentialCondition(), row.getBaseDate());
+        }
+    }
+
+    private void cloneEtfHoldings(Long sourceProductVersionId, Long targetProductVersionId) {
+        for (AdminEtfHoldingRow row : adminProductMapper.selectEtfHoldings(sourceProductVersionId)) {
+            adminProductMapper.insertEtfHolding(
+                    targetProductVersionId, row.getHoldingRank(), row.getHoldingName(),
+                    row.getHoldingCode(), row.getAssetType(), row.getCountryCode(),
+                    row.getWeightPercent(), row.getBaseDate());
         }
     }
 
@@ -225,42 +256,137 @@ public class AdminProductService {
         if (rateTiers == null) return;
         for (AdminProductRateTierRequest tier : rateTiers) {
             validateTierRange(tier);
+            LocalDate baseDate = tier.getBaseDate() != null ? tier.getBaseDate() : LocalDate.now();
             adminProductMapper.insertBaseInterestRate(
                     productVersionId, tier.getMinMonth(), tier.getMaxMonth(),
-                    tier.getBaseRatePercent(), tier.getMaxRatePercent(), LocalDate.now());
+                    tier.getBaseRatePercent(), tier.getMaxRatePercent(), baseDate);
         }
     }
 
-    /**
-     * 요청으로 온 rateTiers 목록을 DB의 현재 구간 목록과 비교해서
-     * id가 있는 건 수정, id가 없는 건 추가, 요청에 없는 기존 구간은 삭제한다.
-     */
+    private void insertPreferentialConditions(
+            Long productVersionId, List<AdminProductPreferentialConditionRequest> conditions
+    ) {
+        if (conditions == null) return;
+        for (AdminProductPreferentialConditionRequest condition : conditions) {
+            LocalDate baseDate = condition.getBaseDate() != null ? condition.getBaseDate() : LocalDate.now();
+            try {
+                adminProductMapper.insertPreferentialRate(
+                        productVersionId, condition.getAdditionalRatePercent(),
+                        condition.getConditionCode(), condition.getPreferentialCondition(), baseDate);
+            } catch (DuplicateKeyException exception) {
+                throw new ServiceException(ResponseCode.DUPLICATE_DATA);
+            }
+        }
+    }
+
+    private void insertEtfHoldings(Long productVersionId, List<AdminProductEtfHoldingRequest> holdings) {
+        if (holdings == null) return;
+        for (AdminProductEtfHoldingRequest holding : holdings) {
+            LocalDate baseDate = holding.getBaseDate() != null ? holding.getBaseDate() : LocalDate.now();
+            try {
+                adminProductMapper.insertEtfHolding(
+                        productVersionId, holding.getHoldingRank(), holding.getHoldingName(),
+                        holding.getHoldingCode(), holding.getAssetType(), holding.getCountryCode(),
+                        holding.getWeightPercent(), baseDate);
+            } catch (DuplicateKeyException exception) {
+                throw new ServiceException(ResponseCode.DUPLICATE_DATA);
+            }
+        }
+    }
+
     private void applyRateTiers(String productType, Long productVersionId, List<AdminProductRateTierRequest> rateTiers) {
         if (!"DEPOSIT".equals(productType) && !"SAVINGS".equals(productType)) return;
-        if (rateTiers == null) return; // 요청에 아예 없으면 금리는 건드리지 않는다
+        if (rateTiers == null) return;
 
         List<AdminBaseRateRow> current = adminProductMapper.selectBaseRateTiers(productVersionId);
         Set<Long> keepIds = rateTiers.stream()
                 .map(AdminProductRateTierRequest::getBaseInterestRateId)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
-
         for (AdminBaseRateRow row : current) {
             if (!keepIds.contains(row.getBaseInterestRateId())) {
                 adminProductMapper.deleteBaseInterestRate(row.getBaseInterestRateId());
             }
         }
-
         for (AdminProductRateTierRequest tier : rateTiers) {
             validateTierRange(tier);
+            LocalDate baseDate = tier.getBaseDate() != null ? tier.getBaseDate() : LocalDate.now();
             if (tier.getBaseInterestRateId() != null) {
                 adminProductMapper.updateBaseInterestRate(
                         tier.getBaseInterestRateId(), tier.getMinMonth(), tier.getMaxMonth(),
-                        tier.getBaseRatePercent(), tier.getMaxRatePercent());
+                        tier.getBaseRatePercent(), tier.getMaxRatePercent(), baseDate);
             } else {
                 adminProductMapper.insertBaseInterestRate(
                         productVersionId, tier.getMinMonth(), tier.getMaxMonth(),
-                        tier.getBaseRatePercent(), tier.getMaxRatePercent(), LocalDate.now());
+                        tier.getBaseRatePercent(), tier.getMaxRatePercent(), baseDate);
+            }
+        }
+    }
+
+    private void applyPreferentialConditions(
+            String productType, Long productVersionId, List<AdminProductPreferentialConditionRequest> conditions
+    ) {
+        if (!"DEPOSIT".equals(productType) && !"SAVINGS".equals(productType)) return;
+        if (conditions == null) return;
+
+        List<AdminPreferentialRateRow> current = adminProductMapper.selectPreferentialRates(productVersionId);
+        Set<Long> keepIds = conditions.stream()
+                .map(AdminProductPreferentialConditionRequest::getPreferentialInterestRateId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        for (AdminPreferentialRateRow row : current) {
+            if (!keepIds.contains(row.getPreferentialInterestRateId())) {
+                adminProductMapper.deletePreferentialRate(row.getPreferentialInterestRateId());
+            }
+        }
+        for (AdminProductPreferentialConditionRequest condition : conditions) {
+            LocalDate baseDate = condition.getBaseDate() != null ? condition.getBaseDate() : LocalDate.now();
+            try {
+                if (condition.getPreferentialInterestRateId() != null) {
+                    adminProductMapper.updatePreferentialRate(
+                            condition.getPreferentialInterestRateId(), condition.getAdditionalRatePercent(),
+                            condition.getConditionCode(), condition.getPreferentialCondition(), baseDate);
+                } else {
+                    adminProductMapper.insertPreferentialRate(
+                            productVersionId, condition.getAdditionalRatePercent(),
+                            condition.getConditionCode(), condition.getPreferentialCondition(), baseDate);
+                }
+            } catch (DuplicateKeyException exception) {
+                throw new ServiceException(ResponseCode.DUPLICATE_DATA);
+            }
+        }
+    }
+
+    private void applyEtfHoldings(String productType, Long productVersionId, List<AdminProductEtfHoldingRequest> holdings) {
+        if (!"ETF".equals(productType)) return;
+        if (holdings == null) return;
+
+        List<AdminEtfHoldingRow> current = adminProductMapper.selectEtfHoldings(productVersionId);
+        Set<Long> keepIds = holdings.stream()
+                .map(AdminProductEtfHoldingRequest::getHoldingId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        for (AdminEtfHoldingRow row : current) {
+            if (!keepIds.contains(row.getHoldingId())) {
+                adminProductMapper.deleteEtfHolding(row.getHoldingId());
+            }
+        }
+        for (AdminProductEtfHoldingRequest holding : holdings) {
+            LocalDate baseDate = holding.getBaseDate() != null ? holding.getBaseDate() : LocalDate.now();
+            try {
+                if (holding.getHoldingId() != null) {
+                    adminProductMapper.updateEtfHolding(
+                            holding.getHoldingId(), holding.getHoldingRank(), holding.getHoldingName(),
+                            holding.getHoldingCode(), holding.getAssetType(), holding.getCountryCode(),
+                            holding.getWeightPercent(), baseDate);
+                } else {
+                    adminProductMapper.insertEtfHolding(
+                            productVersionId, holding.getHoldingRank(), holding.getHoldingName(),
+                            holding.getHoldingCode(), holding.getAssetType(), holding.getCountryCode(),
+                            holding.getWeightPercent(), baseDate);
+                }
+            } catch (DuplicateKeyException exception) {
+                throw new ServiceException(ResponseCode.DUPLICATE_DATA);
             }
         }
     }
@@ -339,7 +465,9 @@ public class AdminProductService {
     }
 
     private AdminProductResponse toProductResponse(AdminProductRow row) {
-        List<AdminProductRateTierResponse> tiers = "ETF".equals(row.getProductType())
+        boolean isEtf = "ETF".equals(row.getProductType());
+
+        List<AdminProductRateTierResponse> tiers = isEtf
                 ? List.of()
                 : adminProductMapper.selectBaseRateTiers(row.getProductVersionId()).stream()
                 .map(tier -> AdminProductRateTierResponse.builder()
@@ -348,8 +476,36 @@ public class AdminProductService {
                         .maxMonth(tier.getMaxMonth())
                         .baseRatePercent(tier.getBaseRatePercent())
                         .maxRatePercent(tier.getMaxRatePercent())
+                        .baseDate(tier.getBaseDate())
                         .build())
                 .toList();
+
+        List<AdminProductPreferentialConditionResponse> preferentialConditions = isEtf
+                ? List.of()
+                : adminProductMapper.selectPreferentialRates(row.getProductVersionId()).stream()
+                .map(condition -> AdminProductPreferentialConditionResponse.builder()
+                        .preferentialInterestRateId(condition.getPreferentialInterestRateId())
+                        .additionalRatePercent(condition.getAdditionalRatePercent())
+                        .conditionCode(condition.getConditionCode())
+                        .preferentialCondition(condition.getPreferentialCondition())
+                        .baseDate(condition.getBaseDate())
+                        .build())
+                .toList();
+
+        List<AdminProductEtfHoldingResponse> etfHoldings = isEtf
+                ? adminProductMapper.selectEtfHoldings(row.getProductVersionId()).stream()
+                .map(holding -> AdminProductEtfHoldingResponse.builder()
+                        .holdingId(holding.getHoldingId())
+                        .holdingRank(holding.getHoldingRank())
+                        .holdingName(holding.getHoldingName())
+                        .holdingCode(holding.getHoldingCode())
+                        .assetType(holding.getAssetType())
+                        .countryCode(holding.getCountryCode())
+                        .weightPercent(holding.getWeightPercent())
+                        .baseDate(holding.getBaseDate())
+                        .build())
+                .toList()
+                : List.of();
 
         return AdminProductResponse.builder()
                 .productVersionId(row.getProductVersionId())
@@ -369,6 +525,7 @@ public class AdminProductService {
                 .minBaseRatePercent(row.getMinBaseRatePercent())
                 .maxRatePercent(row.getMaxRatePercent())
                 .rateTiers(tiers)
+                .preferentialConditions(preferentialConditions)
                 .savingsCategory(row.getSavingsCategory())
                 .monthlyMinAmount(row.getMonthlyMinAmount())
                 .monthlyMaxAmount(row.getMonthlyMaxAmount())
@@ -378,6 +535,7 @@ public class AdminProductService {
                 .annualReturn5yPercent(row.getAnnualReturn5yPercent())
                 .bondRatioPercent(row.getBondRatioPercent())
                 .riskLevel(row.getRiskLevel())
+                .etfHoldings(etfHoldings)
                 .build();
     }
 }

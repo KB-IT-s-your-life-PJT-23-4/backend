@@ -39,4 +39,7 @@ public class AdminProductResponse {
     private final BigDecimal annualReturn5yPercent;
     private final BigDecimal bondRatioPercent;
     private final String riskLevel;
+
+    private final List<AdminProductPreferentialConditionResponse> preferentialConditions; // deposit/savings만
+    private final List<AdminProductEtfHoldingResponse> etfHoldings; // etf만
 }

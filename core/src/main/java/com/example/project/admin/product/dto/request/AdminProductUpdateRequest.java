@@ -45,6 +45,8 @@ public class AdminProductUpdateRequest {
     @DecimalMin(value = "0", inclusive = true)
     private BigDecimal annualReturn5yPercent;
 
-    // deposit/savings 금리 구간 전체 목록. null이면 금리는 건드리지 않음.
     private List<AdminProductRateTierRequest> rateTiers;
+
+    private List<AdminProductPreferentialConditionRequest> preferentialConditions; // deposit/savings
+    private List<AdminProductEtfHoldingRequest> etfHoldings; // etf
 }

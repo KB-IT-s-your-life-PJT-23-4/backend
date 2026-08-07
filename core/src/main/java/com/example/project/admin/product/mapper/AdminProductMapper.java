@@ -1,8 +1,6 @@
 package com.example.project.admin.product.mapper;
 
-import com.example.project.admin.product.domain.AdminBaseRateRow;
-import com.example.project.admin.product.domain.AdminProductRow;
-import com.example.project.admin.product.domain.AdminProductVersionRow;
+import com.example.project.admin.product.domain.*;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -76,7 +74,8 @@ public interface AdminProductMapper {
             @Param("minMonth") Integer minMonth,
             @Param("maxMonth") Integer maxMonth,
             @Param("baseRatePercent") BigDecimal baseRatePercent,
-            @Param("maxRatePercent") BigDecimal maxRatePercent);
+            @Param("maxRatePercent") BigDecimal maxRatePercent,
+            @Param("baseDate") LocalDate baseDate);
 
     int deleteBaseInterestRate(@Param("baseInterestRateId") Long baseInterestRateId);
 
@@ -135,4 +134,46 @@ public interface AdminProductMapper {
             @Param("annualReturn5yPercent") BigDecimal annualReturn5yPercent,
             @Param("bondRatioPercent") BigDecimal bondRatioPercent,
             @Param("riskLevel") String riskLevel);
+
+    List<AdminPreferentialRateRow> selectPreferentialRates(@Param("productVersionId") Long productVersionId);
+
+    int insertPreferentialRate(
+            @Param("productVersionId") Long productVersionId,
+            @Param("additionalRatePercent") BigDecimal additionalRatePercent,
+            @Param("conditionCode") String conditionCode,
+            @Param("preferentialCondition") String preferentialCondition,
+            @Param("baseDate") LocalDate baseDate);
+
+    int updatePreferentialRate(
+            @Param("preferentialInterestRateId") Long preferentialInterestRateId,
+            @Param("additionalRatePercent") BigDecimal additionalRatePercent,
+            @Param("conditionCode") String conditionCode,
+            @Param("preferentialCondition") String preferentialCondition,
+            @Param("baseDate") LocalDate baseDate);
+
+    int deletePreferentialRate(@Param("preferentialInterestRateId") Long preferentialInterestRateId);
+
+    List<AdminEtfHoldingRow> selectEtfHoldings(@Param("productVersionId") Long productVersionId);
+
+    int insertEtfHolding(
+            @Param("productVersionId") Long productVersionId,
+            @Param("holdingRank") Integer holdingRank,
+            @Param("holdingName") String holdingName,
+            @Param("holdingCode") String holdingCode,
+            @Param("assetType") String assetType,
+            @Param("countryCode") String countryCode,
+            @Param("weightPercent") BigDecimal weightPercent,
+            @Param("baseDate") LocalDate baseDate);
+
+    int updateEtfHolding(
+            @Param("holdingId") Long holdingId,
+            @Param("holdingRank") Integer holdingRank,
+            @Param("holdingName") String holdingName,
+            @Param("holdingCode") String holdingCode,
+            @Param("assetType") String assetType,
+            @Param("countryCode") String countryCode,
+            @Param("weightPercent") BigDecimal weightPercent,
+            @Param("baseDate") LocalDate baseDate);
+
+    int deleteEtfHolding(@Param("holdingId") Long holdingId);
 }

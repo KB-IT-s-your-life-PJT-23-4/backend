@@ -207,7 +207,8 @@
         SET min_month = #{minMonth},
         max_month = #{maxMonth},
         base_rate_percent = #{baseRatePercent},
-        max_rate_percent = #{maxRatePercent}
+        max_rate_percent = #{maxRatePercent},
+        base_date = #{baseDate}
         WHERE base_interest_rate_id = #{baseInterestRateId}
     </update>
 
@@ -274,5 +275,66 @@
         VALUES
         (#{productVersionId}, #{stockCode}, #{etfCategory}, #{trackingIndex}, #{annualReturn5yPercent}, #{bondRatioPercent}, #{riskLevel})
     </insert>
+    <select id="selectPreferentialRates"
+            resultType="com.example.project.admin.product.domain.AdminPreferentialRateRow">
+        SELECT preferential_interest_rate_id, additional_rate_percent, condition_code,
+        preferential_condition, base_date
+        FROM preferential_interest_rate
+        WHERE kb_product_version_id = #{productVersionId}
+        ORDER BY preferential_interest_rate_id
+    </select>
+
+    <insert id="insertPreferentialRate">
+        INSERT INTO preferential_interest_rate
+        (kb_product_version_id, additional_rate_percent, condition_code, preferential_condition, base_date)
+        VALUES
+        (#{productVersionId}, #{additionalRatePercent}, #{conditionCode}, #{preferentialCondition}, #{baseDate})
+    </insert>
+
+    <update id="updatePreferentialRate">
+        UPDATE preferential_interest_rate
+        SET additional_rate_percent = #{additionalRatePercent},
+        condition_code = #{conditionCode},
+        preferential_condition = #{preferentialCondition},
+        base_date = #{baseDate}
+        WHERE preferential_interest_rate_id = #{preferentialInterestRateId}
+    </update>
+
+    <delete id="deletePreferentialRate">
+        DELETE FROM preferential_interest_rate
+        WHERE preferential_interest_rate_id = #{preferentialInterestRateId}
+    </delete>
+
+    <select id="selectEtfHoldings"
+            resultType="com.example.project.admin.product.domain.AdminEtfHoldingRow">
+        SELECT holding_id, holding_rank, holding_name, holding_code, asset_type,
+        country_code, weight_percent, base_date
+        FROM etf_holding
+        WHERE kb_product_version_id = #{productVersionId}
+        ORDER BY holding_rank
+    </select>
+
+    <insert id="insertEtfHolding">
+        INSERT INTO etf_holding
+        (kb_product_version_id, holding_rank, holding_name, holding_code, asset_type, country_code, weight_percent, base_date)
+        VALUES
+        (#{productVersionId}, #{holdingRank}, #{holdingName}, #{holdingCode}, #{assetType}, #{countryCode}, #{weightPercent}, #{baseDate})
+    </insert>
+
+    <update id="updateEtfHolding">
+        UPDATE etf_holding
+        SET holding_rank = #{holdingRank},
+        holding_name = #{holdingName},
+        holding_code = #{holdingCode},
+        asset_type = #{assetType},
+        country_code = #{countryCode},
+        weight_percent = #{weightPercent},
+        base_date = #{baseDate}
+        WHERE holding_id = #{holdingId}
+    </update>
+
+    <delete id="deleteEtfHolding">
+        DELETE FROM etf_holding WHERE holding_id = #{holdingId}
+    </delete>
 
 </mapper>

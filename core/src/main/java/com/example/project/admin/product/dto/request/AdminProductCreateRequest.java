@@ -50,4 +50,7 @@ public class AdminProductCreateRequest {
     private String riskLevel;
 
     private List<AdminProductRateTierRequest> rateTiers;
+
+    private List<AdminProductPreferentialConditionRequest> preferentialConditions; // deposit/savings
+    private List<AdminProductEtfHoldingRequest> etfHoldings; // etf
 }
