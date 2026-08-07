@@ -1,7 +1,7 @@
 package com.example.project.security;
 
-import com.example.project.admin.domain.AdminPrincipal;
-import com.example.project.admin.service.AdminAuthorizationService;
+import com.example.project.admin.auth.domain.AdminPrincipal;
+import com.example.project.admin.auth.service.AdminAuthorizationService;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;

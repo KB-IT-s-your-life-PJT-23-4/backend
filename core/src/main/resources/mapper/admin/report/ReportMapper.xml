@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.example.project.admin.report.mapper.ReportMapper">
+    <resultMap id="aiSafetyReportResultMap"
+               type="com.example.project.consultation.domain.AiSafetyReportVO">
+
+        <id property="aiSafetyReportId"
+            column="ai_safety_report_id"/>
+
+        <result property="reportKey"
+                column="report_key"/>
+
+        <result property="reportType"
+                column="report_type"/>
+
+        <result property="status"
+                column="status"/>
+
+        <result property="userId"
+                column="user_id"/>
+
+        <result property="triggerEventId"
+                column="trigger_event_id"/>
+
+        <result property="occurrenceCount"
+                column="occurrence_count"/>
+
+        <result property="countWindowStartedAt"
+                column="count_window_started_at"/>
+
+        <result property="countWindowEndedAt"
+                column="count_window_ended_at"/>
+
+        <result property="assignedAdminId"
+                column="assigned_admin_id"/>
+
+        <result property="resolutionNote"
+                column="resolution_note"/>
+
+        <result property="reviewedAt"
+                column="reviewed_at"/>
+
+        <result property="createdAt"
+                column="created_at"/>
+
+        <result property="updatedAt"
+                column="updated_at"/>
+
+    </resultMap>
+
+    <sql id="reportFilter">
+        <where>
+            <if test="status != null">
+                status = #{status}
+            </if>
+
+            <if test="reportType != null">
+                AND report_type = #{reportType}
+            </if>
+        </where>
+    </sql>
+
+    <select id="selectAiReportsPage"
+            resultMap="aiSafetyReportResultMap">
+
+        SELECT
+        ai_safety_report_id,
+        report_key,
+        report_type,
+        status,
+        user_id,
+        trigger_event_id,
+        occurrence_count,
+        count_window_started_at,
+        count_window_ended_at,
+        assigned_admin_id,
+        resolution_note,
+        reviewed_at,
+        created_at,
+        updated_at
+        FROM ai_safety_report
+
+        <include refid="reportFilter"/>
+
+        ORDER BY
+        created_at DESC,
+        ai_safety_report_id DESC
+
+        LIMIT #{size}
+        OFFSET #{offset}
+    </select>
+
+    <select id="countAiReports"
+            resultType="long">
+
+        SELECT COUNT(*)
+        FROM ai_safety_report
+
+        <include refid="reportFilter"/>
+    </select>
+</mapper>

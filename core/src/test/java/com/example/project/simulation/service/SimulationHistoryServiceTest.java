@@ -47,8 +47,8 @@ class SimulationHistoryServiceTest {
 
         assertEquals(SimulationStatus.SAVED, mapperStub.observedStatus);
         assertTrue(response.items().isEmpty());
-        assertEquals(0, response.pagination().page());
-        assertEquals(10, response.pagination().size());
+        assertEquals(0, response.pagination().getPage());
+        assertEquals(10, response.pagination().getSize());
     }
 
     @Test
@@ -109,9 +109,9 @@ class SimulationHistoryServiceTest {
         );
 
         assertEquals(2, response.items().size());
-        assertEquals(2L, response.pagination().totalElements());
-        assertTrue(response.pagination().first());
-        assertTrue(response.pagination().last());
+        assertEquals(2L, response.pagination().getTotalElements());
+        assertTrue(response.pagination().isFirst());
+        assertTrue(response.pagination().isLast());
 
         SimulationHistoryResponse.Item draftItem = response.items().get(0);
         assertEquals(SimulationStatus.DRAFT, draftItem.status());
@@ -196,6 +196,7 @@ class SimulationHistoryServiceTest {
         simulation.setTaxPaymentMethod(TaxPaymentMethod.RECIPIENT_PAYS);
         simulation.setInvestmentPeriodMonths(36);
         simulation.setAsOfDate(LocalDate.of(2026, 8, 6));
+        simulation.setGiftDate(LocalDate.of(2026, 8, 6));
         simulation.setInvestmentEndDate(LocalDate.of(2029, 8, 6));
         simulation.setSelectedPortfolioId(selectedPortfolioId);
         simulation.setVersion(1L);

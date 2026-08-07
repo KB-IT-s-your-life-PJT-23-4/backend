@@ -1,6 +1,6 @@
 package com.example.project.security;
 
-import com.example.project.admin.service.AdminAuthorizationService;
+import com.example.project.admin.auth.service.AdminAuthorizationService;
 import com.example.project.common.api.ApiResponse;
 import com.example.project.common.api.ResponseCode;
 import com.fasterxml.jackson.databind.ObjectMapper;

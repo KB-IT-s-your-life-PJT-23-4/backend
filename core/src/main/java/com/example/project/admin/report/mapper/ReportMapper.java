@@ -10,14 +10,12 @@ import java.util.List;
 public interface ReportMapper {
 
     List<AiSafetyReportVO> selectAiReportsPage(
-            @Param("offset") long offset,
-            @Param("size") int size,
             @Param("status") String status,
-            @Param("reportType") String reportType
-    );
+            @Param("reportType") String reportType,
+            @Param("offset") long offset,
+            @Param("size") int size);
 
     long countAiReports(
-            @Param("status") String status,
-            @Param("reportType") String reportType
-    );
+           @Param("status") String status,
+           @Param("reportType") String reportType);
 }

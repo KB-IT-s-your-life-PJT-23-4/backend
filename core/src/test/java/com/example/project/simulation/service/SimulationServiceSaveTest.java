@@ -262,6 +262,7 @@ class SimulationServiceSaveTest {
         simulation.setTaxPaymentMethod(TaxPaymentMethod.RECIPIENT_PAYS);
         simulation.setInvestmentPeriodMonths(12);
         simulation.setAsOfDate(LocalDate.of(2026, 8, 5));
+        simulation.setGiftDate(LocalDate.of(2026, 8, 5));
         simulation.setInvestmentEndDate(LocalDate.of(2027, 8, 5));
         simulation.setVersion(1L);
         simulation.setExpiredAt(LocalDateTime.now().plusHours(1));
