@@ -14,6 +14,7 @@ import org.springframework.context.annotation.FilterType;
 import org.springframework.context.annotation.PropertySource;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.stereotype.Controller;
+import org.springframework.transaction.annotation.EnableTransactionManagement;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 
 import javax.sql.DataSource;
@@ -27,6 +28,7 @@ import javax.sql.DataSource;
                 @ComponentScan.Filter(type = FilterType.ANNOTATION, classes = ControllerAdvice.class)
         })
 @MapperScan(basePackages = "com.example.project", annotationClass = org.apache.ibatis.annotations.Mapper.class)
+@EnableTransactionManagement
 @PropertySource("classpath:database.properties")
 @PropertySource("classpath:application.properties")
 public class RootConfig {
@@ -48,7 +50,9 @@ public class RootConfig {
     public SqlSessionFactory sqlSessionFactory(DataSource dataSource, ApplicationContext context) throws Exception {
         SqlSessionFactoryBean factory = new SqlSessionFactoryBean();
         factory.setConfigLocation(context.getResource("classpath:mybatis-config.xml"));
-        factory.setMapperLocations(context.getResources("classpath*:mapper/**/*.xml"));
+        // core WAR 안의 표준 *Mapper.xml만 한 번 읽는다. classpath*: 패턴이나
+        // "Mapper 2.xml" 같은 stale 복제 파일은 같은 namespace를 중복 등록할 수 있다.
+        factory.setMapperLocations(context.getResources("classpath:mapper/**/*Mapper.xml"));
         factory.setDataSource(dataSource);
         return factory.getObject();
     }
