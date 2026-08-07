@@ -71,6 +71,29 @@ class ReportMapperXmlTest {
         assertTrue(sql.contains("LIMIT ? OFFSET ?"));
     }
 
+    @Test
+    @DisplayName("신고 처리 시 상태, 담당 관리자, 처리 내용과 검토 완료 시각을 수정한다")
+    void updateReportUpdatesProcessingFields() throws Exception {
+        Configuration configuration = configuration();
+        Map<String, Object> parameters = new HashMap<>();
+        parameters.put("reportId", 10L);
+        parameters.put("status", "RESOLVED");
+        parameters.put("adminId", 7L);
+        parameters.put("resolutionNote", null);
+
+        BoundSql boundSql = configuration.getMappedStatement(
+                NAMESPACE + "updateReport"
+        ).getBoundSql(parameters);
+        String sql = normalize(boundSql.getSql());
+
+        assertTrue(sql.contains("SET status = ?"));
+        assertTrue(sql.contains("assigned_admin_id = ?"));
+        assertTrue(sql.contains("resolution_note = ?"));
+        assertTrue(sql.contains("WHEN ? IN ('RESOLVED', 'DISMISSED') THEN CURRENT_TIMESTAMP(6)"));
+        assertTrue(sql.contains("ELSE NULL END"));
+        assertTrue(sql.contains("WHERE ai_safety_report_id = ?"));
+    }
+
     private Map<String, Object> parameters(String status, String reportType) {
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("status", status);

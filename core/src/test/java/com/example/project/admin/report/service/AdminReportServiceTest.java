@@ -1,5 +1,6 @@
 package com.example.project.admin.report.service;
 
+import com.example.project.admin.report.dto.request.ReportProcessRequest;
 import com.example.project.admin.report.dto.response.AdminReportPageResponse;
 import com.example.project.admin.report.mapper.ReportMapper;
 import com.example.project.common.api.Pagination;
@@ -91,6 +92,84 @@ class AdminReportServiceTest {
         assertEquals(0, mapper.selectCalls);
     }
 
+    @Test
+    @DisplayName("신고 처리 상태와 관리자 처리 내용을 정규화해 저장한다")
+    void processReportNormalizesAndUpdatesReport() {
+        ReportMapperStub mapper = new ReportMapperStub();
+        AdminReportService service = new AdminReportService(mapper);
+
+        service.processReport(
+                10L,
+                request("  resolved  ", "  정상적인 문의로 확인했습니다.  "),
+                7L
+        );
+
+        assertEquals(10L, mapper.observedReportId);
+        assertEquals("RESOLVED", mapper.observedUpdateStatus);
+        assertEquals(7L, mapper.observedAdminId);
+        assertEquals("정상적인 문의로 확인했습니다.", mapper.observedResolutionNote);
+        assertEquals(1, mapper.updateCalls);
+    }
+
+    @Test
+    @DisplayName("관리자 처리 내용은 null 또는 빈 문자열일 수 있다")
+    void processReportAllowsNullableResolutionNote() {
+        ReportMapperStub mapper = new ReportMapperStub();
+        AdminReportService service = new AdminReportService(mapper);
+
+        service.processReport(10L, request("IN_REVIEW", null), 7L);
+        assertNull(mapper.observedResolutionNote);
+
+        service.processReport(10L, request("OPEN", "   "), 7L);
+        assertNull(mapper.observedResolutionNote);
+        assertEquals(2, mapper.updateCalls);
+    }
+
+    @Test
+    @DisplayName("신고 처리 요청값이 올바르지 않으면 저장하지 않는다")
+    void processReportRejectsInvalidRequest() {
+        ReportMapperStub mapper = new ReportMapperStub();
+        AdminReportService service = new AdminReportService(mapper);
+
+        assertBadRequest(() -> service.processReport(0L, request("OPEN", null), 7L));
+        assertBadRequest(() -> service.processReport(10L, request("OPEN", null), 0L));
+        assertBadRequest(() -> service.processReport(10L, null, 7L));
+        assertBadRequest(() -> service.processReport(10L, request("", null), 7L));
+        assertBadRequest(() -> service.processReport(10L, request("UNKNOWN", null), 7L));
+        assertBadRequest(() -> service.processReport(10L, request("OPEN", "가".repeat(2001)), 7L));
+        assertEquals(0, mapper.updateCalls);
+    }
+
+    @Test
+    @DisplayName("수정할 신고가 없으면 찾을 수 없음 오류를 발생시킨다")
+    void processReportRejectsMissingReport() {
+        ReportMapperStub mapper = new ReportMapperStub();
+        mapper.updatedRows = 0;
+        AdminReportService service = new AdminReportService(mapper);
+
+        ServiceException exception = assertThrows(
+                ServiceException.class,
+                () -> service.processReport(999L, request("RESOLVED", null), 7L)
+        );
+
+        assertEquals(ResponseCode.RESOURCE_NOT_FOUND, exception.getResponseCode());
+    }
+
+    @Test
+    @DisplayName("신고 수정 결과가 한 건을 초과하면 데이터베이스 오류를 발생시킨다")
+    void processReportRejectsUnexpectedAffectedRows() {
+        ReportMapperStub mapper = new ReportMapperStub();
+        mapper.updatedRows = 2;
+        AdminReportService service = new AdminReportService(mapper);
+
+        ServiceException exception = assertThrows(
+                ServiceException.class,
+                () -> service.processReport(10L, request("DISMISSED", null), 7L)
+        );
+
+        assertEquals(ResponseCode.DATABASE_ERROR, exception.getResponseCode());
+    }
+
     private void assertBadRequest(Executable executable) {
         ServiceException exception = assertThrows(
                 ServiceException.class,
@@ -107,6 +186,13 @@ class AdminReportServiceTest {
                 .build();
     }
 
+    private ReportProcessRequest request(String status, String resolutionNote) {
+        return ReportProcessRequest.builder()
+                .status(status)
+                .resolutionNote(resolutionNote)
+                .build();
+    }
+
     private static class ReportMapperStub implements ReportMapper {
 
         private long totalElements;
@@ -117,6 +203,12 @@ class AdminReportServiceTest {
         private int observedSize;
         private int countCalls;
         private int selectCalls;
+        private int updateCalls;
+        private int updatedRows = 1;
+        private long observedReportId;
+        private String observedUpdateStatus;
+        private long observedAdminId;
+        private String observedResolutionNote;
 
         @Override
         public List<AiSafetyReportVO> selectAiReportsPage(
@@ -139,6 +231,21 @@ class AdminReportServiceTest {
             observedStatus = status;
             observedReportType = reportType;
             return totalElements;
+        }
+
+        @Override
+        public int updateReport(
+                long reportId,
+                String status,
+                long adminId,
+                String resolutionNote
+        ) {
+            updateCalls++;
+            observedReportId = reportId;
+            observedUpdateStatus = status;
+            observedAdminId = adminId;
+            observedResolutionNote = resolutionNote;
+            return updatedRows;
         }
     }
 }

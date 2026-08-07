@@ -1,5 +1,6 @@
 package com.example.project.admin.report.service;
 
+import com.example.project.admin.report.dto.request.ReportProcessRequest;
 import com.example.project.admin.report.dto.response.AdminReportPageResponse;
 import com.example.project.admin.report.mapper.ReportMapper;
 import com.example.project.common.api.Pagination;
@@ -98,4 +99,40 @@ public class AdminReportService {
         return normalized;
     }
 
+    @Transactional
+    public void processReport(long reportId, ReportProcessRequest request, long adminId) {
+        if (reportId <= 0 || adminId <= 0 || request == null) {
+            throw new ServiceException(ResponseCode.BAD_REQUEST);
+        }
+
+        String status = normalizeFilter(request.getStatus(), REPORT_STATUSES);
+        if (status == null) {
+            throw new ServiceException(ResponseCode.BAD_REQUEST);
+        }
+
+        String resolutionNote = normalizeResolutionNote(request.getResolutionNote());
+        int updatedRows = reportMapper.updateReport(
+                reportId,
+                status,
+                adminId,
+                resolutionNote
+        );
+
+        if (updatedRows == 0) {
+            throw new ServiceException(ResponseCode.RESOURCE_NOT_FOUND);
+        }
+        if (updatedRows != 1) {
+            throw new ServiceException(ResponseCode.DATABASE_ERROR);
+        }
+    }
+
+    private String normalizeResolutionNote(String resolutionNote) {
+        if (resolutionNote == null || resolutionNote.isBlank()) {
+            return null;
+        }
+        if (resolutionNote.length() > 2000) {
+            throw new ServiceException(ResponseCode.BAD_REQUEST);
+        }
+        return resolutionNote.trim();
+    }
 }

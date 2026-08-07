@@ -101,4 +101,17 @@
 
         <include refid="reportFilter"/>
     </select>
+
+    <update id="updateReport">
+        UPDATE ai_safety_report
+        SET status = #{status},
+            assigned_admin_id = #{adminId},
+            resolution_note = #{resolutionNote},
+            reviewed_at = CASE
+                WHEN #{status} IN ('RESOLVED', 'DISMISSED')
+                    THEN CURRENT_TIMESTAMP(6)
+                ELSE NULL
+            END
+        WHERE ai_safety_report_id = #{reportId}
+    </update>
 </mapper>
