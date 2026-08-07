@@ -7,6 +7,7 @@ import com.example.project.admin.user.mapper.AdminUserMapper;
 import com.example.project.common.api.Pagination;
 import com.example.project.common.api.ResponseCode;
 import com.example.project.common.exception.ServiceException;
+import com.example.project.user.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,6 +22,7 @@ public class AdminUserService {
     private static final int MAX_PAGE_SIZE = 100;
 
     private final AdminUserMapper adminUserMapper;
+    private final UserService userService;
 
     @Transactional(readOnly = true)
     public AdminUserPageResponse getUsers(
@@ -76,6 +78,13 @@ public class AdminUserService {
             throw new ServiceException(ResponseCode.MEMBER_NOT_FOUND);
         }
         return AdminUserResponse.from(user);
+    }
+
+    public void deleteUser(Long userId) {
+        if (userId == null || userId <= 0L) {
+            throw new ServiceException(ResponseCode.BAD_REQUEST);
+        }
+        userService.deleteUser(userId);
     }
 
     private void validatePagination(int page, int size) {
