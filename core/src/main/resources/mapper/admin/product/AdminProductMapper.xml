@@ -8,11 +8,7 @@
     <select id="selectProductDataVersions"
             resultType="com.example.project.admin.product.domain.AdminProductVersionRow">
         SELECT dv.kb_product_data_version_id AS product_data_version_id,
-        dv.version_code,
-        dv.data_date,
-        dv.status,
-        dv.created_at,
-        dv.completed_at,
+        dv.version_code, dv.data_date, dv.status, dv.created_at, dv.completed_at,
         COALESCE(SUM(CASE WHEN p.product_type = 'DEPOSIT' THEN 1 ELSE 0 END), 0) AS deposit_count,
         COALESCE(SUM(CASE WHEN p.product_type = 'SAVINGS' THEN 1 ELSE 0 END), 0) AS savings_count,
         COALESCE(SUM(CASE WHEN p.product_type = 'ETF' THEN 1 ELSE 0 END), 0) AS etf_count
@@ -44,6 +40,23 @@
         WHERE dv.version_code = #{versionCode}
     </select>
 
+    <select id="selectLatestCompletedDataVersion"
+            resultType="com.example.project.admin.product.domain.AdminProductVersionRow">
+        SELECT dv.kb_product_data_version_id AS product_data_version_id,
+        dv.version_code, dv.data_date, dv.status, dv.created_at, dv.completed_at,
+        0 AS deposit_count, 0 AS savings_count, 0 AS etf_count
+        FROM kb_product_data_version dv
+        WHERE dv.status = 'COMPLETED'
+        ORDER BY dv.data_date DESC, dv.kb_product_data_version_id DESC
+        LIMIT 1
+    </select>
+
+    <select id="selectVersionCodesByPrefix" resultType="string">
+        SELECT version_code
+        FROM kb_product_data_version
+        WHERE version_code LIKE CONCAT(#{prefix}, '%')
+    </select>
+
     <select id="selectProductType" resultType="string">
         SELECT p.product_type
         FROM kb_product_version pv
@@ -70,7 +83,10 @@
         <include refid="adminProductColumns"/>,
         d.min_amount, d.max_amount, d.min_month, d.max_month,
         MIN(br.base_rate_percent) AS min_base_rate_percent,
-        MAX(br.max_rate_percent) AS max_rate_percent
+        MAX(br.max_rate_percent) AS max_rate_percent,
+        CASE WHEN COUNT(br.base_interest_rate_id) = 1
+        THEN MAX(br.base_interest_rate_id)
+        ELSE NULL END AS base_interest_rate_id
         FROM kb_product_version pv
         JOIN kb_product p ON p.product_id = pv.product_id
         JOIN deposit d ON d.kb_product_version_id = pv.kb_product_version_id
@@ -96,7 +112,10 @@
         s.savings_category, s.monthly_min_amount, s.monthly_max_amount,
         s.min_month, s.max_month,
         MIN(br.base_rate_percent) AS min_base_rate_percent,
-        MAX(br.max_rate_percent) AS max_rate_percent
+        MAX(br.max_rate_percent) AS max_rate_percent,
+        CASE WHEN COUNT(br.base_interest_rate_id) = 1
+        THEN MAX(br.base_interest_rate_id)
+        ELSE NULL END AS base_interest_rate_id
         FROM kb_product_version pv
         JOIN kb_product p ON p.product_id = pv.product_id
         JOIN savings s ON s.kb_product_version_id = pv.kb_product_version_id
@@ -137,6 +156,14 @@
         ORDER BY pv.product_name
     </select>
 
+    <select id="selectBaseRateTiers"
+            resultType="com.example.project.admin.product.domain.AdminBaseRateRow">
+        SELECT base_interest_rate_id, min_month, max_month, base_rate_percent, max_rate_percent, base_date
+        FROM base_interest_rate
+        WHERE kb_product_version_id = #{productVersionId}
+        ORDER BY min_month
+    </select>
+
     <update id="updateProductVersion">
         UPDATE kb_product_version
         SET product_name = #{productName},
@@ -146,9 +173,210 @@
         WHERE kb_product_version_id = #{productVersionId}
     </update>
 
+    <update id="updateDepositDetail">
+        UPDATE deposit
+        SET min_amount = #{minAmount},
+        max_amount = #{maxAmount},
+        min_month = #{minMonth},
+        max_month = #{maxMonth}
+        WHERE kb_product_version_id = #{productVersionId}
+    </update>
+
+    <update id="updateSavingsDetail">
+        UPDATE savings
+        SET savings_category = #{savingsCategory},
+        monthly_min_amount = #{monthlyMinAmount},
+        monthly_max_amount = #{monthlyMaxAmount},
+        min_month = #{minMonth},
+        max_month = #{maxMonth}
+        WHERE kb_product_version_id = #{productVersionId}
+    </update>
+
+    <update id="updateEtfDetail">
+        UPDATE etf
+        SET stock_code = #{stockCode},
+        etf_category = #{etfCategory},
+        tracking_index = #{trackingIndex},
+        bond_ratio = #{bondRatioPercent},
+        risk_level = #{riskLevel}
+        WHERE kb_product_version_id = #{productVersionId}
+    </update>
+
+    <update id="updateBaseInterestRate">
+        UPDATE base_interest_rate
+        SET min_month = #{minMonth},
+        max_month = #{maxMonth},
+        base_rate_percent = #{baseRatePercent},
+        max_rate_percent = #{maxRatePercent},
+        base_date = #{baseDate}
+        WHERE base_interest_rate_id = #{baseInterestRateId}
+    </update>
+
+    <delete id="deleteBaseInterestRate">
+        DELETE FROM base_interest_rate WHERE base_interest_rate_id = #{baseInterestRateId}
+    </delete>
+
+    <update id="updateEtfReturn">
+        UPDATE etf
+        SET annual_return_5y = #{annualReturn5yPercent}
+        WHERE kb_product_version_id = #{productVersionId}
+    </update>
+
     <insert id="insertProductDataVersion">
         INSERT INTO kb_product_data_version (version_code, data_date, status)
         VALUES (#{versionCode}, #{dataDate}, 'LOADING')
     </insert>
 
+    <update id="completeProductDataVersion">
+        UPDATE kb_product_data_version
+        SET status = 'COMPLETED', completed_at = NOW()
+        WHERE kb_product_data_version_id = #{productDataVersionId}
+        AND status = 'LOADING'
+    </update>
+
+    <insert id="insertProduct">
+        INSERT INTO kb_product (product_code, product_type)
+        VALUES (#{productCode}, #{productType})
+    </insert>
+
+    <insert id="insertProductVersion">
+        INSERT INTO kb_product_version
+        (kb_product_data_version_id, product_id, product_name, description, product_url, sales_status)
+        VALUES
+        (#{productDataVersionId}, #{productId}, #{productName}, #{description}, #{productUrl}, #{salesStatus})
+    </insert>
+
+    <select id="selectLastInsertedId" resultType="long">
+        SELECT LAST_INSERT_ID()
+    </select>
+
+    <insert id="insertBaseInterestRate">
+        INSERT INTO base_interest_rate
+        (kb_product_version_id, min_month, max_month, base_rate_percent, max_rate_percent, base_date)
+        VALUES
+        (#{productVersionId}, #{minMonth}, #{maxMonth}, #{baseRatePercent}, #{maxRatePercent}, #{baseDate})
+    </insert>
+
+    <insert id="insertDeposit">
+        INSERT INTO deposit (kb_product_version_id, min_amount, max_amount, min_month, max_month)
+        VALUES (#{productVersionId}, #{minAmount}, #{maxAmount}, #{minMonth}, #{maxMonth})
+    </insert>
+
+    <insert id="insertSavings">
+        INSERT INTO savings
+        (kb_product_version_id, savings_category, min_month, max_month, monthly_min_amount, monthly_max_amount)
+        VALUES
+        (#{productVersionId}, #{savingsCategory}, #{minMonth}, #{maxMonth}, #{monthlyMinAmount}, #{monthlyMaxAmount})
+    </insert>
+
+    <insert id="insertEtf">
+        INSERT INTO etf
+        (kb_product_version_id, stock_code, etf_category, tracking_index, annual_return_5y, bond_ratio, risk_level)
+        VALUES
+        (#{productVersionId}, #{stockCode}, #{etfCategory}, #{trackingIndex}, #{annualReturn5yPercent}, #{bondRatioPercent}, #{riskLevel})
+    </insert>
+    <select id="selectPreferentialRates"
+            resultType="com.example.project.admin.product.domain.AdminPreferentialRateRow">
+        SELECT preferential_interest_rate_id, additional_rate_percent, condition_code,
+        preferential_condition, base_date
+        FROM preferential_interest_rate
+        WHERE kb_product_version_id = #{productVersionId}
+        ORDER BY preferential_interest_rate_id
+    </select>
+
+    <insert id="insertPreferentialRate">
+        INSERT INTO preferential_interest_rate
+        (kb_product_version_id, additional_rate_percent, condition_code, preferential_condition, base_date)
+        VALUES
+        (#{productVersionId}, #{additionalRatePercent}, #{conditionCode}, #{preferentialCondition}, #{baseDate})
+    </insert>
+
+    <update id="updatePreferentialRate">
+        UPDATE preferential_interest_rate
+        SET additional_rate_percent = #{additionalRatePercent},
+        condition_code = #{conditionCode},
+        preferential_condition = #{preferentialCondition},
+        base_date = #{baseDate}
+        WHERE preferential_interest_rate_id = #{preferentialInterestRateId}
+    </update>
+
+    <delete id="deletePreferentialRate">
+        DELETE FROM preferential_interest_rate
+        WHERE preferential_interest_rate_id = #{preferentialInterestRateId}
+    </delete>
+
+    <select id="selectEtfHoldings"
+            resultType="com.example.project.admin.product.domain.AdminEtfHoldingRow">
+        SELECT holding_id, holding_rank, holding_name, holding_code, asset_type,
+        country_code, weight_percent, base_date
+        FROM etf_holding
+        WHERE kb_product_version_id = #{productVersionId}
+        ORDER BY holding_rank
+    </select>
+
+    <insert id="insertEtfHolding">
+        INSERT INTO etf_holding
+        (kb_product_version_id, holding_rank, holding_name, holding_code, asset_type, country_code, weight_percent, base_date)
+        VALUES
+        (#{productVersionId}, #{holdingRank}, #{holdingName}, #{holdingCode}, #{assetType}, #{countryCode}, #{weightPercent}, #{baseDate})
+    </insert>
+
+    <update id="updateEtfHolding">
+        UPDATE etf_holding
+        SET holding_rank = #{holdingRank},
+        holding_name = #{holdingName},
+        holding_code = #{holdingCode},
+        asset_type = #{assetType},
+        country_code = #{countryCode},
+        weight_percent = #{weightPercent},
+        base_date = #{baseDate}
+        WHERE holding_id = #{holdingId}
+    </update>
+
+    <delete id="deleteEtfHolding">
+        DELETE FROM etf_holding WHERE holding_id = #{holdingId}
+    </delete>
+    <delete id="deleteEtfHoldingsByDataVersion">
+        DELETE eh FROM etf_holding eh
+        JOIN kb_product_version pv ON pv.kb_product_version_id = eh.kb_product_version_id
+        WHERE pv.kb_product_data_version_id = #{dataVersionId}
+    </delete>
+
+    <delete id="deletePreferentialRatesByDataVersion">
+        DELETE pr FROM preferential_interest_rate pr
+        JOIN kb_product_version pv ON pv.kb_product_version_id = pr.kb_product_version_id
+        WHERE pv.kb_product_data_version_id = #{dataVersionId}
+    </delete>
+
+    <delete id="deleteBaseRatesByDataVersion">
+        DELETE br FROM base_interest_rate br
+        JOIN kb_product_version pv ON pv.kb_product_version_id = br.kb_product_version_id
+        WHERE pv.kb_product_data_version_id = #{dataVersionId}
+    </delete>
+
+    <delete id="deleteEtfByDataVersion">
+        DELETE e FROM etf e
+        JOIN kb_product_version pv ON pv.kb_product_version_id = e.kb_product_version_id
+        WHERE pv.kb_product_data_version_id = #{dataVersionId}
+    </delete>
+
+    <delete id="deleteDepositByDataVersion">
+        DELETE d FROM deposit d
+        JOIN kb_product_version pv ON pv.kb_product_version_id = d.kb_product_version_id
+        WHERE pv.kb_product_data_version_id = #{dataVersionId}
+    </delete>
+
+    <delete id="deleteSavingsByDataVersion">
+        DELETE s FROM savings s
+        JOIN kb_product_version pv ON pv.kb_product_version_id = s.kb_product_version_id
+        WHERE pv.kb_product_data_version_id = #{dataVersionId}
+    </delete>
+
+    <delete id="deleteProductVersionsByDataVersion">
+        DELETE FROM kb_product_version WHERE kb_product_data_version_id = #{dataVersionId}
+    </delete>
+
+    <delete id="deleteProductDataVersion">
+        DELETE FROM kb_product_data_version WHERE kb_product_data_version_id = #{dataVersionId}
+    </delete>
 </mapper>
