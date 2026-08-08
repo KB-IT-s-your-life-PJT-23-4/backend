@@ -18,4 +18,10 @@ public interface ReportMapper {
     long countAiReports(
            @Param("status") String status,
            @Param("reportType") String reportType);
+
+    int updateReport(
+            @Param("reportId") long reportId,
+            @Param("status") String status,
+            @Param("adminId") long adminId,
+            @Param("resolutionNote") String resolutionNote);
 }

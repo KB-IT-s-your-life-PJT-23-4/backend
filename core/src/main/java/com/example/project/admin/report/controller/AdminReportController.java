@@ -1,25 +1,29 @@
 package com.example.project.admin.report.controller;
 
+import com.example.project.admin.auth.domain.AdminPrincipal;
+import com.example.project.admin.report.dto.request.ReportProcessRequest;
 import com.example.project.admin.report.dto.response.AdminReportPageResponse;
 import com.example.project.admin.report.service.AdminReportService;
 import com.example.project.common.api.ApiResponse;
 import com.example.project.common.api.Pagination;
 import com.example.project.common.api.ResponseCode;
 import com.example.project.common.logging.ApiLog;
-import com.example.project.consultation.domain.AiSafetyReportVO;
 import io.swagger.annotations.Api;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import javax.servlet.http.HttpServletRequest;
+import javax.validation.Valid;
 import javax.validation.constraints.Max;
 import javax.validation.constraints.Min;
-import java.util.List;
+import javax.validation.constraints.Positive;
 
 @ApiLog
 @Api(tags = "관리자 신고 관리 API")
 @RestController
+@Validated
 @RequestMapping("/api/admin/report")
 @RequiredArgsConstructor
 public class AdminReportController {
@@ -54,5 +58,21 @@ public class AdminReportController {
         );
 
         return ApiResponse.success(ResponseCode.SUCCESS, httpRequest.getRequestURI(), response);
+    }
+
+    @PatchMapping("/{reportId}")
+    public ApiResponse<Void> processReport(
+            @Valid @RequestBody ReportProcessRequest request,
+            @Positive @PathVariable long reportId,
+            @AuthenticationPrincipal AdminPrincipal principal,
+            HttpServletRequest httpRequest
+    ) {
+        adminReportService.processReport(reportId, request, principal.userId());
+
+        return ApiResponse.success(
+                ResponseCode.UPDATED,
+                httpRequest.getRequestURI(),
+                null
+        );
     }
 }
