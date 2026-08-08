@@ -28,6 +28,10 @@ public class UserDTO {
     private final String phone;
     @ApiModelProperty(value = "회원 권한", example = "USER")
     private final String role;
+    @ApiModelProperty(value = "계정 상태", example = "ACTIVE")
+    private final String accountStatus;
+    @ApiModelProperty(value = "차단 만료 시각")
+    private final LocalDateTime blockedUntil;
     @ApiModelProperty(value = "프로필 이미지 경로")
     private final String img;
     @ApiModelProperty(value = "가입 시각")
@@ -43,6 +47,8 @@ public class UserDTO {
                 userVO.getBirthDate(),
                 userVO.getPhone(),
                 userVO.getRole(),
+                userVO.getAccountStatus(),
+                userVO.getBlockedUntil(),
                 userVO.getImg(),
                 userVO.getCreatedAt(),
                 userVO.getUpdatedAt()
@@ -71,6 +77,14 @@ public class UserDTO {
 
     public String role() {
         return role;
+    }
+
+    public String accountStatus() {
+        return accountStatus;
+    }
+
+    public LocalDateTime blockedUntil() {
+        return blockedUntil;
     }
 
     public String img() {

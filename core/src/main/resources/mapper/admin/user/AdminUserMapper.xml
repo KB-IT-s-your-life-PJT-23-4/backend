@@ -11,6 +11,8 @@
         <result property="email" column="email"/>
         <result property="userName" column="user_name"/>
         <result property="role" column="role"/>
+        <result property="accountStatus" column="account_status"/>
+        <result property="blockedUntil" column="blocked_until"/>
         <result property="createdAt" column="created_at"/>
         <result property="updatedAt" column="updated_at"/>
         <result property="recipientCount" column="recipient_count"/>
@@ -35,6 +37,8 @@
         u.email,
         u.user_name,
         u.role,
+        u.account_status,
+        u.blocked_until,
         u.created_at,
         u.updated_at,
         COUNT(DISTINCT f.family_id) AS recipient_count,
@@ -57,7 +61,8 @@
         LEFT JOIN simulation s ON s.family_id = f.family_id
         WHERE 1 = 1
         <include refid="userFilters"/>
-        GROUP BY u.user_id, u.email, u.user_name, u.role, u.created_at, u.updated_at
+        GROUP BY u.user_id, u.email, u.user_name, u.role, u.account_status,
+                 u.blocked_until, u.created_at, u.updated_at
         ORDER BY u.created_at DESC, u.user_id DESC
         LIMIT #{size} OFFSET #{offset}
     </select>
@@ -69,7 +74,30 @@
         LEFT JOIN gift g ON g.family_id = f.family_id
         LEFT JOIN simulation s ON s.family_id = f.family_id
         WHERE u.user_id = #{userId}
-        GROUP BY u.user_id, u.email, u.user_name, u.role, u.created_at, u.updated_at
+        GROUP BY u.user_id, u.email, u.user_name, u.role, u.account_status,
+                 u.blocked_until, u.created_at, u.updated_at
     </select>
+
+    <update id="blockUser">
+        UPDATE user
+        SET account_status = 'BLOCKED',
+            blocked_until = #{blockedUntil},
+            updated_at = CURRENT_TIMESTAMP
+        WHERE user_id = #{userId}
+          AND role = 'USER'
+          AND account_status = 'ACTIVE'
+          AND blocked_until IS NULL
+          AND #{blockedUntil} &gt; CURRENT_TIMESTAMP
+    </update>
+
+    <update id="unblockUser">
+        UPDATE user
+        SET account_status = 'ACTIVE',
+            blocked_until = NULL,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE user_id = #{userId}
+          AND role = 'USER'
+          AND account_status = 'BLOCKED'
+    </update>
 
 </mapper>

@@ -21,8 +21,6 @@ import java.util.Locale;
 @RequiredArgsConstructor
 public class AuthService {
 
-    private static final String USER_ROLE = "USER";
-
     private final UserMapper userMapper;
     private final PasswordEncoder passwordEncoder;
     private final JwtProvider jwtProvider;
@@ -68,7 +66,7 @@ public class AuthService {
 
     private AuthTokenResponse issueTokens(UserVO user) {
         String subject = String.valueOf(user.getUserId());
-        String accessToken = jwtProvider.createAccessToken(subject, USER_ROLE);
+        String accessToken = jwtProvider.createAccessToken(subject, user.getRole());
         String refreshToken = jwtProvider.createRefreshToken(subject);
 
         return new AuthTokenResponse(accessToken, refreshToken, UserDTO.from(user));

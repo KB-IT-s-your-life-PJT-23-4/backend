@@ -8,6 +8,7 @@ import com.example.project.consultation.dto.request.ConsultClarificationRequest;
 import com.example.project.consultation.dto.request.ConsultRequest;
 import com.example.project.consultation.dto.response.ConsultResponse;
 import com.example.project.consultation.service.ConsultService;
+import com.example.project.user.service.AccountAccessService;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +29,7 @@ import javax.servlet.http.HttpServletRequest;
 public class ConsultController {
 
     private final ConsultService consultService;
+    private final AccountAccessService accountAccessService;
 
     private static final long TIMEOUT_MS = 20_000L;
 
@@ -43,6 +45,7 @@ public class ConsultController {
     ) {
         DeferredResult<ApiResponse<ConsultResponse>> deferredResult = new DeferredResult<>(TIMEOUT_MS);
         Long userId = CurrentUser.id(principal);
+        accountAccessService.requireRestrictedFeatureAccess(userId);
 
         consultService.consult(request.question(), userId)
                 .subscribe(
@@ -67,6 +70,7 @@ public class ConsultController {
     ) {
         DeferredResult<ApiResponse<ConsultResponse>> deferredResult = new DeferredResult<>(TIMEOUT_MS);
         Long userId = CurrentUser.id(principal);
+        accountAccessService.requireRestrictedFeatureAccess(userId);
 
         consultService.answerClarification(request, userId)
                 .subscribe(

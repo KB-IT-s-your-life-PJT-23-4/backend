@@ -1,7 +1,10 @@
 package com.example.project.simulation.controller;
 
+import com.example.project.common.api.ResponseCode;
 import com.example.project.common.exception.CommonExceptionAdvice;
+import com.example.project.common.exception.ServiceException;
 import com.example.project.security.JwtProvider;
+import com.example.project.user.service.AccountAccessService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
@@ -32,6 +35,7 @@ class SimulationControllerValidationTest {
 
     private MockMvc mockMvc;
     private ObjectMapper objectMapper;
+    private TestAccountAccessService accountAccessService;
 
     @BeforeEach
     void setUp() {
@@ -41,11 +45,13 @@ class SimulationControllerValidationTest {
                 60_000L,
                 120_000L
         );
+        accountAccessService = new TestAccountAccessService();
         SimulationController controller = new SimulationController(
                 null,
                 null,
                 null,
-                jwtProvider
+                jwtProvider,
+                accountAccessService
         );
         LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
         validator.afterPropertiesSet();
@@ -199,6 +205,19 @@ class SimulationControllerValidationTest {
         assertEquals("INVALID_PAGE_REQUEST", body(result).get("error").asText());
     }
 
+    @Test
+    @DisplayName("차단된 회원은 기존 Access Token으로도 증여 시뮬레이션에 접근할 수 없다")
+    void rejectBlockedAccount() throws Exception {
+        authenticate();
+        accountAccessService.blocked = true;
+
+        MvcResult result = mockMvc.perform(get("/api/gs/1"))
+                .andExpect(status().isForbidden())
+                .andReturn();
+
+        assertEquals(403, body(result).get("statusCode").asInt());
+    }
+
     private void authenticate() {
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken("1", null, List.of())
@@ -208,5 +227,21 @@ class SimulationControllerValidationTest {
     private JsonNode body(MvcResult result) throws Exception {
         return objectMapper.readTree(
                 result.getResponse().getContentAsString(StandardCharsets.UTF_8));
+    }
+
+    private static final class TestAccountAccessService extends AccountAccessService {
+
+        private boolean blocked;
+
+        private TestAccountAccessService() {
+            super(null, null, null);
+        }
+
+        @Override
+        public void requireRestrictedFeatureAccess(Long userId) {
+            if (blocked) {
+                throw new ServiceException(ResponseCode.FORBIDDEN);
+            }
+        }
     }
 }
