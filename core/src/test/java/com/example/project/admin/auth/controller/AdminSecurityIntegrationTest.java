@@ -1,5 +1,6 @@
 package com.example.project.admin.auth.controller;
 
+import com.example.project.admin.auth.mapper.AdminAuthMapper;
 import com.example.project.admin.auth.service.AdminAuthorizationService;
 import com.example.project.security.JwtProvider;
 import com.example.project.security.SecurityConfig;
@@ -23,6 +24,8 @@ import org.springframework.web.context.support.AnnotationConfigWebApplicationCon
 import org.springframework.web.servlet.config.annotation.EnableWebMvc;
 
 import java.util.Map;
+import java.util.List;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
@@ -199,8 +202,16 @@ class AdminSecurityIntegrationTest {
         }
 
         @Bean
-        AdminAuthorizationService adminAuthorizationService(InMemoryUserMapper userMapper) {
-            return new AdminAuthorizationService(userMapper);
+        AdminAuthMapper adminAuthMapper() {
+            return new EmptyAdminAuthMapper();
+        }
+
+        @Bean
+        AdminAuthorizationService adminAuthorizationService(
+                InMemoryUserMapper userMapper,
+                AdminAuthMapper adminAuthMapper
+        ) {
+            return new AdminAuthorizationService(userMapper, adminAuthMapper);
         }
 
         @Bean
@@ -253,6 +264,19 @@ class AdminSecurityIntegrationTest {
 
         @Override
         public int deleteById(Long userId) {
+            return 0;
+        }
+    }
+
+    static class EmptyAdminAuthMapper implements AdminAuthMapper {
+
+        @Override
+        public List<UserVO> getAdmins(Set<String> roles, long offset, int size) {
+            return List.of();
+        }
+
+        @Override
+        public long getAdminCounts(Set<String> roles) {
             return 0;
         }
     }

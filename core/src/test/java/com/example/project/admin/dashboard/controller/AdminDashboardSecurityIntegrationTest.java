@@ -1,5 +1,6 @@
 package com.example.project.admin.dashboard.controller;
 
+import com.example.project.admin.auth.mapper.AdminAuthMapper;
 import com.example.project.admin.auth.service.AdminAuthorizationService;
 import com.example.project.admin.dashboard.domain.DailySignupCount;
 import com.example.project.admin.dashboard.domain.LatestProductDataVersion;
@@ -37,6 +38,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -175,8 +177,16 @@ class AdminDashboardSecurityIntegrationTest {
         }
 
         @Bean
-        AdminAuthorizationService adminAuthorizationService(InMemoryUserMapper userMapper) {
-            return new AdminAuthorizationService(userMapper);
+        AdminAuthMapper adminAuthMapper() {
+            return new EmptyAdminAuthMapper();
+        }
+
+        @Bean
+        AdminAuthorizationService adminAuthorizationService(
+                InMemoryUserMapper userMapper,
+                AdminAuthMapper adminAuthMapper
+        ) {
+            return new AdminAuthorizationService(userMapper, adminAuthMapper);
         }
 
         @Bean
@@ -232,6 +242,19 @@ class AdminDashboardSecurityIntegrationTest {
         @Override
         public ProductTypeCount selectProductTypeCounts(Long productDataVersionId) {
             return null;
+        }
+    }
+
+    static class EmptyAdminAuthMapper implements AdminAuthMapper {
+
+        @Override
+        public List<UserVO> getAdmins(Set<String> roles, long offset, int size) {
+            return List.of();
+        }
+
+        @Override
+        public long getAdminCounts(Set<String> roles) {
+            return 0;
         }
     }
 

@@ -1,6 +1,8 @@
 package com.example.project.admin.auth.service;
 
 import com.example.project.admin.auth.domain.AdminPrincipal;
+import com.example.project.admin.auth.dto.response.AdminAuthPageResponse;
+import com.example.project.admin.auth.mapper.AdminAuthMapper;
 import com.example.project.common.api.ResponseCode;
 import com.example.project.common.exception.ServiceException;
 import com.example.project.user.domain.UserVO;
@@ -11,7 +13,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -21,12 +25,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class AdminAuthorizationServiceTest {
 
     private FakeUserMapper userMapper;
+    private FakeAdminAuthMapper adminAuthMapper;
     private AdminAuthorizationService service;
 
     @BeforeEach
     void setUp() {
         userMapper = new FakeUserMapper();
-        service = new AdminAuthorizationService(userMapper);
+        adminAuthMapper = new FakeAdminAuthMapper();
+        service = new AdminAuthorizationService(userMapper, adminAuthMapper);
     }
 
     @Test
@@ -98,6 +104,28 @@ class AdminAuthorizationServiceTest {
         assertEquals(ResponseCode.FORBIDDEN, forbidden.getResponseCode());
     }
 
+    @Test
+    @DisplayName("관리자 역할 계정만 페이지 응답으로 반환한다")
+    void returnOnlyAdminRoleAccounts() {
+        adminAuthMapper.totalAdmins = 3L;
+        adminAuthMapper.admins = List.of(
+                user(1L, "ROOT"),
+                user(2L, "USER")
+        );
+
+        AdminAuthPageResponse response = service.getAdmins(1, 2);
+
+        assertEquals(Set.of("ROOT", "MIDDLE", "DEFAULT"), adminAuthMapper.roles);
+        assertEquals(2L, adminAuthMapper.offset);
+        assertEquals(2, adminAuthMapper.size);
+        assertEquals(1, response.getAdmins().size());
+        assertTrue(response.getAdmins().stream()
+                .noneMatch(admin -> "USER".equals(admin.getRole())));
+        assertEquals(3L, response.getPagination().getTotalElements());
+        assertEquals(2, response.getPagination().getTotalPages());
+        assertTrue(response.getPagination().isLast());
+    }
+
     private UserVO user(Long userId, String role) {
         UserVO user = new UserVO();
         user.setUserId(userId);
@@ -136,6 +164,33 @@ class AdminAuthorizationServiceTest {
         @Override
         public int deleteById(Long userId) {
             return 0;
+        }
+    }
+
+    private static final class FakeAdminAuthMapper implements AdminAuthMapper {
+
+        private List<UserVO> admins = List.of();
+        private long totalAdmins;
+        private Set<String> roles;
+        private long offset;
+        private int size;
+
+        @Override
+        public List<UserVO> getAdmins(
+                Set<String> roles,
+                long offset,
+                int size
+        ) {
+            this.roles = Set.copyOf(roles);
+            this.offset = offset;
+            this.size = size;
+            return admins;
+        }
+
+        @Override
+        public long getAdminCounts(Set<String> roles) {
+            this.roles = Set.copyOf(roles);
+            return totalAdmins;
         }
     }
 }
