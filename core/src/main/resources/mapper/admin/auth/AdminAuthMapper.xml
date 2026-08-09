@@ -49,4 +49,29 @@
         <include refid="adminRoleFilter"/>
     </select>
 
+    <select id="findByUserId" resultMap="adminResultMap">
+        SELECT
+            user_id,
+            email,
+            user_name,
+            role,
+            created_at,
+            updated_at
+        FROM user
+        WHERE user_id = #{userId}
+    </select>
+
+    <update id="changeAuth">
+        UPDATE user
+        SET role = #{role}
+        WHERE user_id = #{userId}
+    </update>
+
+    <update id="deleteAuth">
+        UPDATE user
+        SET role = 'USER'
+        WHERE user_id = #{userId}
+          AND role IN ('ROOT', 'MIDDLE', 'DEFAULT')
+    </update>
+
 </mapper>

@@ -38,6 +38,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -254,6 +255,21 @@ class AdminDashboardSecurityIntegrationTest {
 
         @Override
         public long getAdminCounts(Set<String> roles) {
+            return 0;
+        }
+
+        @Override
+        public Optional<UserVO> findByUserId(long userId) {
+            return Optional.empty();
+        }
+
+        @Override
+        public int changeAuth(Long userId, String role) {
+            return 0;
+        }
+
+        @Override
+        public int deleteAuth(Long userId) {
             return 0;
         }
     }

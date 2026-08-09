@@ -5,6 +5,7 @@ import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 @Mapper
@@ -17,4 +18,13 @@ public interface AdminAuthMapper {
     );
 
     long getAdminCounts(@Param("roles") Set<String> roles);
+
+    Optional<UserVO> findByUserId(@Param("userId") long userId);
+
+    int changeAuth(
+            @Param("userId") Long userId,
+            @Param("role") String role
+    );
+
+    int deleteAuth(@Param("userId") Long userId);
 }

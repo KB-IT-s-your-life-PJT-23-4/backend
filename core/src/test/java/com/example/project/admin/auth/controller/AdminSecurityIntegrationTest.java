@@ -2,6 +2,8 @@ package com.example.project.admin.auth.controller;
 
 import com.example.project.admin.auth.mapper.AdminAuthMapper;
 import com.example.project.admin.auth.service.AdminAuthorizationService;
+import com.example.project.common.exception.CommonExceptionAdvice;
+import com.example.project.security.AdminAccessValidator;
 import com.example.project.security.JwtProvider;
 import com.example.project.security.SecurityConfig;
 import com.example.project.security.TokenRevocationStore;
@@ -16,6 +18,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockServletContext;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -25,11 +28,14 @@ import org.springframework.web.servlet.config.annotation.EnableWebMvc;
 
 import java.util.Map;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.setup.MockMvcBuilders.webAppContextSetup;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -202,8 +208,8 @@ class AdminSecurityIntegrationTest {
         }
 
         @Bean
-        AdminAuthMapper adminAuthMapper() {
-            return new EmptyAdminAuthMapper();
+        AdminAuthMapper adminAuthMapper(InMemoryUserMapper userMapper) {
+            return new InMemoryAdminAuthMapper(userMapper);
         }
 
         @Bean
@@ -216,7 +222,12 @@ class AdminSecurityIntegrationTest {
 
         @Bean
         AdminAuthController adminAuthController(AdminAuthorizationService service) {
-            return new AdminAuthController(service);
+            return new AdminAuthController(service, new AdminAccessValidator());
+        }
+
+        @Bean
+        CommonExceptionAdvice commonExceptionAdvice() {
+            return new CommonExceptionAdvice();
         }
 
         @Bean
@@ -268,7 +279,13 @@ class AdminSecurityIntegrationTest {
         }
     }
 
-    static class EmptyAdminAuthMapper implements AdminAuthMapper {
+    static class InMemoryAdminAuthMapper implements AdminAuthMapper {
+
+        private final InMemoryUserMapper userMapper;
+
+        InMemoryAdminAuthMapper(InMemoryUserMapper userMapper) {
+            this.userMapper = userMapper;
+        }
 
         @Override
         public List<UserVO> getAdmins(Set<String> roles, long offset, int size) {
@@ -279,5 +296,86 @@ class AdminSecurityIntegrationTest {
         public long getAdminCounts(Set<String> roles) {
             return 0;
         }
+
+        @Override
+        public Optional<UserVO> findByUserId(long userId) {
+            return Optional.ofNullable(userMapper.findById(userId));
+        }
+
+        @Override
+        public int changeAuth(Long userId, String role) {
+            UserVO user = userMapper.findById(userId);
+            if (user == null) {
+                return 0;
+            }
+            user.setRole(role);
+            return 1;
+        }
+
+        @Override
+        public int deleteAuth(Long userId) {
+            UserVO user = userMapper.findById(userId);
+            if (user == null || !Set.of("ROOT", "MIDDLE", "DEFAULT").contains(user.getRole())) {
+                return 0;
+            }
+            user.setRole("USER");
+            return 1;
+        }
+    }
+
+    @Test
+    @DisplayName("ROOT 관리자는 다른 사용자의 관리자 역할을 변경할 수 있다")
+    void rootCanChangeAdminRole() throws Exception {
+        userMapper.save(user(1L, "ROOT"));
+        userMapper.save(user(2L, "USER"));
+        String token = jwtProvider.createAccessToken("1", "USER");
+
+        var result = mockMvc.perform(patch("/api/admin/auth/{userId}", 2L)
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"role\":\"MIDDLE\"}"))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        JsonNode body = responseBody(result.getResponse().getContentAsString());
+        assertEquals(203, body.path("statusCode").asInt());
+        assertEquals("MIDDLE", userMapper.findById(2L).getRole());
+    }
+
+    @Test
+    @DisplayName("ROOT가 아닌 관리자는 관리자 역할을 변경하거나 회수할 수 없다")
+    void nonRootCannotChangeOrDeleteAdminRole() throws Exception {
+        userMapper.save(user(1L, "MIDDLE"));
+        userMapper.save(user(2L, "DEFAULT"));
+        String token = jwtProvider.createAccessToken("1", "ROOT");
+
+        mockMvc.perform(patch("/api/admin/auth/{userId}", 2L)
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"role\":\"ROOT\"}"))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(delete("/api/admin/auth/{userId}", 2L)
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isForbidden());
+
+        assertEquals("DEFAULT", userMapper.findById(2L).getRole());
+    }
+
+    @Test
+    @DisplayName("ROOT 관리자는 관리자 권한을 회수해 USER 역할로 변경할 수 있다")
+    void rootCanDeleteAdminRole() throws Exception {
+        userMapper.save(user(1L, "ROOT"));
+        userMapper.save(user(2L, "DEFAULT"));
+        String token = jwtProvider.createAccessToken("1", "USER");
+
+        var result = mockMvc.perform(delete("/api/admin/auth/{userId}", 2L)
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        JsonNode body = responseBody(result.getResponse().getContentAsString());
+        assertEquals(204, body.path("statusCode").asInt());
+        assertEquals("USER", userMapper.findById(2L).getRole());
     }
 }

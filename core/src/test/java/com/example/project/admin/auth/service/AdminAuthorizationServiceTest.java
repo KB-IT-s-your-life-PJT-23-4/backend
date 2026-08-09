@@ -1,6 +1,7 @@
 package com.example.project.admin.auth.service;
 
 import com.example.project.admin.auth.domain.AdminPrincipal;
+import com.example.project.admin.auth.dto.request.AdminChangeAuthRequest;
 import com.example.project.admin.auth.dto.response.AdminAuthPageResponse;
 import com.example.project.admin.auth.mapper.AdminAuthMapper;
 import com.example.project.common.api.ResponseCode;
@@ -15,6 +16,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -126,6 +128,70 @@ class AdminAuthorizationServiceTest {
         assertTrue(response.getPagination().isLast());
     }
 
+    @Test
+    @DisplayName("ROOT 관리자가 대상 사용자의 관리자 역할을 변경할 수 있도록 값을 정규화한다")
+    void changeAdminRole() {
+        adminAuthMapper.save(user(10L, "USER"));
+
+        service.changeAuth(
+                10L,
+                AdminChangeAuthRequest.builder().role(" middle ").build()
+        );
+
+        assertEquals(10L, adminAuthMapper.changedUserId);
+        assertEquals("MIDDLE", adminAuthMapper.changedRole);
+    }
+
+    @Test
+    @DisplayName("허용되지 않은 역할이나 존재하지 않는 사용자의 권한은 변경하지 않는다")
+    void rejectInvalidAdminRoleChange() {
+        adminAuthMapper.save(user(10L, "USER"));
+
+        ServiceException invalidRole = assertThrows(
+                ServiceException.class,
+                () -> service.changeAuth(
+                        10L,
+                        AdminChangeAuthRequest.builder().role("USER").build()
+                )
+        );
+        assertEquals(ResponseCode.BAD_REQUEST, invalidRole.getResponseCode());
+
+        ServiceException missingUser = assertThrows(
+                ServiceException.class,
+                () -> service.changeAuth(
+                        999L,
+                        AdminChangeAuthRequest.builder().role("DEFAULT").build()
+                )
+        );
+        assertEquals(ResponseCode.MEMBER_NOT_FOUND, missingUser.getResponseCode());
+        assertEquals(0, adminAuthMapper.changeCalls);
+    }
+
+    @Test
+    @DisplayName("관리자 권한 삭제는 계정을 삭제하지 않고 USER 역할로 강등한다")
+    void deleteAdminRole() {
+        adminAuthMapper.save(user(10L, "DEFAULT"));
+
+        service.deleteAuth(10L);
+
+        assertEquals(10L, adminAuthMapper.deletedUserId);
+        assertEquals(1, adminAuthMapper.deleteCalls);
+    }
+
+    @Test
+    @DisplayName("관리자 역할이 아닌 사용자의 관리자 권한은 삭제할 수 없다")
+    void rejectDeletingNonAdminRole() {
+        adminAuthMapper.save(user(10L, "USER"));
+
+        ServiceException exception = assertThrows(
+                ServiceException.class,
+                () -> service.deleteAuth(10L)
+        );
+
+        assertEquals(ResponseCode.RESOURCE_NOT_FOUND, exception.getResponseCode());
+        assertEquals(0, adminAuthMapper.deleteCalls);
+    }
+
     private UserVO user(Long userId, String role) {
         UserVO user = new UserVO();
         user.setUserId(userId);
@@ -174,6 +240,16 @@ class AdminAuthorizationServiceTest {
         private Set<String> roles;
         private long offset;
         private int size;
+        private final Map<Long, UserVO> users = new HashMap<>();
+        private int changeCalls;
+        private int deleteCalls;
+        private Long changedUserId;
+        private String changedRole;
+        private Long deletedUserId;
+
+        private void save(UserVO user) {
+            users.put(user.getUserId(), user);
+        }
 
         @Override
         public List<UserVO> getAdmins(
@@ -191,6 +267,36 @@ class AdminAuthorizationServiceTest {
         public long getAdminCounts(Set<String> roles) {
             this.roles = Set.copyOf(roles);
             return totalAdmins;
+        }
+
+        @Override
+        public Optional<UserVO> findByUserId(long userId) {
+            return Optional.ofNullable(users.get(userId));
+        }
+
+        @Override
+        public int changeAuth(Long userId, String role) {
+            changeCalls++;
+            changedUserId = userId;
+            changedRole = role;
+            UserVO user = users.get(userId);
+            if (user == null) {
+                return 0;
+            }
+            user.setRole(role);
+            return 1;
+        }
+
+        @Override
+        public int deleteAuth(Long userId) {
+            deleteCalls++;
+            deletedUserId = userId;
+            UserVO user = users.get(userId);
+            if (user == null) {
+                return 0;
+            }
+            user.setRole("USER");
+            return 1;
         }
     }
 }

@@ -1,6 +1,7 @@
 package com.example.project.admin.auth.service;
 
 import com.example.project.admin.auth.domain.AdminPrincipal;
+import com.example.project.admin.auth.dto.request.AdminChangeAuthRequest;
 import com.example.project.admin.auth.dto.response.AdminAuthPageResponse;
 import com.example.project.admin.auth.dto.response.AdminAuthResponse;
 import com.example.project.admin.auth.dto.response.AdminMeResponse;
@@ -17,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.security.Principal;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 
@@ -110,5 +112,52 @@ public class AdminAuthorizationService {
                 .admins(items)
                 .pagination(pagination)
                 .build();
+    }
+
+    @Transactional
+    public void changeAuth(Long userId, AdminChangeAuthRequest request) {
+        validateUserId(userId);
+        if (request == null || request.getRole() == null || request.getRole().isBlank()) {
+            throw new ServiceException(ResponseCode.BAD_REQUEST);
+        }
+
+        requireUser(userId);
+        String role = request.getRole().trim().toUpperCase(Locale.ROOT);
+        if (!ADMIN_ROLES.contains(role)) {
+            throw new ServiceException(ResponseCode.BAD_REQUEST);
+        }
+
+        validateAffectedRows(adminAuthMapper.changeAuth(userId, role));
+    }
+
+    @Transactional
+    public void deleteAuth(Long userId) {
+        validateUserId(userId);
+        UserVO user = requireUser(userId);
+        if (!isAdminRole(user.getRole())) {
+            throw new ServiceException(ResponseCode.RESOURCE_NOT_FOUND);
+        }
+
+        validateAffectedRows(adminAuthMapper.deleteAuth(userId));
+    }
+
+    private UserVO requireUser(Long userId) {
+        return adminAuthMapper.findByUserId(userId)
+                .orElseThrow(() -> new ServiceException(ResponseCode.MEMBER_NOT_FOUND));
+    }
+
+    private void validateUserId(Long userId) {
+        if (userId == null || userId <= 0) {
+            throw new ServiceException(ResponseCode.BAD_REQUEST);
+        }
+    }
+
+    private void validateAffectedRows(int affectedRows) {
+        if (affectedRows == 0) {
+            throw new ServiceException(ResponseCode.RESOURCE_NOT_FOUND);
+        }
+        if (affectedRows != 1) {
+            throw new ServiceException(ResponseCode.DATABASE_ERROR);
+        }
     }
 }

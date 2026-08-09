@@ -53,6 +53,36 @@ class AdminAuthMapperXmlTest {
         assertFalse(sql.contains("OFFSET"));
     }
 
+    @Test
+    @DisplayName("관리자 권한 변경은 사용자 ID와 역할을 사용한다")
+    void changeAuthUpdatesRoleByUserId() throws Exception {
+        Configuration configuration = configuration();
+        Map<String, Object> parameters = new LinkedHashMap<>();
+        parameters.put("userId", 10L);
+        parameters.put("role", "MIDDLE");
+
+        String sql = sql(configuration, "changeAuth", parameters);
+
+        assertTrue(sql.contains("UPDATE user SET role = ? WHERE user_id = ?"));
+    }
+
+    @Test
+    @DisplayName("관리자 권한 삭제는 관리자 역할 계정만 USER로 강등한다")
+    void deleteAuthDemotesOnlyAdminRoles() throws Exception {
+        Configuration configuration = configuration();
+
+        String sql = sql(
+                configuration,
+                "deleteAuth",
+                Map.of("userId", 10L)
+        );
+
+        assertTrue(sql.contains("SET role = 'USER'"));
+        assertTrue(sql.contains("WHERE user_id = ?"));
+        assertTrue(sql.contains("role IN ('ROOT', 'MIDDLE', 'DEFAULT')"));
+        assertFalse(sql.startsWith("DELETE"));
+    }
+
     private Map<String, Object> parameters() {
         Map<String, Object> parameters = new LinkedHashMap<>();
         Set<String> roles = new LinkedHashSet<>();
