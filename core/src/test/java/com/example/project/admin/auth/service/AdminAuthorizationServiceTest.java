@@ -1,8 +1,10 @@
 package com.example.project.admin.auth.service;
 
 import com.example.project.admin.auth.domain.AdminPrincipal;
+import com.example.project.admin.auth.dto.request.AdminAuthCreateRequest;
 import com.example.project.admin.auth.dto.request.AdminChangeAuthRequest;
 import com.example.project.admin.auth.dto.response.AdminAuthPageResponse;
+import com.example.project.admin.auth.dto.response.AdminAuthResponse;
 import com.example.project.admin.auth.mapper.AdminAuthMapper;
 import com.example.project.common.api.ResponseCode;
 import com.example.project.common.exception.ServiceException;
@@ -12,6 +14,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
 import java.util.HashMap;
 import java.util.List;
@@ -34,7 +37,11 @@ class AdminAuthorizationServiceTest {
     void setUp() {
         userMapper = new FakeUserMapper();
         adminAuthMapper = new FakeAdminAuthMapper();
-        service = new AdminAuthorizationService(userMapper, adminAuthMapper);
+        service = new AdminAuthorizationService(
+                userMapper,
+                adminAuthMapper,
+                new BCryptPasswordEncoder(4)
+        );
     }
 
     @Test
@@ -193,6 +200,58 @@ class AdminAuthorizationServiceTest {
         assertEquals(0, adminAuthMapper.deleteCalls);
     }
 
+    @Test
+    @DisplayName("신규 관리자 계정은 정규화된 정보와 암호화된 비밀번호로 생성한다")
+    void createAdmin() {
+        AdminAuthResponse response = service.createAdmin(
+                AdminAuthCreateRequest.builder()
+                        .email(" ADMIN@Example.com ")
+                        .password("Admin1234!")
+                        .name("관리자")
+                        .phone("010-1234-5678")
+                        .role(" middle ")
+                        .build()
+        );
+
+        UserVO created = adminAuthMapper.findByUserId(response.getAdminId()).orElseThrow();
+        assertEquals("admin@example.com", created.getEmail());
+        assertEquals("관리자", created.getUserName());
+        assertEquals("010-1234-5678", created.getPhone());
+        assertEquals("MIDDLE", created.getRole());
+        assertTrue(new BCryptPasswordEncoder().matches("Admin1234!", created.getPassword()));
+        assertEquals(created.getUserId().longValue(), response.getAdminId());
+    }
+
+    @Test
+    @DisplayName("중복 이메일이나 관리자 이외 역할로 계정을 생성할 수 없다")
+    void rejectInvalidAdminCreation() {
+        UserVO existing = user(20L, "USER");
+        existing.setEmail("existing@example.com");
+        userMapper.save(existing);
+
+        ServiceException duplicate = assertThrows(
+                ServiceException.class,
+                () -> service.createAdmin(adminRequest("existing@example.com", "DEFAULT"))
+        );
+        assertEquals(ResponseCode.DUPLICATE_DATA, duplicate.getResponseCode());
+
+        ServiceException invalidRole = assertThrows(
+                ServiceException.class,
+                () -> service.createAdmin(adminRequest("new@example.com", "USER"))
+        );
+        assertEquals(ResponseCode.BAD_REQUEST, invalidRole.getResponseCode());
+    }
+
+    private AdminAuthCreateRequest adminRequest(String email, String role) {
+        return AdminAuthCreateRequest.builder()
+                .email(email)
+                .password("Admin1234!")
+                .name("관리자")
+                .phone("010-9876-5432")
+                .role(role)
+                .build();
+    }
+
     private UserVO user(Long userId, String role) {
         UserVO user = new UserVO();
         user.setUserId(userId);
@@ -215,7 +274,10 @@ class AdminAuthorizationServiceTest {
 
         @Override
         public UserVO findByEmail(String email) {
-            return null;
+            return users.values().stream()
+                    .filter(user -> email.equals(user.getEmail()))
+                    .findFirst()
+                    .orElse(null);
         }
 
         @Override
@@ -247,6 +309,7 @@ class AdminAuthorizationServiceTest {
         private Long changedUserId;
         private String changedRole;
         private Long deletedUserId;
+        private long sequence = 100L;
 
         private void save(UserVO user) {
             users.put(user.getUserId(), user);
@@ -297,6 +360,13 @@ class AdminAuthorizationServiceTest {
                 return 0;
             }
             users.remove(userId);
+            return 1;
+        }
+
+        @Override
+        public int createAdmin(UserVO admin) {
+            admin.setUserId(++sequence);
+            users.put(admin.getUserId(), admin);
             return 1;
         }
     }

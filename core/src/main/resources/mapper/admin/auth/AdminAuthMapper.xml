@@ -73,4 +73,23 @@
           AND role IN ('ROOT', 'MIDDLE', 'DEFAULT')
     </delete>
 
+    <insert id="createAdmin"
+            parameterType="com.example.project.user.domain.UserVO"
+            useGeneratedKeys="true"
+            keyProperty="userId">
+        INSERT INTO user (
+            email,
+            password,
+            user_name,
+            phone,
+            role
+        ) VALUES (
+            #{email},
+            #{password},
+            #{userName},
+            #{phone},
+            #{role}
+        )
+    </insert>
+
 </mapper>

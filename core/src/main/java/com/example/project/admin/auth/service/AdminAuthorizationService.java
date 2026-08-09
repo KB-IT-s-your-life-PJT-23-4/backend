@@ -1,6 +1,7 @@
 package com.example.project.admin.auth.service;
 
 import com.example.project.admin.auth.domain.AdminPrincipal;
+import com.example.project.admin.auth.dto.request.AdminAuthCreateRequest;
 import com.example.project.admin.auth.dto.request.AdminChangeAuthRequest;
 import com.example.project.admin.auth.dto.response.AdminAuthPageResponse;
 import com.example.project.admin.auth.dto.response.AdminAuthResponse;
@@ -12,7 +13,9 @@ import com.example.project.common.exception.ServiceException;
 import com.example.project.user.domain.UserVO;
 import com.example.project.user.mapper.UserMapper;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,6 +33,7 @@ public class AdminAuthorizationService {
 
     private final UserMapper userMapper;
     private final AdminAuthMapper adminAuthMapper;
+    private final PasswordEncoder passwordEncoder;
 
     public Optional<AdminPrincipal> findCurrentUser(Object authenticatedPrincipal) {
         Long authenticatedUserId = parseUserId(authenticatedPrincipal);
@@ -159,5 +163,52 @@ public class AdminAuthorizationService {
         if (affectedRows != 1) {
             throw new ServiceException(ResponseCode.DATABASE_ERROR);
         }
+    }
+
+    @Transactional
+    public AdminAuthResponse createAdmin(AdminAuthCreateRequest request) {
+        if (request == null) {
+            throw new ServiceException(ResponseCode.BAD_REQUEST);
+        }
+
+        String email = normalizeRequired(request.getEmail()).toLowerCase(Locale.ROOT);
+        String name = normalizeRequired(request.getName());
+        String phone = normalizeRequired(request.getPhone());
+        String role = normalizeRequired(request.getRole()).toUpperCase(Locale.ROOT);
+        String password = request.getPassword();
+
+        if (password == null || password.isBlank() || !ADMIN_ROLES.contains(role)) {
+            throw new ServiceException(ResponseCode.BAD_REQUEST);
+        }
+        if (userMapper.findByEmail(email) != null) {
+            throw new ServiceException(ResponseCode.DUPLICATE_DATA);
+        }
+
+        UserVO admin = new UserVO();
+        admin.setEmail(email);
+        admin.setPassword(passwordEncoder.encode(password));
+        admin.setUserName(name);
+        admin.setPhone(phone);
+        admin.setRole(role);
+
+        try {
+            if (adminAuthMapper.createAdmin(admin) != 1) {
+                throw new ServiceException(ResponseCode.DATABASE_ERROR);
+            }
+        } catch (DuplicateKeyException exception) {
+            throw new ServiceException(ResponseCode.DUPLICATE_DATA);
+        }
+
+        UserVO createdAdmin = adminAuthMapper.findByUserId(admin.getUserId())
+                .orElseThrow(() -> new ServiceException(ResponseCode.DATABASE_ERROR));
+
+        return AdminAuthResponse.of(createdAdmin);
+    }
+
+    private String normalizeRequired(String value) {
+        if (value == null || value.isBlank()) {
+            throw new ServiceException(ResponseCode.BAD_REQUEST);
+        }
+        return value.trim();
     }
 }

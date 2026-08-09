@@ -24,6 +24,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.http.converter.HttpMessageConverter;
 import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.mock.web.MockServletContext;
@@ -185,9 +186,10 @@ class AdminDashboardSecurityIntegrationTest {
         @Bean
         AdminAuthorizationService adminAuthorizationService(
                 InMemoryUserMapper userMapper,
-                AdminAuthMapper adminAuthMapper
+                AdminAuthMapper adminAuthMapper,
+                PasswordEncoder passwordEncoder
         ) {
-            return new AdminAuthorizationService(userMapper, adminAuthMapper);
+            return new AdminAuthorizationService(userMapper, adminAuthMapper, passwordEncoder);
         }
 
         @Bean
@@ -270,6 +272,11 @@ class AdminDashboardSecurityIntegrationTest {
 
         @Override
         public int deleteAdmin(Long userId) {
+            return 0;
+        }
+
+        @Override
+        public int createAdmin(UserVO admin) {
             return 0;
         }
     }

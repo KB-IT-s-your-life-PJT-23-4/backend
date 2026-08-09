@@ -27,4 +27,6 @@ public interface AdminAuthMapper {
     );
 
     int deleteAdmin(@Param("userId") Long userId);
+
+    int createAdmin(UserVO admin);
 }

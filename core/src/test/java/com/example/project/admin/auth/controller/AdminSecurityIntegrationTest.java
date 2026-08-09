@@ -21,6 +21,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockServletContext;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.context.support.AnnotationConfigWebApplicationContext;
@@ -36,6 +37,7 @@ import static org.springframework.security.test.web.servlet.setup.SecurityMockMv
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.setup.MockMvcBuilders.webAppContextSetup;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -216,9 +218,10 @@ class AdminSecurityIntegrationTest {
         @Bean
         AdminAuthorizationService adminAuthorizationService(
                 InMemoryUserMapper userMapper,
-                AdminAuthMapper adminAuthMapper
+                AdminAuthMapper adminAuthMapper,
+                PasswordEncoder passwordEncoder
         ) {
-            return new AdminAuthorizationService(userMapper, adminAuthMapper);
+            return new AdminAuthorizationService(userMapper, adminAuthMapper, passwordEncoder);
         }
 
         @Bean
@@ -261,7 +264,10 @@ class AdminSecurityIntegrationTest {
 
         @Override
         public UserVO findByEmail(String email) {
-            return null;
+            return users.values().stream()
+                    .filter(user -> email.equals(user.getEmail()))
+                    .findFirst()
+                    .orElse(null);
         }
 
         @Override
@@ -321,6 +327,17 @@ class AdminSecurityIntegrationTest {
             }
             return userMapper.deleteById(userId);
         }
+
+        @Override
+        public int createAdmin(UserVO admin) {
+            long userId = userMapper.users.keySet().stream()
+                    .mapToLong(Long::longValue)
+                    .max()
+                    .orElse(0L) + 1L;
+            admin.setUserId(userId);
+            userMapper.save(admin);
+            return 1;
+        }
     }
 
     @Test
@@ -359,7 +376,18 @@ class AdminSecurityIntegrationTest {
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isForbidden());
 
+        mockMvc.perform(post("/api/admin/auth/create")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"blocked@example.com\","
+                                + "\"password\":\"Admin1234!\","
+                                + "\"name\":\"차단 관리자\","
+                                + "\"phone\":\"010-1111-2222\","
+                                + "\"role\":\"DEFAULT\"}"))
+                .andExpect(status().isForbidden());
+
         assertEquals("DEFAULT", userMapper.findById(2L).getRole());
+        assertNull(userMapper.findByEmail("blocked@example.com"));
     }
 
     @Test
@@ -377,5 +405,32 @@ class AdminSecurityIntegrationTest {
         JsonNode body = responseBody(result.getResponse().getContentAsString());
         assertEquals(204, body.path("statusCode").asInt());
         assertNull(userMapper.findById(2L));
+    }
+
+    @Test
+    @DisplayName("ROOT 관리자는 암호화된 비밀번호로 신규 관리자 계정을 생성할 수 있다")
+    void rootCanCreateAdmin() throws Exception {
+        userMapper.save(user(1L, "ROOT"));
+        String token = jwtProvider.createAccessToken("1", "USER");
+
+        var result = mockMvc.perform(post("/api/admin/auth/create")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"new.admin@example.com\","
+                                + "\"password\":\"Admin1234!\","
+                                + "\"name\":\"신규 관리자\","
+                                + "\"phone\":\"010-4321-8765\","
+                                + "\"role\":\"DEFAULT\"}"))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        JsonNode body = responseBody(result.getResponse().getContentAsString());
+        JsonNode data = body.path("data");
+        UserVO created = userMapper.findByEmail("new.admin@example.com");
+        assertEquals(201, body.path("statusCode").asInt());
+        assertEquals("DEFAULT", data.path("role").asText());
+        assertFalse(data.has("password"));
+        assertTrue(context.getBean(PasswordEncoder.class)
+                .matches("Admin1234!", created.getPassword()));
     }
 }

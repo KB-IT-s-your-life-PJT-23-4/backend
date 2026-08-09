@@ -1,5 +1,6 @@
 package com.example.project.admin.auth.mapper;
 
+import com.example.project.user.domain.UserVO;
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.io.Resources;
 import org.apache.ibatis.mapping.BoundSql;
@@ -80,6 +81,24 @@ class AdminAuthMapperXmlTest {
         assertTrue(sql.startsWith("DELETE FROM user"));
         assertTrue(sql.contains("WHERE user_id = ?"));
         assertTrue(sql.contains("role IN ('ROOT', 'MIDDLE', 'DEFAULT')"));
+    }
+
+    @Test
+    @DisplayName("관리자 생성은 로그인 필수 정보와 관리자 역할을 저장한다")
+    void createAdminInsertsRequiredFields() throws Exception {
+        Configuration configuration = configuration();
+        UserVO admin = new UserVO();
+        admin.setEmail("admin@example.com");
+        admin.setPassword("encoded-password");
+        admin.setUserName("관리자");
+        admin.setPhone("010-1234-5678");
+        admin.setRole("DEFAULT");
+
+        String sql = sql(configuration, "createAdmin", admin);
+
+        assertTrue(sql.startsWith("INSERT INTO user"));
+        assertTrue(sql.contains("email, password, user_name, phone, role"));
+        assertEquals(5, questionMarkCount(sql));
     }
 
     private Map<String, Object> parameters() {
