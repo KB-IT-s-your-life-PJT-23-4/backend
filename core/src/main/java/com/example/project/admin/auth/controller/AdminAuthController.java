@@ -59,7 +59,7 @@ public class AdminAuthController {
             @Min(0)
             Integer page,
 
-            @RequestParam(defaultValue = "20")
+            @RequestParam(defaultValue = "10")
             @Min(1)
             @Max(Pagination.MAX_PAGE_SIZE)
             int size,
