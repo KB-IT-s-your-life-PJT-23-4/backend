@@ -67,11 +67,10 @@
         WHERE user_id = #{userId}
     </update>
 
-    <update id="deleteAuth">
-        UPDATE user
-        SET role = 'USER'
+    <delete id="deleteAdmin">
+        DELETE FROM user
         WHERE user_id = #{userId}
           AND role IN ('ROOT', 'MIDDLE', 'DEFAULT')
-    </update>
+    </delete>
 
 </mapper>

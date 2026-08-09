@@ -131,14 +131,14 @@ public class AdminAuthorizationService {
     }
 
     @Transactional
-    public void deleteAuth(Long userId) {
+    public void deleteAdmin(Long userId) {
         validateUserId(userId);
         UserVO user = requireUser(userId);
         if (!isAdminRole(user.getRole())) {
             throw new ServiceException(ResponseCode.RESOURCE_NOT_FOUND);
         }
 
-        validateAffectedRows(adminAuthMapper.deleteAuth(userId));
+        validateAffectedRows(adminAuthMapper.deleteAdmin(userId));
     }
 
     private UserVO requireUser(Long userId) {

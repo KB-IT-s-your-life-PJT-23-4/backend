@@ -26,5 +26,5 @@ public interface AdminAuthMapper {
             @Param("role") String role
     );
 
-    int deleteAuth(@Param("userId") Long userId);
+    int deleteAdmin(@Param("userId") Long userId);
 }

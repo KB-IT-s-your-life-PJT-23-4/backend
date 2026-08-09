@@ -93,7 +93,7 @@ public class AdminAuthController {
             HttpServletRequest httpRequest
     ) {
         adminAccessValidator.requireRoot(authentication);
-        adminAuthorizationService.deleteAuth(userId);
+        adminAuthorizationService.deleteAdmin(userId);
 
         return ApiResponse.success(ResponseCode.DELETED, httpRequest.getRequestURI(), null);
     }

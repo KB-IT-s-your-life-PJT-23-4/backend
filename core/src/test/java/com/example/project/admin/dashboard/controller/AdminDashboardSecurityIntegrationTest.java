@@ -269,7 +269,7 @@ class AdminDashboardSecurityIntegrationTest {
         }
 
         @Override
-        public int deleteAuth(Long userId) {
+        public int deleteAdmin(Long userId) {
             return 0;
         }
     }

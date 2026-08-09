@@ -168,14 +168,15 @@ class AdminAuthorizationServiceTest {
     }
 
     @Test
-    @DisplayName("관리자 권한 삭제는 계정을 삭제하지 않고 USER 역할로 강등한다")
-    void deleteAdminRole() {
+    @DisplayName("관리자 삭제는 관리자 계정을 실제로 삭제한다")
+    void deleteAdmin() {
         adminAuthMapper.save(user(10L, "DEFAULT"));
 
-        service.deleteAuth(10L);
+        service.deleteAdmin(10L);
 
         assertEquals(10L, adminAuthMapper.deletedUserId);
         assertEquals(1, adminAuthMapper.deleteCalls);
+        assertTrue(adminAuthMapper.findByUserId(10L).isEmpty());
     }
 
     @Test
@@ -185,7 +186,7 @@ class AdminAuthorizationServiceTest {
 
         ServiceException exception = assertThrows(
                 ServiceException.class,
-                () -> service.deleteAuth(10L)
+                () -> service.deleteAdmin(10L)
         );
 
         assertEquals(ResponseCode.RESOURCE_NOT_FOUND, exception.getResponseCode());
@@ -288,14 +289,14 @@ class AdminAuthorizationServiceTest {
         }
 
         @Override
-        public int deleteAuth(Long userId) {
+        public int deleteAdmin(Long userId) {
             deleteCalls++;
             deletedUserId = userId;
             UserVO user = users.get(userId);
-            if (user == null) {
+            if (user == null || !Set.of("ROOT", "MIDDLE", "DEFAULT").contains(user.getRole())) {
                 return 0;
             }
-            user.setRole("USER");
+            users.remove(userId);
             return 1;
         }
     }

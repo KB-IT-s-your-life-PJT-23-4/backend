@@ -67,20 +67,19 @@ class AdminAuthMapperXmlTest {
     }
 
     @Test
-    @DisplayName("관리자 권한 삭제는 관리자 역할 계정만 USER로 강등한다")
-    void deleteAuthDemotesOnlyAdminRoles() throws Exception {
+    @DisplayName("관리자 삭제는 관리자 역할 계정만 실제 삭제한다")
+    void deleteAdminDeletesOnlyAdminRoles() throws Exception {
         Configuration configuration = configuration();
 
         String sql = sql(
                 configuration,
-                "deleteAuth",
+                "deleteAdmin",
                 Map.of("userId", 10L)
         );
 
-        assertTrue(sql.contains("SET role = 'USER'"));
+        assertTrue(sql.startsWith("DELETE FROM user"));
         assertTrue(sql.contains("WHERE user_id = ?"));
         assertTrue(sql.contains("role IN ('ROOT', 'MIDDLE', 'DEFAULT')"));
-        assertFalse(sql.startsWith("DELETE"));
     }
 
     private Map<String, Object> parameters() {

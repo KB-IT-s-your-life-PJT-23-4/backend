@@ -40,6 +40,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.setup.MockMvcBuilders.webAppContextSetup;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class AdminSecurityIntegrationTest {
@@ -275,7 +276,7 @@ class AdminSecurityIntegrationTest {
 
         @Override
         public int deleteById(Long userId) {
-            return 0;
+            return users.remove(userId) == null ? 0 : 1;
         }
     }
 
@@ -313,13 +314,12 @@ class AdminSecurityIntegrationTest {
         }
 
         @Override
-        public int deleteAuth(Long userId) {
+        public int deleteAdmin(Long userId) {
             UserVO user = userMapper.findById(userId);
             if (user == null || !Set.of("ROOT", "MIDDLE", "DEFAULT").contains(user.getRole())) {
                 return 0;
             }
-            user.setRole("USER");
-            return 1;
+            return userMapper.deleteById(userId);
         }
     }
 
@@ -343,7 +343,7 @@ class AdminSecurityIntegrationTest {
     }
 
     @Test
-    @DisplayName("ROOT가 아닌 관리자는 관리자 역할을 변경하거나 회수할 수 없다")
+    @DisplayName("ROOT가 아닌 관리자는 관리자 역할을 변경하거나 삭제할 수 없다")
     void nonRootCannotChangeOrDeleteAdminRole() throws Exception {
         userMapper.save(user(1L, "MIDDLE"));
         userMapper.save(user(2L, "DEFAULT"));
@@ -363,7 +363,7 @@ class AdminSecurityIntegrationTest {
     }
 
     @Test
-    @DisplayName("ROOT 관리자는 관리자 권한을 회수해 USER 역할로 변경할 수 있다")
+    @DisplayName("ROOT 관리자는 관리자 계정을 삭제할 수 있다")
     void rootCanDeleteAdminRole() throws Exception {
         userMapper.save(user(1L, "ROOT"));
         userMapper.save(user(2L, "DEFAULT"));
@@ -376,6 +376,6 @@ class AdminSecurityIntegrationTest {
 
         JsonNode body = responseBody(result.getResponse().getContentAsString());
         assertEquals(204, body.path("statusCode").asInt());
-        assertEquals("USER", userMapper.findById(2L).getRole());
+        assertNull(userMapper.findById(2L));
     }
 }
