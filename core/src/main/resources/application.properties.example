@@ -7,3 +7,6 @@ fastapi.base-url=http://localhost:8000
 jwt.secret=${JWT_SECRET}
 jwt.expiration=${JWT_ACCESS_EXPIRATION:3600000}
 jwt.refresh-expiration=${JWT_REFRESH_EXPIRATION:604800000}
+
+kakao.local.base-url=https://dapi.kakao.com
+kakao.rest-api-key=${KAKAO_REST_API_KEY}
