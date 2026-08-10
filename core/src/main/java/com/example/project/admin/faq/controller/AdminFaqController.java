@@ -54,8 +54,8 @@ public class AdminFaqController {
             @Min(0)
             Integer page,
 
-            @ApiParam(value = "페이지당 FAQ 개수", defaultValue = "20", allowableValues = "range[1, 100]", example = "20")
-            @RequestParam(defaultValue = "20")
+            @ApiParam(value = "페이지당 FAQ 개수", defaultValue = "10", allowableValues = "range[1, 100]", example = "10")
+            @RequestParam(defaultValue = "10")
             @Min(1)
             @Max(Pagination.MAX_PAGE_SIZE)
             int size,
