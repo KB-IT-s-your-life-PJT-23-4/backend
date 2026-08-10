@@ -1,5 +1,6 @@
 package com.example.project.admin.dashboard.controller;
 
+import com.example.project.admin.auth.mapper.AdminAuthMapper;
 import com.example.project.admin.auth.service.AdminAuthorizationService;
 import com.example.project.admin.dashboard.domain.DailySignupCount;
 import com.example.project.admin.dashboard.domain.LatestProductDataVersion;
@@ -23,6 +24,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.http.converter.HttpMessageConverter;
 import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.mock.web.MockServletContext;
@@ -37,6 +39,8 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -175,8 +179,17 @@ class AdminDashboardSecurityIntegrationTest {
         }
 
         @Bean
-        AdminAuthorizationService adminAuthorizationService(InMemoryUserMapper userMapper) {
-            return new AdminAuthorizationService(userMapper);
+        AdminAuthMapper adminAuthMapper() {
+            return new EmptyAdminAuthMapper();
+        }
+
+        @Bean
+        AdminAuthorizationService adminAuthorizationService(
+                InMemoryUserMapper userMapper,
+                AdminAuthMapper adminAuthMapper,
+                PasswordEncoder passwordEncoder
+        ) {
+            return new AdminAuthorizationService(userMapper, adminAuthMapper, passwordEncoder);
         }
 
         @Bean
@@ -232,6 +245,39 @@ class AdminDashboardSecurityIntegrationTest {
         @Override
         public ProductTypeCount selectProductTypeCounts(Long productDataVersionId) {
             return null;
+        }
+    }
+
+    static class EmptyAdminAuthMapper implements AdminAuthMapper {
+
+        @Override
+        public List<UserVO> getAdmins(Set<String> roles, long offset, int size) {
+            return List.of();
+        }
+
+        @Override
+        public long getAdminCounts(Set<String> roles) {
+            return 0;
+        }
+
+        @Override
+        public Optional<UserVO> findByUserId(long userId) {
+            return Optional.empty();
+        }
+
+        @Override
+        public int changeAuth(Long userId, String role) {
+            return 0;
+        }
+
+        @Override
+        public int deleteAdmin(Long userId) {
+            return 0;
+        }
+
+        @Override
+        public int createAdmin(UserVO admin) {
+            return 0;
         }
     }
 
