@@ -1,4 +1,4 @@
-package com.example.project.consultation.domain;
+package com.example.project.consultation.reservation.domain;
 
 import lombok.Getter;
 import lombok.NoArgsConstructor;

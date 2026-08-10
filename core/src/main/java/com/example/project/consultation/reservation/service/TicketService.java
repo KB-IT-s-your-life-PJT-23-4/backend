@@ -1,12 +1,12 @@
-package com.example.project.consultation.service;
+package com.example.project.consultation.reservation.service;
 
 import com.example.project.common.api.ResponseCode;
 import com.example.project.common.exception.ServiceException;
-import com.example.project.consultation.domain.BranchVO;
-import com.example.project.consultation.domain.DeskTypeVO;
-import com.example.project.consultation.domain.TicketVO;
-import com.example.project.consultation.dto.response.TicketIssueResponse;
-import com.example.project.consultation.mapper.TicketMapper;
+import com.example.project.consultation.reservation.domain.BranchVO;
+import com.example.project.consultation.reservation.domain.DeskTypeVO;
+import com.example.project.consultation.reservation.domain.TicketVO;
+import com.example.project.consultation.reservation.dto.response.TicketIssueResponse;
+import com.example.project.consultation.reservation.mapper.TicketMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;

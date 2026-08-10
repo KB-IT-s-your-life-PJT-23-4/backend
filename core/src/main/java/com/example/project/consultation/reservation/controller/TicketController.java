@@ -1,11 +1,11 @@
-package com.example.project.consultation.controller;
+package com.example.project.consultation.reservation.controller;
 
 import com.example.project.common.api.ApiResponse;
 import com.example.project.common.api.ResponseCode;
 import com.example.project.common.web.CurrentUser;
-import com.example.project.consultation.dto.request.TicketIssueRequest;
-import com.example.project.consultation.dto.response.TicketIssueResponse;
-import com.example.project.consultation.service.TicketService;
+import com.example.project.consultation.reservation.dto.request.TicketIssueRequest;
+import com.example.project.consultation.reservation.dto.response.TicketIssueResponse;
+import com.example.project.consultation.reservation.service.TicketService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PostMapping;

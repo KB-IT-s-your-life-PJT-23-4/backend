@@ -1,8 +1,8 @@
-package com.example.project.consultation.mapper;
+package com.example.project.consultation.reservation.mapper;
 
-import com.example.project.consultation.domain.BranchVO;
-import com.example.project.consultation.domain.DeskTypeVO;
-import com.example.project.consultation.domain.TicketVO;
+import com.example.project.consultation.reservation.domain.BranchVO;
+import com.example.project.consultation.reservation.domain.DeskTypeVO;
+import com.example.project.consultation.reservation.domain.TicketVO;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 

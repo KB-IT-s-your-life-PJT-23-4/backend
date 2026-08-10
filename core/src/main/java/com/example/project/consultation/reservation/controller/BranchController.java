@@ -1,11 +1,12 @@
-package com.example.project.consultation.controller;
+package com.example.project.consultation.reservation.controller;
 
 import com.example.project.common.api.ApiResponse;
 import com.example.project.common.api.ResponseCode;
-import com.example.project.consultation.client.KakaoLocalClient;
-import com.example.project.consultation.dto.response.NearbyBranchResponse;
-import com.example.project.consultation.mapper.TicketMapper;
-import com.example.project.consultation.service.BranchMatchService;
+import com.example.project.consultation.reservation.client.KakaoLocalClient;
+import com.example.project.consultation.reservation.domain.BranchVO;
+import com.example.project.consultation.reservation.dto.response.NearbyBranchResponse;
+import com.example.project.consultation.reservation.mapper.TicketMapper;
+import com.example.project.consultation.reservation.service.BranchMatchService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -39,7 +40,7 @@ public class BranchController {
     ) {
         DeferredResult<ApiResponse<List<NearbyBranchResponse>>> deferredResult = new DeferredResult<>(TIMEOUT_MS);
 
-        Mono<List<com.example.project.consultation.domain.BranchVO>> branchesMono =
+        Mono<List<BranchVO>> branchesMono =
                 Mono.fromCallable(ticketMapper::selectAllActiveBranches)
                         .subscribeOn(Schedulers.boundedElastic());
 

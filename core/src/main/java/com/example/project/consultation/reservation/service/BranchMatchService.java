@@ -1,8 +1,8 @@
-package com.example.project.consultation.service;
+package com.example.project.consultation.reservation.service;
 
-import com.example.project.consultation.dto.response.KakaoKeywordSearchResponse;
-import com.example.project.consultation.domain.BranchVO;
-import com.example.project.consultation.dto.response.NearbyBranchResponse;
+import com.example.project.consultation.reservation.dto.response.KakaoKeywordSearchResponse;
+import com.example.project.consultation.reservation.domain.BranchVO;
+import com.example.project.consultation.reservation.dto.response.NearbyBranchResponse;
 import org.springframework.stereotype.Component;
 
 import java.util.List;

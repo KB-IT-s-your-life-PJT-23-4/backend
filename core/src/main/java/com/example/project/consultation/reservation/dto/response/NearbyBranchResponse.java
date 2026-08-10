@@ -1,4 +1,4 @@
-package com.example.project.consultation.dto.response;
+package com.example.project.consultation.reservation.dto.response;
 
 public record NearbyBranchResponse(
         String placeName,
