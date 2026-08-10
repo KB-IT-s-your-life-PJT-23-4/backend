@@ -22,6 +22,7 @@ public record SimulationHistoryResponse(
             Long version,
             Family family,
             InputSummary inputSummary,
+            Long estimatedGiftTax,
             ExpectedReturnRange expectedReturnRange,
             SelectionSummary selection,
             LocalDateTime createdAt,

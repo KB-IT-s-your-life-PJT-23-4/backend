@@ -265,6 +265,11 @@ public class SimulationHistoryService {
         if (simulation.getStatus() == SimulationStatus.SAVED && selection == null) {
             throw new SimulationException(SimulationError.SIMULATION_HISTORY_INCOMPLETE);
         }
+        Long estimatedGiftTax = historyEstimatedGiftTax(
+                recommendations,
+                resultById,
+                selection
+        );
 
         return new SimulationHistoryResponse.Item(
                 simulation.getSimulationId(),
@@ -283,6 +288,7 @@ public class SimulationHistoryService {
                         simulation.getGiftDate(),
                         simulation.getInvestmentEndDate()
                 ),
+                estimatedGiftTax,
                 returnRange,
                 selection,
                 simulation.getCreatedAt(),
@@ -290,6 +296,37 @@ public class SimulationHistoryService {
                 simulation.getSavedAt(),
                 simulation.getExpiredAt()
         );
+    }
+
+    private Long historyEstimatedGiftTax(
+            List<SimulationPortfolioRecord> recommendations,
+            Map<Long, SimulationResultRecord> resultById,
+            SimulationHistoryResponse.SelectionSummary selection
+    ) {
+        if (selection != null) {
+            if (selection.estimatedGiftTax() == null) {
+                throw new SimulationException(
+                        SimulationError.SIMULATION_HISTORY_INCOMPLETE
+                );
+            }
+            return selection.estimatedGiftTax();
+        }
+
+        SimulationPortfolioRecord defaultPortfolio = recommendations.stream()
+                .filter(portfolio -> portfolio.getPortfolioType() == RiskProfile.BALANCED)
+                .findFirst()
+                .orElseGet(() -> recommendations.stream().findFirst().orElseThrow(
+                        () -> new SimulationException(
+                                SimulationError.SIMULATION_RECOMMENDATION_INCOMPLETE
+                        )
+                ));
+        SimulationResultRecord result = resultById.get(defaultPortfolio.getResultId());
+        if (result == null || result.getGiftTax() == null) {
+            throw new SimulationException(
+                    SimulationError.SIMULATION_RECOMMENDATION_INCOMPLETE
+            );
+        }
+        return result.getGiftTax();
     }
 
     private SimulationHistoryResponse.ExpectedReturnRange expectedReturnRange(
