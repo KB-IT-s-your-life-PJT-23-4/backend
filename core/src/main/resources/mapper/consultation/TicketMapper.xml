@@ -76,4 +76,31 @@
         (#{branchId}, #{deskTypeCode}, #{serviceType}, #{ticketNumber}, #{userId}, #{status}, #{businessDate})
     </insert>
 
+    <!-- 대기 중인 티켓 중 번호가 가장 작은 것 조회-->
+    <select id="selectNextWaitingTicket" resultType="com.example.project.consultation.reservation.domain.TicketVO">
+        SELECT
+        ticket_id AS ticketId,
+        branch_id AS branchId,
+        desk_type_code AS deskTypeCode,
+        service_type AS serviceType,
+        ticket_number AS ticketNumber,
+        user_id AS userId,
+        status,
+        business_date AS businessDate
+        FROM kb_ticket
+        WHERE branch_id = #{branchId}
+        AND desk_type_code = #{deskTypeCode}
+        AND business_date = #{businessDate}
+        AND status = 'WAITING'
+        ORDER BY ticket_number ASC
+        LIMIT 1
+    </select>
+
+    <!-- 호출 처리: WAITING -> CALLED. 이미 처리된 티켓이면 0건 반영되어 동시 호출을 방지 -->
+    <update id="updateTicketStatusToCalled">
+        UPDATE kb_ticket
+        SET status = 'CALLED', called_at = NOW()
+        WHERE ticket_id = #{ticketId}
+        AND status = 'WAITING'
+    </update>
 </mapper>

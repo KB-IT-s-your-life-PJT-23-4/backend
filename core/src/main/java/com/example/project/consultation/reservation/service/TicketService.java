@@ -5,6 +5,7 @@ import com.example.project.common.exception.ServiceException;
 import com.example.project.consultation.reservation.domain.BranchVO;
 import com.example.project.consultation.reservation.domain.DeskTypeVO;
 import com.example.project.consultation.reservation.domain.TicketVO;
+import com.example.project.consultation.reservation.dto.response.TicketCallResponse;
 import com.example.project.consultation.reservation.dto.response.TicketIssueResponse;
 import com.example.project.consultation.reservation.mapper.TicketMapper;
 import lombok.RequiredArgsConstructor;
@@ -69,5 +70,25 @@ public class TicketService {
         String displayNumber = deskType.getPrefix() + "-" + newNumber;
 
         return new TicketIssueResponse(ticket.getTicketId(), displayNumber, businessDate);
+    }
+
+    @Transactional
+    public TicketCallResponse callNextTicket(Long branchId) {
+        LocalDate businessDate = LocalDate.now();
+
+        TicketVO nextTicket = ticketMapper.selectNextWaitingTicket(branchId, PERSONAL_DESK_TYPE, businessDate);
+        if (nextTicket == null) {
+            throw new ServiceException(ResponseCode.RESOURCE_NOT_FOUND); // 대기 중인 손님 없음
+        }
+
+        int updated = ticketMapper.updateTicketStatusToCalled(nextTicket.getTicketId());
+        if (updated == 0) {
+            throw new ServiceException(ResponseCode.CONFLICT); // 그 사이 다른 요청이 먼저 처리함
+        }
+
+        DeskTypeVO deskType = ticketMapper.selectDeskType(PERSONAL_DESK_TYPE);
+        String displayNumber = deskType.getPrefix() + "-" + nextTicket.getTicketNumber();
+
+        return new TicketCallResponse(nextTicket.getTicketId(), displayNumber);
     }
 }

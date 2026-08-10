@@ -38,4 +38,12 @@ public interface TicketMapper {
     DeskTypeVO selectDeskType(@Param("deskTypeCode") String deskTypeCode);
 
     void insertTicket(TicketVO ticket);
+
+    TicketVO selectNextWaitingTicket(
+            @Param("branchId") Long branchId,
+            @Param("deskTypeCode") String deskTypeCode,
+            @Param("businessDate") LocalDate businessDate
+    );
+
+    int updateTicketStatusToCalled(@Param("ticketId") Long ticketId);
 }
