@@ -22,6 +22,7 @@ public class SimulationProductRecord {
     private BigDecimal baseAnnualRatePercent;
     private BigDecimal maximumAnnualRatePercent;
     private BigDecimal appliedAnnualRatePercent;
+    private String riskLevel;
     private Integer minimumContractMonths;
     private Integer maximumContractMonths;
     private Long expectedFutureValue;

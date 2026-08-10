@@ -246,7 +246,8 @@ class SimulationServiceSaveTest {
                     mapper,
                     userMapper,
                     new SimulationCalculator(),
-                    new SimulationIdempotencyStore()
+                    new SimulationIdempotencyStore(),
+                    new EtfVolatilityCalculator()
             );
         }
     }

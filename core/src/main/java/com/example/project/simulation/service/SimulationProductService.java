@@ -32,6 +32,7 @@ public class SimulationProductService {
 
     private final SimulationMapper simulationMapper;
     private final SimulationService simulationService;
+    private final EtfVolatilityCalculator volatilityCalculator;
 
     @Transactional(readOnly = true)
     public ProductDetailResponse getDetail(
@@ -226,6 +227,14 @@ public class SimulationProductService {
                 product.getAnnualizedReturn5yPercent(),
                 product.getBondRatioPercent(),
                 product.getRiskLevel(),
+                volatilityCalculator.calculate(
+                        safeList(simulationMapper.selectRecentEtfPrices(
+                                product.getProductId(),
+                                simulation.getAsOfDate(),
+                                EtfVolatilityCalculator.MAX_PRICE_OBSERVATIONS
+                        )),
+                        product.getRiskLevel()
+                ),
                 "연 평균 수익률은 최근 5년 데이터를 기준으로 계산한 값이며, 미래 수익을 보장하지 않습니다.",
                 holdings.stream()
                         .map(item -> new ProductDetailResponse.Holding(

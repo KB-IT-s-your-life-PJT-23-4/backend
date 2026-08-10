@@ -43,7 +43,8 @@ class SimulationDatabaseIntegrationTest {
                         session.getMapper(SimulationMapper.class),
                         session.getMapper(UserMapper.class),
                         new SimulationCalculator(),
-                        new SimulationIdempotencyStore()
+                        new SimulationIdempotencyStore(),
+                        new EtfVolatilityCalculator()
                 );
 
                 SimulationResponse draft = service.get(990001L, 990001L);
