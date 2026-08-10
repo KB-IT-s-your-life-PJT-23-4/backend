@@ -76,6 +76,20 @@ class SimulationHistoryServiceTest {
     }
 
     @Test
+    @DisplayName("다른 회원이 소유한 수증자의 시뮬레이션 이력은 조회할 수 없다")
+    void rejectHistoryForAnotherUsersFamily() {
+        HistoryMapperStub mapperStub = new HistoryMapperStub();
+        mapperStub.family = family(31L, 2L);
+
+        SimulationException exception = assertThrows(
+                SimulationException.class,
+                () -> service(mapperStub).getHistory(1L, "SAVED", 31L, 0, 10)
+        );
+
+        assertEquals(SimulationError.FAMILY_ACCESS_DENIED, exception.getError());
+    }
+
+    @Test
     @DisplayName("DRAFT와 SAVED 이력을 추천 수익률 범위 및 선택 결과와 함께 반환한다")
     void returnDraftAndSavedHistorySummaries() {
         HistoryMapperStub mapperStub = new HistoryMapperStub();

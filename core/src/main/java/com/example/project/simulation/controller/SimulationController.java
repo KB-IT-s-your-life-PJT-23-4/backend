@@ -94,7 +94,6 @@ public class SimulationController {
             HttpServletRequest httpRequest
     ) {
         Long userId = resolveUserId(principal, authorization);
-        accountAccessService.requireRestrictedFeatureAccess(userId);
         SimulationHistoryResponse response = simulationHistoryService.getHistory(
                 userId,
                 status,
