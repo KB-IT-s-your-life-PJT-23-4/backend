@@ -1,5 +1,6 @@
 package com.example.project.admin.user.controller;
 
+import com.example.project.admin.user.dto.request.AdminUserBlockRequest;
 import com.example.project.admin.user.dto.response.AdminUserPageResponse;
 import com.example.project.admin.user.dto.response.AdminUserResponse;
 import com.example.project.admin.user.service.AdminUserService;
@@ -10,14 +11,18 @@ import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import lombok.RequiredArgsConstructor;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import javax.servlet.http.HttpServletRequest;
+import javax.validation.Valid;
 import javax.validation.constraints.Max;
 import javax.validation.constraints.Min;
 
@@ -59,6 +64,33 @@ public class AdminUserController {
     ) {
         AdminUserResponse data = adminUserService.getUser(userId);
         return ApiResponse.success(ResponseCode.SUCCESS, request.getRequestURI(), data);
+    }
+
+    @ApiOperation(value = "관리자 회원 차단", notes = "ROOT 또는 MIDDLE 관리자가 일반 회원을 지정 시각까지 차단합니다.")
+    @PatchMapping("/{userId}/block")
+    public ApiResponse<AdminUserResponse> blockUser(
+            @PathVariable @Min(1) Long userId,
+            @Valid @RequestBody AdminUserBlockRequest body,
+            Authentication authentication,
+            HttpServletRequest request
+    ) {
+        AdminUserResponse data = adminUserService.blockUser(
+                authentication,
+                userId,
+                body.getBlockedUntil()
+        );
+        return ApiResponse.success(ResponseCode.UPDATED, request.getRequestURI(), data);
+    }
+
+    @ApiOperation(value = "관리자 회원 차단 해제", notes = "ROOT 또는 MIDDLE 관리자가 일반 회원의 차단을 해제합니다.")
+    @PatchMapping("/{userId}/unblock")
+    public ApiResponse<AdminUserResponse> unblockUser(
+            @PathVariable @Min(1) Long userId,
+            Authentication authentication,
+            HttpServletRequest request
+    ) {
+        AdminUserResponse data = adminUserService.unblockUser(authentication, userId);
+        return ApiResponse.success(ResponseCode.UPDATED, request.getRequestURI(), data);
     }
 
     @ApiOperation(

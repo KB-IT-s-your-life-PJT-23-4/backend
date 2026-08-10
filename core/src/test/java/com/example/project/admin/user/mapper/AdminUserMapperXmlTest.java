@@ -46,7 +46,10 @@ class AdminUserMapperXmlTest {
                 .map(java.lang.reflect.Method::getName)
                 .collect(Collectors.toSet());
 
-        assertEquals(Set.of("countUsers", "selectUsers", "selectUserById"), methodNames);
+        assertEquals(
+                Set.of("countUsers", "selectUsers", "selectUserById", "blockUser", "unblockUser"),
+                methodNames
+        );
         methodNames.forEach(name -> assertTrue(configuration.hasStatement(NAMESPACE + name)));
     }
 
@@ -70,6 +73,25 @@ class AdminUserMapperXmlTest {
         assertTrue(sql.contains("COUNT(DISTINCT s.simul_id) AS simulation_count"));
         assertTrue(sql.endsWith("LIMIT ? OFFSET ?"));
         assertFalse(sql.matches("(?is).*\\b(INSERT|UPDATE|DELETE)\\b.*"));
+    }
+
+    @Test
+    @DisplayName("차단과 해제 SQL은 일반 회원과 현재 계정 상태를 조건으로 갱신한다")
+    void mutateOnlyExpectedUserState() {
+        Map<String, Object> blockParameters = new HashMap<>();
+        blockParameters.put("userId", 7L);
+        blockParameters.put("blockedUntil", java.time.LocalDateTime.of(2026, 8, 31, 23, 59));
+
+        String blockSql = sql("blockUser", blockParameters);
+        String unblockSql = sql("unblockUser", Map.of("userId", 7L));
+
+        assertTrue(blockSql.contains("role = 'USER'"));
+        assertTrue(blockSql.contains("account_status = 'ACTIVE'"));
+        assertTrue(blockSql.contains("blocked_until IS NULL"));
+        assertTrue(blockSql.contains("? > CURRENT_TIMESTAMP"));
+        assertTrue(unblockSql.contains("role = 'USER'"));
+        assertTrue(unblockSql.contains("account_status = 'BLOCKED'"));
+        assertTrue(unblockSql.contains("blocked_until = NULL"));
     }
 
     private String sql(String statementId, Object parameters) {

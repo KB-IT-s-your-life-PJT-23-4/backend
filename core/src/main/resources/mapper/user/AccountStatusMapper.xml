@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.example.project.user.mapper.AccountStatusMapper">
+
+    <update id="activateExpiredBlock">
+        UPDATE user
+        SET account_status = 'ACTIVE',
+            blocked_until = NULL,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE user_id = #{userId}
+          AND account_status = 'BLOCKED'
+          AND blocked_until &lt;= CURRENT_TIMESTAMP
+    </update>
+
+    <update id="activateAllExpiredBlocks">
+        UPDATE user
+        SET account_status = 'ACTIVE',
+            blocked_until = NULL,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE account_status = 'BLOCKED'
+          AND blocked_until &lt;= CURRENT_TIMESTAMP
+    </update>
+
+</mapper>

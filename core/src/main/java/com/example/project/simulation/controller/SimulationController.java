@@ -14,6 +14,7 @@ import com.example.project.simulation.exception.SimulationException;
 import com.example.project.simulation.service.SimulationHistoryService;
 import com.example.project.simulation.service.SimulationProductService;
 import com.example.project.simulation.service.SimulationService;
+import com.example.project.user.service.AccountAccessService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.http.CacheControl;
@@ -52,6 +53,7 @@ public class SimulationController {
     private final SimulationProductService simulationProductService;
     private final SimulationHistoryService simulationHistoryService;
     private final JwtProvider jwtProvider;
+    private final AccountAccessService accountAccessService;
 
     @PostMapping({"", "/"})
     public ResponseEntity<ApiResponse<SimulationResponse>> execute(
@@ -62,6 +64,7 @@ public class SimulationController {
             HttpServletRequest httpRequest
     ) {
         Long userId = resolveUserId(principal, authorization);
+        accountAccessService.requireRestrictedFeatureAccess(userId);
         SimulationResponse response =
                 simulationService.execute(request, userId, idempotencyKey);
         URI location = UriComponentsBuilder.fromPath("/api/gs/{id}")
@@ -117,6 +120,7 @@ public class SimulationController {
             HttpServletRequest httpRequest
     ) {
         Long userId = resolveUserId(principal, authorization);
+        accountAccessService.requireRestrictedFeatureAccess(userId);
         SimulationResponse response = simulationService.get(
                 parsePositiveId(simulationId, SimulationError.INVALID_SIMULATION_ID),
                 userId
@@ -144,6 +148,7 @@ public class SimulationController {
             HttpServletRequest httpRequest
     ) {
         Long userId = resolveUserId(principal, authorization);
+        accountAccessService.requireRestrictedFeatureAccess(userId);
         Long parsedSimulationId = parsePositiveId(
                 simulationId,
                 SimulationError.INVALID_SIMULATION_ID
@@ -190,6 +195,7 @@ public class SimulationController {
             HttpServletRequest httpRequest
     ) {
         Long userId = resolveUserId(principal, authorization);
+        accountAccessService.requireRestrictedFeatureAccess(userId);
         SimulationSaveResponse response = simulationService.save(
                 parsePositiveId(simulationId, SimulationError.INVALID_SIMULATION_ID),
                 request,

@@ -59,6 +59,21 @@ class AuthServiceTest {
         assertEquals(1L, response.user().userId());
         assertTrue(jwtProvider.isValidAccessToken(response.accessToken()));
         assertTrue(jwtProvider.isValidRefreshToken(response.refreshToken()));
+        assertEquals("USER", jwtProvider.parse(response.accessToken()).get("role", String.class));
+    }
+
+    @Test
+    @DisplayName("로그인 Access Token에는 DB의 실제 사용자 권한이 포함된다")
+    void issueDatabaseRoleOnLogin() {
+        for (String role : java.util.List.of("ROOT", "MIDDLE", "DEFAULT", "USER")) {
+            userMapper.user.setRole(role);
+
+            AuthTokenResponse response = authService.login(
+                    new LoginRequest("user@example.com", "password123!")
+            );
+
+            assertEquals(role, jwtProvider.parse(response.accessToken()).get("role", String.class));
+        }
     }
 
     @Test
@@ -80,6 +95,7 @@ class AuthServiceTest {
         AuthTokenResponse loginResponse = authService.login(
                 new LoginRequest("user@example.com", "password123!")
         );
+        userMapper.user.setRole("MIDDLE");
 
         AuthTokenResponse refreshResponse = authService.refresh(
                 new TokenRefreshRequest(loginResponse.refreshToken())
@@ -88,6 +104,10 @@ class AuthServiceTest {
         assertNotEquals(loginResponse.accessToken(), refreshResponse.accessToken());
         assertNotEquals(loginResponse.refreshToken(), refreshResponse.refreshToken());
         assertTrue(tokenRevocationStore.isRevoked(loginResponse.refreshToken()));
+        assertEquals(
+                "MIDDLE",
+                jwtProvider.parse(refreshResponse.accessToken()).get("role", String.class)
+        );
 
         ServiceException exception = assertThrows(
                 ServiceException.class,

@@ -13,6 +13,8 @@ public class AdminUserRecord {
     private String email;
     private String userName;
     private String role;
+    private String accountStatus;
+    private LocalDateTime blockedUntil;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private Long recipientCount;

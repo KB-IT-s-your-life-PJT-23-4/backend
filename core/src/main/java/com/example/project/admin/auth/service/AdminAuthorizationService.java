@@ -54,6 +54,10 @@ public class AdminAuthorizationService {
     }
 
     public AdminMeResponse getCurrentAdmin(Authentication authentication) {
+        return AdminMeResponse.from(requireCurrentAdmin(authentication));
+    }
+
+    public AdminPrincipal requireCurrentAdmin(Authentication authentication) {
         if (authentication == null
                 || !authentication.isAuthenticated()
                 || !(authentication.getPrincipal() instanceof AdminPrincipal principal)) {
@@ -64,7 +68,7 @@ public class AdminAuthorizationService {
             throw new ServiceException(ResponseCode.FORBIDDEN);
         }
 
-        return AdminMeResponse.from(principal);
+        return principal;
     }
 
 

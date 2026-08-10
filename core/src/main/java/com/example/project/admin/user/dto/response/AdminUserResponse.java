@@ -18,6 +18,7 @@ public class AdminUserResponse {
     private final String role;
     private final String accountStatus;
     private final boolean accountStatusAvailable;
+    private final LocalDateTime blockedUntil;
     private final long recipientCount;
     private final long giftCount;
     private final long simulationCount;
@@ -30,8 +31,9 @@ public class AdminUserResponse {
                 record.getCreatedAt(),
                 record.getUpdatedAt(),
                 record.getRole(),
-                null,
-                false,
+                record.getAccountStatus(),
+                true,
+                record.getBlockedUntil(),
                 nonNegative(record.getRecipientCount()),
                 nonNegative(record.getGiftCount()),
                 nonNegative(record.getSimulationCount())

@@ -14,6 +14,8 @@
         <result property="birthDate" column="birth_date"/>
         <result property="phone" column="phone"/>
         <result property="role" column="role"/>
+        <result property="accountStatus" column="account_status"/>
+        <result property="blockedUntil" column="blocked_until"/>
         <result property="createdAt" column="created_at"/>
         <result property="updatedAt" column="updated_at"/>
         <result property="img" column="img"/>
@@ -27,6 +29,8 @@
         birth_date,
         phone,
         role,
+        account_status,
+        blocked_until,
         created_at,
         updated_at,
         img

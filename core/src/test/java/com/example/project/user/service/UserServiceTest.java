@@ -8,6 +8,7 @@ import com.example.project.user.dto.UserDTO;
 import com.example.project.user.dto.request.UserSignupRequest;
 import com.example.project.user.dto.request.UserProfileUpdateRequest;
 import com.example.project.user.dto.request.UserUpdateRequest;
+import com.example.project.user.mapper.AccountStatusMapper;
 import com.example.project.user.mapper.UserMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -19,8 +20,10 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.mock.web.MockMultipartFile;
 
 import java.nio.file.Path;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -30,6 +33,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class UserServiceTest {
+
+    private static final LocalDateTime NOW = LocalDateTime.of(2026, 8, 10, 12, 0);
 
     @TempDir
     Path tempDirectory;
@@ -105,6 +110,7 @@ class UserServiceTest {
     @DisplayName("인증된 회원의 정보를 조회한다")
     void getProfile() {
         userMapper.savedUser = createUser("user@example.com");
+        userService = userServiceWithAccountRefresh();
 
         UserDTO result = userService.getProfile(1L);
 
@@ -113,6 +119,34 @@ class UserServiceTest {
         assertEquals("홍길동", result.name());
         assertEquals("010-1111-2222", result.phone());
         assertEquals("USER", result.role());
+    }
+
+    @Test
+    @DisplayName("회원 정보 조회는 아직 유효한 차단 상태를 유지한다")
+    void getProfileWithValidBlockedAccount() {
+        userMapper.savedUser = createUser("user@example.com");
+        userMapper.savedUser.setAccountStatus("BLOCKED");
+        userMapper.savedUser.setBlockedUntil(NOW.plusDays(1));
+        userService = userServiceWithAccountRefresh();
+
+        UserDTO result = userService.getProfile(1L);
+
+        assertEquals("BLOCKED", result.accountStatus());
+        assertEquals(NOW.plusDays(1), result.blockedUntil());
+    }
+
+    @Test
+    @DisplayName("회원 정보 조회는 만료된 차단을 ACTIVE 상태로 복구한다")
+    void getProfileWithExpiredBlockedAccount() {
+        userMapper.savedUser = createUser("user@example.com");
+        userMapper.savedUser.setAccountStatus("BLOCKED");
+        userMapper.savedUser.setBlockedUntil(NOW.minusSeconds(1));
+        userService = userServiceWithAccountRefresh();
+
+        UserDTO result = userService.getProfile(1L);
+
+        assertEquals("ACTIVE", result.accountStatus());
+        assertNull(result.blockedUntil());
     }
 
     @Test
@@ -273,6 +307,35 @@ class UserServiceTest {
                 LocalDateTime.now(),
                 "profile.png"
         );
+    }
+
+    private UserService userServiceWithAccountRefresh() {
+        AccountStatusMapper accountStatusMapper = new AccountStatusMapper() {
+            @Override
+            public int activateExpiredBlock(Long userId) {
+                UserVO user = userMapper.findById(userId);
+                if (user != null
+                        && "BLOCKED".equals(user.getAccountStatus())
+                        && user.getBlockedUntil() != null
+                        && !user.getBlockedUntil().isAfter(NOW)) {
+                    user.setAccountStatus("ACTIVE");
+                    user.setBlockedUntil(null);
+                    return 1;
+                }
+                return 0;
+            }
+
+            @Override
+            public int activateAllExpiredBlocks() {
+                return 0;
+            }
+        };
+        AccountAccessService accountAccessService = new AccountAccessService(
+                accountStatusMapper,
+                userMapper,
+                Clock.fixed(NOW.toInstant(ZoneOffset.UTC), ZoneOffset.UTC)
+        );
+        return new UserService(userMapper, passwordEncoder, null, accountAccessService);
     }
 
     private static class FakeUserMapper implements UserMapper {

@@ -4,6 +4,7 @@ import com.example.project.admin.user.domain.AdminUserRecord;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Mapper
@@ -24,4 +25,11 @@ public interface AdminUserMapper {
     );
 
     AdminUserRecord selectUserById(@Param("userId") Long userId);
+
+    int blockUser(
+            @Param("userId") Long userId,
+            @Param("blockedUntil") LocalDateTime blockedUntil
+    );
+
+    int unblockUser(@Param("userId") Long userId);
 }
