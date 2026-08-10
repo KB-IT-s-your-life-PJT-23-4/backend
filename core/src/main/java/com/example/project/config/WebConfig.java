@@ -1,6 +1,6 @@
 package com.example.project.config;
 
-import com.example.project.consultation.config.KakaoWebClientConfig;
+import com.example.project.consultation.reservation.config.KakaoWebClientConfig;
 import com.example.project.consultation.config.WebClientConfig;
 import com.example.project.security.SecurityConfig;
 import org.springframework.web.filter.CharacterEncodingFilter;

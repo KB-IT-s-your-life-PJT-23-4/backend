@@ -1,8 +1,8 @@
-package com.example.project.common.kakao.client;
+package com.example.project.consultation.client;
 
 import com.example.project.common.api.ResponseCode;
 import com.example.project.common.exception.ServiceException;
-import com.example.project.common.kakao.dto.KakaoKeywordSearchResponse;
+import com.example.project.consultation.reservation.dto.response.KakaoKeywordSearchResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Component;
