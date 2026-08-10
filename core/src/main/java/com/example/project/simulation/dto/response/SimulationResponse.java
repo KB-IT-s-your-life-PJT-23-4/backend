@@ -133,6 +133,8 @@ public record SimulationResponse(
             BigDecimal appliedAnnualRatePercent,
             CalculationType calculationMethod,
             ReturnMetric returnMetric,
+            String riskLevel,
+            EtfVolatilityResponse volatility,
             Long expectedFutureValue,
             Long expectedProfit,
             boolean isSelected,

@@ -14,5 +14,6 @@ public record ChatResponse(
         boolean requiresCalculation,
         String answer,
         List<ClarificationQuestion> clarificationQuestions,
-        Map<String, Object> facts
+        Map<String, Object> facts,
+        List<AnswerSource> sources
 ) {}

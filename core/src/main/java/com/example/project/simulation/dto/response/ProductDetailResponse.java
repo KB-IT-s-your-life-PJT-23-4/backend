@@ -55,6 +55,7 @@ public record ProductDetailResponse(
             BigDecimal annualizedReturn5yPercent,
             BigDecimal bondRatioPercent,
             String riskLevel,
+            EtfVolatilityResponse volatility,
             String returnNotice,
             List<Holding> holdings,
             BigDecimal topHoldingsWeightPercent,
