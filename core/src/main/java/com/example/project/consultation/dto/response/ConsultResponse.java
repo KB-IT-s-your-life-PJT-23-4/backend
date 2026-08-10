@@ -1,5 +1,6 @@
 package com.example.project.consultation.dto.response;
 
+import com.example.project.consultation.dto.fastapi.AnswerSource;
 import com.example.project.consultation.dto.fastapi.ChatResponse;
 import com.example.project.consultation.dto.fastapi.ChatStatus;
 import com.example.project.consultation.dto.fastapi.ClarificationQuestion;
@@ -14,7 +15,8 @@ public record ConsultResponse(
         boolean requiresCalculation,
         String answer,
         List<ClarificationQuestion> clarificationQuestions,
-        Map<String, Object> facts
+        Map<String, Object> facts,
+        List<AnswerSource> references
 ) {
     public static ConsultResponse from(ChatResponse response) {
         return new ConsultResponse(
@@ -24,7 +26,8 @@ public record ConsultResponse(
                 response.requiresCalculation(),
                 response.answer(),
                 response.clarificationQuestions(),
-                response.facts()
+                response.facts(),
+                response.sources()
         );
     }
 }
