@@ -46,4 +46,16 @@ public interface TicketMapper {
     );
 
     int updateTicketStatusToCalled(@Param("ticketId") Long ticketId);
+
+    int countWaitingTickets(
+            @Param("branchId") Long branchId,
+            @Param("deskTypeCode") String deskTypeCode,
+            @Param("businessDate") LocalDate businessDate
+    );
+
+    Integer selectLastCalledNumber(
+            @Param("branchId") Long branchId,
+            @Param("deskTypeCode") String deskTypeCode,
+            @Param("businessDate") LocalDate businessDate
+    );
 }

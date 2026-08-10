@@ -7,13 +7,11 @@ import com.example.project.consultation.reservation.dto.request.TicketCallReques
 import com.example.project.consultation.reservation.dto.request.TicketIssueRequest;
 import com.example.project.consultation.reservation.dto.response.TicketCallResponse;
 import com.example.project.consultation.reservation.dto.response.TicketIssueResponse;
+import com.example.project.consultation.reservation.dto.response.TicketStatusResponse;
 import com.example.project.consultation.reservation.service.TicketService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.validation.Valid;
@@ -45,5 +43,13 @@ public class TicketController {
         CurrentUser.id(principal); // 로그인 여부만 확인
         TicketCallResponse data = ticketService.callNextTicket(request.branchId());
         return ApiResponse.success(ResponseCode.UPDATED, httpRequest.getRequestURI(), data);
+    }
+    @GetMapping("/status")
+    public ApiResponse<TicketStatusResponse> status(
+            @RequestParam Long branchId,
+            HttpServletRequest httpRequest
+    ) {
+        TicketStatusResponse data = ticketService.getTicketStatus(branchId);
+        return ApiResponse.success(ResponseCode.SUCCESS, httpRequest.getRequestURI(), data);
     }
 }

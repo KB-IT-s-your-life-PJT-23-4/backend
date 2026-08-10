@@ -103,4 +103,26 @@
         WHERE ticket_id = #{ticketId}
         AND status = 'WAITING'
     </update>
+
+    <!-- 대기 중인 티켓 개수 조회 -->
+    <select id="countWaitingTickets" resultType="int">
+        SELECT COUNT(*)
+        FROM kb_ticket
+        WHERE branch_id = #{branchId}
+        AND desk_type_code = #{deskTypeCode}
+        AND business_date = #{businessDate}
+        AND status = 'WAITING'
+    </select>
+
+    <!-- 가장 최근에 호출된 번호 조회 -->
+    <select id="selectLastCalledNumber" resultType="java.lang.Integer">
+        SELECT ticket_number
+        FROM kb_ticket
+        WHERE branch_id = #{branchId}
+        AND desk_type_code = #{deskTypeCode}
+        AND business_date = #{businessDate}
+        AND status = 'CALLED'
+        ORDER BY called_at DESC
+        LIMIT 1
+    </select>
 </mapper>

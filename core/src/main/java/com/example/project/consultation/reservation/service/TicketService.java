@@ -7,6 +7,7 @@ import com.example.project.consultation.reservation.domain.DeskTypeVO;
 import com.example.project.consultation.reservation.domain.TicketVO;
 import com.example.project.consultation.reservation.dto.response.TicketCallResponse;
 import com.example.project.consultation.reservation.dto.response.TicketIssueResponse;
+import com.example.project.consultation.reservation.dto.response.TicketStatusResponse;
 import com.example.project.consultation.reservation.mapper.TicketMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -67,9 +68,12 @@ public class TicketService {
 
         ticketMapper.insertTicket(ticket);
 
+        // 방금 발급한 내 티켓을 포함해서 몇 명 대기 중인지 조회
+        int waitingCount = ticketMapper.countWaitingTickets(branchId, PERSONAL_DESK_TYPE, businessDate);
+
         String displayNumber = deskType.getPrefix() + "-" + newNumber;
 
-        return new TicketIssueResponse(ticket.getTicketId(), displayNumber, businessDate);
+        return new TicketIssueResponse(ticket.getTicketId(), displayNumber, waitingCount, businessDate);
     }
 
     @Transactional
@@ -90,5 +94,18 @@ public class TicketService {
         String displayNumber = deskType.getPrefix() + "-" + nextTicket.getTicketNumber();
 
         return new TicketCallResponse(nextTicket.getTicketId(), displayNumber);
+    }
+    public TicketStatusResponse getTicketStatus(Long branchId) {
+        LocalDate businessDate = LocalDate.now();
+
+        int waitingCount = ticketMapper.countWaitingTickets(branchId, PERSONAL_DESK_TYPE, businessDate);
+        Integer lastCalledNumber = ticketMapper.selectLastCalledNumber(branchId, PERSONAL_DESK_TYPE, businessDate);
+
+        DeskTypeVO deskType = ticketMapper.selectDeskType(PERSONAL_DESK_TYPE);
+        String currentCalledNumber = lastCalledNumber == null
+                ? null
+                : deskType.getPrefix() + "-" + lastCalledNumber;
+
+        return new TicketStatusResponse(branchId, waitingCount, currentCalledNumber);
     }
 }
