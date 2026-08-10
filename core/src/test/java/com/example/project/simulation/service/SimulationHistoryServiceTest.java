@@ -94,7 +94,7 @@ class SimulationHistoryServiceTest {
         mapperStub.totalElements = 2L;
         mapperStub.simulations = List.of(draft, saved);
         mapperStub.results = List.of(
-                result(1_001L, 100L, 1_000L, 0L),
+                result(1_001L, 100L, 1_000L, 500L),
                 result(2_001L, 200L, 2_000L, 100L)
         );
         mapperStub.recommendations = List.of(
@@ -129,6 +129,7 @@ class SimulationHistoryServiceTest {
         SimulationHistoryResponse.Item draftItem = response.items().get(0);
         assertEquals(SimulationStatus.DRAFT, draftItem.status());
         assertNull(draftItem.selection());
+        assertEquals(500L, draftItem.estimatedGiftTax());
         assertEquals(
                 RiskProfile.CONSERVATIVE,
                 draftItem.expectedReturnRange().minimum().portfolioType()
@@ -148,6 +149,7 @@ class SimulationHistoryServiceTest {
 
         SimulationHistoryResponse.Item savedItem = response.items().get(1);
         assertEquals(SimulationStatus.SAVED, savedItem.status());
+        assertEquals(100L, savedItem.estimatedGiftTax());
         assertEquals(2_999L, savedItem.selection().selectedPortfolioId());
         assertEquals(2_300L, savedItem.selection().expectedFutureValue());
         assertEquals(300L, savedItem.selection().expectedProfit());
