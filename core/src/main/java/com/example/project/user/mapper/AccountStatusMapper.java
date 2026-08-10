@@ -7,4 +7,6 @@ import org.apache.ibatis.annotations.Param;
 public interface AccountStatusMapper {
 
     int activateExpiredBlock(@Param("userId") Long userId);
+
+    int activateAllExpiredBlocks();
 }

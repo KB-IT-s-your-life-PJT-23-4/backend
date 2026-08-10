@@ -38,7 +38,7 @@ public class AdminUserService {
     private final AccountAccessService accountAccessService;
     private final Clock clock;
 
-    @Transactional(readOnly = true)
+    @Transactional
     public AdminUserPageResponse getUsers(
             Long userId,
             String emailValue,
@@ -50,6 +50,8 @@ public class AdminUserService {
         if (userId != null && userId <= 0L) {
             throw new ServiceException(ResponseCode.BAD_REQUEST);
         }
+
+        accountAccessService.refreshAllExpiredBlocks();
 
         String email = normalize(emailValue, true);
         String name = normalize(nameValue, false);
@@ -82,11 +84,12 @@ public class AdminUserService {
         return new AdminUserPageResponse(users, pagination);
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public AdminUserResponse getUser(Long userId) {
         if (userId == null || userId <= 0L) {
             throw new ServiceException(ResponseCode.BAD_REQUEST);
         }
+        accountAccessService.refreshAndGet(userId);
         AdminUserRecord user = adminUserMapper.selectUserById(userId);
         if (user == null) {
             throw new ServiceException(ResponseCode.MEMBER_NOT_FOUND);

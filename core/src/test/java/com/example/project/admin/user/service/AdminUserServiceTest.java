@@ -49,7 +49,29 @@ class AdminUserServiceTest {
                 new AccountAccessService(null, null, clock) {
                     @Override
                     public com.example.project.user.domain.UserVO refreshAndGet(Long userId) {
+                        activateIfExpired(mapper.selectUserById(userId));
                         return new com.example.project.user.domain.UserVO();
+                    }
+
+                    @Override
+                    public int refreshAllExpiredBlocks() {
+                        int updated = 0;
+                        for (AdminUserRecord user : mapper.users) {
+                            updated += activateIfExpired(user);
+                        }
+                        return updated;
+                    }
+
+                    private int activateIfExpired(AdminUserRecord user) {
+                        if (user != null
+                                && "BLOCKED".equals(user.getAccountStatus())
+                                && user.getBlockedUntil() != null
+                                && !user.getBlockedUntil().isAfter(LocalDateTime.now(clock))) {
+                            user.setAccountStatus("ACTIVE");
+                            user.setBlockedUntil(null);
+                            return 1;
+                        }
+                        return 0;
                     }
                 },
                 clock
@@ -80,6 +102,41 @@ class AdminUserServiceTest {
         assertEquals(4L, user.getSimulationCount());
         assertEquals(2, response.getPagination().getTotalPages());
         assertFalse(response.getPagination().isFirst());
+    }
+
+    @Test
+    @DisplayName("회원 목록은 만료된 차단만 해제하고 유효한 차단은 유지한다")
+    void refreshExpiredBlocksBeforeListingUsers() {
+        AdminUserRecord expired = user(7L, "expired@example.com", "만료회원", 0L, 0L, 0L);
+        expired.setAccountStatus("BLOCKED");
+        expired.setBlockedUntil(LocalDateTime.of(2026, 8, 8, 11, 59));
+        AdminUserRecord blocked = user(8L, "blocked@example.com", "차단회원", 0L, 0L, 0L);
+        blocked.setAccountStatus("BLOCKED");
+        blocked.setBlockedUntil(LocalDateTime.of(2026, 8, 9, 12, 0));
+        mapper.users.add(expired);
+        mapper.users.add(blocked);
+        mapper.totalElements = 2L;
+
+        var response = service.getUsers(null, null, null, 0, 20);
+
+        assertEquals("ACTIVE", response.getUsers().get(0).getAccountStatus());
+        assertNull(response.getUsers().get(0).getBlockedUntil());
+        assertEquals("BLOCKED", response.getUsers().get(1).getAccountStatus());
+        assertEquals(blocked.getBlockedUntil(), response.getUsers().get(1).getBlockedUntil());
+    }
+
+    @Test
+    @DisplayName("회원 상세는 만료된 차단 상태를 해제한 뒤 반환한다")
+    void refreshExpiredBlockBeforeGettingUser() {
+        AdminUserRecord expired = user(7L, "expired@example.com", "만료회원", 0L, 0L, 0L);
+        expired.setAccountStatus("BLOCKED");
+        expired.setBlockedUntil(LocalDateTime.of(2026, 8, 8, 11, 59));
+        mapper.users.add(expired);
+
+        var response = service.getUser(7L);
+
+        assertEquals("ACTIVE", response.getAccountStatus());
+        assertNull(response.getBlockedUntil());
     }
 
     @Test

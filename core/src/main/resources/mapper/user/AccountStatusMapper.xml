@@ -15,4 +15,13 @@
           AND blocked_until &lt;= CURRENT_TIMESTAMP
     </update>
 
+    <update id="activateAllExpiredBlocks">
+        UPDATE user
+        SET account_status = 'ACTIVE',
+            blocked_until = NULL,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE account_status = 'BLOCKED'
+          AND blocked_until &lt;= CURRENT_TIMESTAMP
+    </update>
+
 </mapper>

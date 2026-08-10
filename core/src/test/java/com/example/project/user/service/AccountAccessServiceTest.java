@@ -74,11 +74,22 @@ class AccountAccessServiceTest {
         assertEquals(1, accountStatusMapper.updateCount);
     }
 
+    @Test
+    @DisplayName("관리자 목록 조회 전에는 만료 차단 전체를 한 번에 복구한다")
+    void activateAllExpiredBlocks() {
+        accountStatusMapper.allExpiredUpdateCount = 2;
+
+        assertEquals(2, service.refreshAllExpiredBlocks());
+        assertEquals(1, accountStatusMapper.activateAllCallCount);
+    }
+
     private static final class FakeAccountStatusMapper implements AccountStatusMapper {
 
         private final UserVO user;
         private final LocalDateTime now;
         private int updateCount;
+        private int allExpiredUpdateCount;
+        private int activateAllCallCount;
 
         private FakeAccountStatusMapper(UserVO user, LocalDateTime now) {
             this.user = user;
@@ -97,6 +108,12 @@ class AccountAccessServiceTest {
                 return 1;
             }
             return 0;
+        }
+
+        @Override
+        public int activateAllExpiredBlocks() {
+            activateAllCallCount++;
+            return allExpiredUpdateCount;
         }
     }
 

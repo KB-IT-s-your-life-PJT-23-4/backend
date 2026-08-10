@@ -25,20 +25,31 @@ public class UserService {
     private final UserMapper userMapper;
     private final PasswordEncoder passwordEncoder;
     private final ProfileImageStorageService profileImageStorageService;
+    private final AccountAccessService accountAccessService;
 
     @Autowired
     public UserService(
             UserMapper userMapper,
             PasswordEncoder passwordEncoder,
-            ProfileImageStorageService profileImageStorageService
+            ProfileImageStorageService profileImageStorageService,
+            AccountAccessService accountAccessService
     ) {
         this.userMapper = userMapper;
         this.passwordEncoder = passwordEncoder;
         this.profileImageStorageService = profileImageStorageService;
+        this.accountAccessService = accountAccessService;
     }
 
     public UserService(UserMapper userMapper, PasswordEncoder passwordEncoder) {
-        this(userMapper, passwordEncoder, null);
+        this(userMapper, passwordEncoder, null, null);
+    }
+
+    public UserService(
+            UserMapper userMapper,
+            PasswordEncoder passwordEncoder,
+            ProfileImageStorageService profileImageStorageService
+    ) {
+        this(userMapper, passwordEncoder, profileImageStorageService, null);
     }
 
     public UserDTO signup(UserSignupRequest signupRequest) {
@@ -83,7 +94,10 @@ public class UserService {
     }
 
     public UserDTO getProfile(Long userId) {
-        return UserDTO.from(findUser(userId));
+        UserVO user = accountAccessService == null
+                ? findUser(userId)
+                : accountAccessService.refreshAndGet(userId);
+        return UserDTO.from(user);
     }
 
     public UserDTO updateProfile(Long userId, UserUpdateRequest updateRequest) {

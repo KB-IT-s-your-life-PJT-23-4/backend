@@ -37,6 +37,11 @@ public class AccountAccessService {
     }
 
     @Transactional
+    public int refreshAllExpiredBlocks() {
+        return accountStatusMapper.activateAllExpiredBlocks();
+    }
+
+    @Transactional
     public void requireRestrictedFeatureAccess(Long userId) {
         UserVO user = refreshAndGet(userId);
         if (BLOCKED.equals(user.getAccountStatus())
