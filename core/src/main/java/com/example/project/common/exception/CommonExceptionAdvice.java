@@ -145,10 +145,10 @@ public class CommonExceptionAdvice {
         return switch (code) {
             case 401, 402 -> HttpStatus.UNAUTHORIZED;
             case 403 -> HttpStatus.FORBIDDEN;
-            case 404, 410, 411, 412, 415 -> HttpStatus.NOT_FOUND;
+            case 404, 410, 411, 412, 415, 423 -> HttpStatus.NOT_FOUND;
             case 405 -> HttpStatus.METHOD_NOT_ALLOWED;
             case 408 -> HttpStatus.REQUEST_TIMEOUT;
-            case 406, 409 -> HttpStatus.CONFLICT;
+            case 406, 409, 422 -> HttpStatus.CONFLICT;
             default -> HttpStatus.BAD_REQUEST;
         };
     }

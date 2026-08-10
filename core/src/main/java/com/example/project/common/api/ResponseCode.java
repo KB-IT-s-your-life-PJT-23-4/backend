@@ -65,6 +65,8 @@ public enum ResponseCode {
     FILE_FORMAT_INVALID(419, "FILE_FORMAT_INVALID", "지원하지 않는 파일 형식입니다"),
     FILE_SIZE_EXCEEDED(420, "FILE_SIZE_EXCEEDED", "첨부파일 허용 용량을 초과합니다"),
     INVALID_GIFT_DATE(421, "INVALID_GIFT_DATE", "확정된 증여는 오늘 이후 날짜로 기록할 수 없습니다"),
+    SIMULATION_ALREADY_REGISTERED(422, "SIMULATION_ALREADY_REGISTERED", "이미 증여로 등록된 시뮬레이션입니다"),
+    SIMULATION_NOT_REGISTRABLE(423, "SIMULATION_NOT_REGISTRABLE", "증여로 등록할 수 있는 시뮬레이션이 아닙니다"),
 
     // 500번대: 서버 및 외부 시스템 오류
     INTERNAL_SERVER_ERROR(500, "INTERNAL_SERVER_ERROR", "서버 내부에서 알 수 없는 오류가 발생하였습니다"),

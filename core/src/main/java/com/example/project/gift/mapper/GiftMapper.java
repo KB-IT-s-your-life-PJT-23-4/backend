@@ -2,8 +2,10 @@ package com.example.project.gift.mapper;
 
 import com.example.project.gift.domain.DeductionVO;
 import com.example.project.gift.domain.GiftVO;
+import com.example.project.gift.domain.SimulationGiftSource;
 import com.example.project.gift.domain.Status;
 import com.example.project.gift.domain.TaxBracketVO;
+import com.example.project.simulation.domain.SimulationTrancheRecord;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -72,4 +74,21 @@ public interface GiftMapper {
      * 수증자 삭제 전 증여 이력 유무 확인용. gift FK 가 CASCADE 라 이 검사를 빼면 이력이 함께 사라진다.
      */
     int countGiftByFamily(@Param("familyId") Long familyId);
+
+    /**
+     * 증여로 등록할 수 있는 시뮬레이션인지 확인하고 수증자·시나리오를 함께 가져온다.
+     * 남의 시뮬레이션이거나, 저장 상태가 아니거나, 포트폴리오를 고르지 않았으면 null.
+     */
+    SimulationGiftSource selectSimulationGiftSource(@Param("simulationId") Long simulationId,
+                                                    @Param("userId") Long userId);
+
+    /**
+     * 등록할 회차들. 회차 순으로 나오며 gift 행 하나하나의 원본이 된다.
+     */
+    List<SimulationTrancheRecord> selectTranchesByResultId(@Param("simulResultId") Long simulResultId);
+
+    /**
+     * 같은 시나리오가 이미 증여로 등록됐는지. 0 이 아니면 중복 등록이다.
+     */
+    int countGiftBySimulResultId(@Param("simulResultId") Long simulResultId);
 }
