@@ -45,7 +45,7 @@ class AdminUserServiceTest {
         service = new AdminUserService(
                 mapper,
                 userService,
-                new AdminAuthorizationService(null),
+                new AdminAuthorizationService(null, null, null),
                 new AccountAccessService(null, null, clock) {
                     @Override
                     public com.example.project.user.domain.UserVO refreshAndGet(Long userId) {
