@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.example.project.consultation.reservation.mapper.TicketMapper">
+
+    <!-- 좌표 확정된 운영 지점 전체 조회, 카카오 검색 결과와 이름 매칭에 사용 -->
+    <select id="selectAllActiveBranches" resultType="com.example.project.consultation.reservation.domain.BranchVO">
+        SELECT
+        branch_id AS branchId,
+        branch_name AS branchName,
+        latitude,
+        longitude
+        FROM kb_branch
+        WHERE is_active = 1
+        AND geocoded_at IS NOT NULL
+    </select>
+
+    <!-- 번호표 발급 대상 지점 단건 조회 (존재/활성 여부 검증용) -->
+    <select id="selectActiveBranch" resultType="com.example.project.consultation.reservation.domain.BranchVO">
+        SELECT
+        branch_id AS branchId,
+        branch_name AS branchName,
+        latitude,
+        longitude
+        FROM kb_branch
+        WHERE branch_id = #{branchId}
+        AND is_active = 1
+    </select>
+
+    <!-- 오늘자 카운터 행이 없으면 0으로 미리 생성->동시 요청이어도 UNIQUE 제약으로 한쪽만 성공함-->
+    <insert id="insertCounterIfAbsent">
+        INSERT IGNORE INTO kb_ticket_counter
+        (branch_id, desk_type_code, current_number, business_date)
+        VALUES
+        (#{branchId}, #{deskTypeCode}, 0, #{businessDate})
+    </insert>
+
+    <!-- 오늘자 카운터 행을 잠그고 현재 번호를 조회(Pessimistic Lock) -->
+    <select id="selectCounterForUpdate" resultType="java.lang.Integer">
+        SELECT current_number
+        FROM kb_ticket_counter
+        WHERE branch_id = #{branchId}
+        AND desk_type_code = #{deskTypeCode}
+        AND business_date = #{businessDate}
+        FOR UPDATE
+    </select>
+
+    <!-- 잠근 행을 애플리케이션에서 계산한 새 번호로 갱신 -->
+    <update id="incrementCounter">
+        UPDATE kb_ticket_counter
+        SET current_number = #{newNumber}
+        WHERE branch_id = #{branchId}
+        AND desk_type_code = #{deskTypeCode}
+        AND business_date = #{businessDate}
+    </update>
+
+    <!-- 창구 타입 정보(접두어 등) 조회 -->
+    <select id="selectDeskType" resultType="com.example.project.consultation.reservation.domain.DeskTypeVO">
+        SELECT
+        desk_type_code AS deskTypeCode,
+        desk_type_name AS deskTypeName,
+        prefix,
+        is_operating AS operating
+        FROM kb_desk_type
+        WHERE desk_type_code = #{deskTypeCode}
+    </select>
+
+    <!-- 발급된 번호표를 저장 -->
+    <insert id="insertTicket" useGeneratedKeys="true" keyProperty="ticketId">
+        INSERT INTO kb_ticket
+        (branch_id, desk_type_code, service_type, ticket_number, user_id, status, business_date)
+        VALUES
+        (#{branchId}, #{deskTypeCode}, #{serviceType}, #{ticketNumber}, #{userId}, #{status}, #{businessDate})
+    </insert>
+
+</mapper>
