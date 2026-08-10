@@ -1,4 +1,4 @@
-package com.example.project.consultation.client;
+package com.example.project.consultation.reservation.client;
 
 import com.example.project.common.api.ResponseCode;
 import com.example.project.common.exception.ServiceException;

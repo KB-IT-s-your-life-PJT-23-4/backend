@@ -1,4 +1,4 @@
-package com.example.project.consultation.config;
+package com.example.project.consultation.reservation.config;
 
 import io.netty.channel.ChannelOption;
 import org.springframework.beans.factory.annotation.Value;

@@ -1,9 +1,9 @@
-package com.example.project.consultation.controller;
+package com.example.project.consultation.reservation.controller;
 
 import com.example.project.common.api.ApiResponse;
 import com.example.project.common.api.ResponseCode;
-import com.example.project.consultation.client.KakaoLocalClient;
-import com.example.project.consultation.dto.response.KakaoKeywordSearchResponse;
+import com.example.project.consultation.reservation.client.KakaoLocalClient;
+import com.example.project.consultation.reservation.dto.response.KakaoKeywordSearchResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;

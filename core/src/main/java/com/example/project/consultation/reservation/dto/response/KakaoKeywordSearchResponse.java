@@ -1,4 +1,4 @@
-package com.example.project.consultation.dto.response;
+package com.example.project.consultation.reservation.dto.response;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
