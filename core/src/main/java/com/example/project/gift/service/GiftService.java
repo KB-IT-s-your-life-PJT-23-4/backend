@@ -5,17 +5,21 @@ import com.example.project.common.exception.ServiceException;
 import com.example.project.gift.domain.DeductionVO;
 import com.example.project.gift.domain.FilingDeadline;
 import com.example.project.gift.domain.GiftVO;
+import com.example.project.gift.domain.SimulationGiftSource;
 import com.example.project.gift.domain.Status;
 import com.example.project.gift.domain.TaxBracketVO;
 import com.example.project.gift.dto.request.GiftRequest;
+import com.example.project.gift.dto.request.SimulationGiftRequest;
 import com.example.project.gift.dto.response.DeductionResponse;
 import com.example.project.gift.dto.response.FilingInfoResponse;
 import com.example.project.gift.dto.response.GiftResponse;
 import com.example.project.gift.mapper.GiftMapper;
 import com.example.project.recipient.service.RecipientService;
+import com.example.project.simulation.domain.SimulationTrancheRecord;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -55,6 +59,71 @@ public class GiftService {
         giftMapper.insertGift(gift);
 
         return selectGift(gift.getGiftId(), userId);
+    }
+
+    /**
+     * 저장된 시뮬레이션을 진행 중인 증여로 등록한다. 분할 증여면 <b>회차 수만큼 gift 행이 생긴다.</b>
+     *
+     * <p>회차를 한 행으로 합치지 않는 이유는 회차마다 증여일이 다르기 때문이다. 증여일이 다르면
+     * 신고기한도 10년 합산 창에서 빠지는 날도 회차별로 따로 움직인다. 합쳐 놓으면 그 계산이 전부
+     * 어긋나고, {@code reminder} 도 {@code (gift_id, reminder_type)} 이 유일해서 회차별 신고기한
+     * 알림을 만들 수 없다.
+     *
+     * <p>금액·증여일은 요청이 아니라 {@code simulation_tranche} 에서 읽는다. 화면이 보낸 값을 믿으면
+     * 시뮬레이션이 계산한 회차와 실제 등록된 증여가 어긋날 수 있다.
+     *
+     * <p>중복 등록은 {@code gift(simul_result_id, sequence_no)} UNIQUE 제약이 최종적으로 막는다.
+     * 여기서 미리 세어 보는 것은 사용자에게 이유를 알려주기 위한 것이고, 동시에 두 번 눌러 검사를
+     * 통과하더라도 DB 가 걸러 낸다.
+     */
+    @Transactional
+    public List<GiftResponse> registerFromSimulation(SimulationGiftRequest request, Long userId) {
+        if (request.getSimulationId() == null) {
+            throw new ServiceException(ResponseCode.VALIDATION_FAILED);
+        }
+
+        SimulationGiftSource source = giftMapper.selectSimulationGiftSource(request.getSimulationId(), userId);
+
+        if (source == null) {
+            throw new ServiceException(ResponseCode.SIMULATION_NOT_REGISTRABLE);
+        }
+
+        if (giftMapper.countGiftBySimulResultId(source.getSimulResultId()) > 0) {
+            throw new ServiceException(ResponseCode.SIMULATION_ALREADY_REGISTERED);
+        }
+
+        List<SimulationTrancheRecord> tranches = giftMapper.selectTranchesByResultId(source.getSimulResultId());
+
+        if (tranches.isEmpty()) {
+            throw new ServiceException(ResponseCode.SIMULATION_NOT_REGISTRABLE);
+        }
+
+        List<Long> giftIds = new ArrayList<>();
+
+        for (SimulationTrancheRecord tranche : tranches) {
+            GiftVO gift = new GiftVO();
+            gift.setFamilyId(source.getFamilyId());
+            gift.setSimulResultId(source.getSimulResultId());
+            gift.setSequenceNo(tranche.getSequenceNo());
+            gift.setAmount(tranche.getGiftAmount());
+            gift.setGiftDate(tranche.getGiftDate());
+            gift.setStatus(Status.PLANNED);
+            gift.setMemo(memoFor(request.getMemo(), tranche.getSequenceNo(), tranches.size()));
+
+            giftMapper.insertGift(gift);
+            giftIds.add(gift.getGiftId());
+        }
+
+        return giftIds.stream().map(giftId -> selectGift(giftId, userId)).toList();
+    }
+
+    /** 회차가 하나뿐이면 분할이 아니므로 회차 표기를 붙이지 않는다. */
+    private String memoFor(String requestedMemo, int sequenceNo, int totalCount) {
+        if (requestedMemo != null && !requestedMemo.isBlank()) {
+            return requestedMemo;
+        }
+
+        return totalCount == 1 ? "진행 중인 증여" : sequenceNo + "/" + totalCount + "회차 증여";
     }
 
     public List<GiftResponse> selectAllGift(Long familyId, Status status, Long userId) {
@@ -133,6 +202,7 @@ public class GiftService {
     /**
      * 증여 1건의 신고 안내. 공제 현황과 달리 기준일이 오늘이 아니라 <b>증여일</b>이다.
      * 신고는 그 증여가 일어난 시점의 합산 이력과 세율로 판단하기 때문이다.
+     * 신고를 위한 메서드
      */
     public FilingInfoResponse getFilingInfo(Long giftId, Long userId) {
         GiftVO gift = findOwnerGift(giftId, userId);
@@ -381,7 +451,7 @@ public class GiftService {
      *
      * <p>미래에 할 증여는 {@link Status#PLANNED} 라는 상태가 따로 있으니 확정으로 넣을 이유가 없다.
      * 계획을 미리 확정 처리하는 것도 같은 이유로 막는다.
-     */
+     * */
     private void validateCompletedGiftDate(Status status, LocalDate giftDate) {
         if (status == Status.COMPLETED && giftDate != null && giftDate.isAfter(LocalDate.now())) {
             throw new ServiceException(ResponseCode.INVALID_GIFT_DATE);

@@ -7,6 +7,8 @@
     <resultMap id="giftResultMap" type="com.example.project.gift.domain.GiftVO">
         <id property="giftId" column="gift_id"/>
         <result property="familyId" column="family_id"/>
+        <result property="simulResultId" column="simul_result_id"/>
+        <result property="sequenceNo" column="sequence_no"/>
         <result property="amount" column="amount"/>
         <result property="giftDate" column="gift_date"/>
         <result property="status" column="status"/>
@@ -18,6 +20,8 @@
     <sql id="giftColumns">
         g.gift_id,
         g.family_id,
+        g.simul_result_id,
+        g.sequence_no,
         g.amount,
         g.gift_date,
         g.status,
@@ -29,9 +33,9 @@
     <insert id="insertGift" parameterType="com.example.project.gift.domain.GiftVO"
             useGeneratedKeys="true" keyProperty="giftId">
         INSERT INTO gift (
-        family_id, amount, gift_date, status, memo
+        family_id, simul_result_id, sequence_no, amount, gift_date, status, memo
         ) VALUES (
-        #{familyId}, #{amount}, #{giftDate}, #{status}, #{memo}
+        #{familyId}, #{simulResultId}, #{sequenceNo}, #{amount}, #{giftDate}, #{status}, #{memo}
         )
     </insert>
 
@@ -189,5 +193,34 @@
         AND lower_bound &lt; #{taxableBase}
         AND (upper_bound IS NULL OR #{taxableBase} &lt;= upper_bound)
         LIMIT 1
+    </select>
+
+    <!--
+      selected_portfolio_id 를 INNER JOIN 으로 타는 것이 조건 하나 몫을 한다.
+      포트폴리오를 고르지 않고 저장된 시뮬레이션은 여기서 행이 안 나와 등록 대상에서 빠진다.
+    -->
+    <select id="selectSimulationGiftSource" resultType="com.example.project.gift.domain.SimulationGiftSource">
+        SELECT s.family_id, sp.simul_result_id
+        FROM simulation s
+        JOIN family f ON f.family_id = s.family_id
+        JOIN simulation_portfolio sp ON sp.simul_portfolio_id = s.selected_portfolio_id
+        WHERE s.simul_id = #{simulationId}
+        AND f.user_id = #{userId}
+        AND s.status = 'SAVED'
+    </select>
+
+    <select id="selectTranchesByResultId"
+            resultType="com.example.project.simulation.domain.SimulationTrancheRecord">
+        SELECT tranche_id, simul_result_id AS result_id, sequence_no, gift_date, gift_amount,
+        estimated_gift_tax, donor_required_amount, investment_amount, created_at
+        FROM simulation_tranche
+        WHERE simul_result_id = #{simulResultId}
+        ORDER BY sequence_no
+    </select>
+
+    <select id="countGiftBySimulResultId" resultType="int">
+        SELECT COUNT(*)
+        FROM gift
+        WHERE simul_result_id = #{simulResultId}
     </select>
 </mapper>

@@ -18,6 +18,8 @@ public class GiftResponse {
 
     private Long giftId;
     private Long familyId;
+    private Long simulResultId;
+    private Integer sequenceNo;
     private Long amount;
 
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = DATE_FORMAT)
@@ -30,6 +32,8 @@ public class GiftResponse {
         return new GiftResponse(
                 gift.getGiftId(),
                 gift.getFamilyId(),
+                gift.getSimulResultId(),
+                gift.getSequenceNo(),
                 gift.getAmount(),
                 gift.getGiftDate(),
                 gift.getStatus(),

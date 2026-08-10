@@ -9,6 +9,7 @@ import com.example.project.gift.dto.response.DeductionResponse;
 import com.example.project.gift.dto.response.FilingInfoResponse;
 import com.example.project.gift.dto.response.GiftResponse;
 import com.example.project.gift.dto.request.GiftStatusRequest;
+import com.example.project.gift.dto.request.SimulationGiftRequest;
 import com.example.project.gift.service.GiftService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
@@ -29,6 +30,18 @@ public class GiftController {
     @PostMapping("/gift")
     public ApiResponse<GiftResponse> createGift(@RequestBody GiftRequest giftRequest, @AuthenticationPrincipal String principal, HttpServletRequest request) {
         GiftResponse data = giftService.createGift(giftRequest, CurrentUser.id(principal));
+
+        return ApiResponse.success(ResponseCode.CREATED, request.getRequestURI(), data);
+    }
+
+    /** 저장된 시뮬레이션을 진행 중인 증여로 등록한다. 분할 증여면 회차 수만큼 생성되어 목록으로 돌아온다. */
+    @PostMapping("/gift/from-simulation")
+    public ApiResponse<List<GiftResponse>> registerGiftFromSimulation(
+            @RequestBody SimulationGiftRequest simulationGiftRequest,
+            @AuthenticationPrincipal String principal,
+            HttpServletRequest request
+    ) {
+        List<GiftResponse> data = giftService.registerFromSimulation(simulationGiftRequest, CurrentUser.id(principal));
 
         return ApiResponse.success(ResponseCode.CREATED, request.getRequestURI(), data);
     }
@@ -102,6 +115,7 @@ public class GiftController {
         return ApiResponse.success(ResponseCode.DELETED, request.getRequestURI(), null);
     }
 
+    // 공제
     @GetMapping("/gift/{giftId}/filing-info")
     public ApiResponse<FilingInfoResponse> getFilingInfo(@PathVariable Long giftId, @AuthenticationPrincipal String principal, HttpServletRequest request) {
         FilingInfoResponse data = giftService.getFilingInfo(giftId, CurrentUser.id(principal));

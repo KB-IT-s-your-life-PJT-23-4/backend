@@ -10,6 +10,8 @@ import java.time.LocalDateTime;
 public class GiftVO {
     private Long giftId;
     private Long familyId;
+    private Long simulResultId;
+    private Integer sequenceNo;
     private Long amount;
     private LocalDate giftDate;
     private Status status;
