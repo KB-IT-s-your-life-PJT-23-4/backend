@@ -221,7 +221,8 @@ class AiSafetyPersistenceServiceTest {
                 false,
                 "요청을 처리할 수 없습니다.",
                 List.of(),
-                Map.of()
+                Map.of(),
+                List.of()
         );
     }
 
