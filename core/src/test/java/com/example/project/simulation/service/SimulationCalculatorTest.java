@@ -143,6 +143,39 @@ class SimulationCalculatorTest {
     }
 
     @Test
+    @DisplayName("과거 증여 과세표준을 합산해 이번 증여의 누진구간과 증분세액을 계산한다")
+    void calculateIncrementalTaxWithPreviousGifts() {
+        SimulationCalculator.TaxOutcome result = calculator.calculateTax(
+                100_000_000L,
+                500_000_000L,
+                50_000_000L,
+                TaxPaymentMethod.RECIPIENT_PAYS,
+                brackets()
+        );
+
+        assertEquals(0L, result.deductionAmount());
+        assertEquals(100_000_000L, result.taxableAmount());
+        assertEquals(25_000_000L, result.giftTax());
+        assertEquals(75_000_000L, result.investmentAmount());
+    }
+
+    @Test
+    @DisplayName("과거 증여가 있을 때 증여자 대납 세액도 누적 과세표준으로 gross-up 한다")
+    void grossUpDonorPaidTaxWithPreviousGifts() {
+        SimulationCalculator.TaxOutcome result = calculator.calculateTax(
+                100_000_000L,
+                500_000_000L,
+                50_000_000L,
+                TaxPaymentMethod.DONOR_PAYS,
+                brackets()
+        );
+
+        assertEquals(35_714_285L, result.giftTax());
+        assertEquals(135_714_285L, result.donorRequiredAmount());
+        assertEquals(100_000_000L, result.investmentAmount());
+    }
+
+    @Test
     @DisplayName("단기 균형형은 안전자산 80%와 ETF 20%를 적용한다")
     void balancedPortfolioTotalsOneHundred() {
         Map<ProductType, BigDecimal> balanced =
@@ -198,7 +231,10 @@ class SimulationCalculatorTest {
     private List<TaxBracket> brackets() {
         return List.of(
                 bracket(0L, 100_000_000L, "0.10", 0L),
-                bracket(100_000_001L, 500_000_000L, "0.20", 10_000_000L)
+                bracket(100_000_000L, 500_000_000L, "0.20", 10_000_000L),
+                bracket(500_000_000L, 1_000_000_000L, "0.30", 60_000_000L),
+                bracket(1_000_000_000L, 3_000_000_000L, "0.40", 160_000_000L),
+                bracket(3_000_000_000L, null, "0.50", 460_000_000L)
         );
     }
 

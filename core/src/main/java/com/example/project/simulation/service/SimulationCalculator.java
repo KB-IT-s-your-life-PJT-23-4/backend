@@ -34,34 +34,91 @@ public class SimulationCalculator {
             TaxPaymentMethod paymentMethod,
             List<TaxBracket> brackets
     ) {
-        long appliedDeduction = Math.max(0, Math.min(giftAmount, deductionAmount));
+        return calculateTax(
+                giftAmount,
+                0L,
+                deductionAmount,
+                paymentMethod,
+                brackets
+        );
+    }
+
+    /**
+     * 최근 10년 과거 증여와 이번 증여의 과세표준을 합산해 이번 증여의 증분세액을 계산한다.
+     * 과거 증여분에 해당하는 산출세액은 빼서 동일 금액에 세금이 중복 부과되지 않게 한다.
+     */
+    public TaxOutcome calculateTax(
+            long giftAmount,
+            long previousGiftAmount,
+            long deductionLimit,
+            TaxPaymentMethod paymentMethod,
+            List<TaxBracket> brackets
+    ) {
+        long normalizedGiftAmount = Math.max(0L, giftAmount);
+        long normalizedPreviousGiftAmount = Math.max(0L, previousGiftAmount);
+        long normalizedDeductionLimit = Math.max(0L, deductionLimit);
+        long remainingDeduction = Math.max(
+                0L,
+                normalizedDeductionLimit - Math.min(
+                        normalizedPreviousGiftAmount,
+                        normalizedDeductionLimit
+                )
+        );
+        long appliedDeduction = Math.min(normalizedGiftAmount, remainingDeduction);
+        long previousTaxableAmount = Math.max(
+                0L,
+                normalizedPreviousGiftAmount - normalizedDeductionLimit
+        );
+        long currentTaxableAmount = Math.max(
+                0L,
+                normalizedGiftAmount - appliedDeduction
+        );
+        long previousCalculatedTax = calculateProgressiveTax(
+                previousTaxableAmount,
+                brackets
+        );
 
         if (paymentMethod == TaxPaymentMethod.RECIPIENT_PAYS) {
-            long taxableAmount = Math.max(0, giftAmount - appliedDeduction);
-            long tax = calculateProgressiveTax(taxableAmount, brackets);
+            long cumulativeTaxableAmount = Math.addExact(
+                    previousTaxableAmount,
+                    currentTaxableAmount
+            );
+            long tax = Math.max(
+                    0L,
+                    calculateProgressiveTax(cumulativeTaxableAmount, brackets)
+                            - previousCalculatedTax
+            );
             return new TaxOutcome(
                     appliedDeduction,
-                    taxableAmount,
+                    currentTaxableAmount,
                     tax,
-                    giftAmount,
-                    Math.max(0, giftAmount - tax)
+                    normalizedGiftAmount,
+                    Math.max(0, normalizedGiftAmount - tax)
             );
         }
 
-        long previousTax = 0;
+        long grossedUpTax = 0L;
         for (int index = 0; index < MAX_GROSS_UP_ITERATIONS; index++) {
-            long taxableAmount = Math.max(0, giftAmount + previousTax - appliedDeduction);
-            long nextTax = calculateProgressiveTax(taxableAmount, brackets);
-            if (Math.abs(nextTax - previousTax) <= 1) {
+            long taxableAmount = Math.addExact(currentTaxableAmount, grossedUpTax);
+            long cumulativeTaxableAmount = Math.addExact(
+                    previousTaxableAmount,
+                    taxableAmount
+            );
+            long nextTax = Math.max(
+                    0L,
+                    calculateProgressiveTax(cumulativeTaxableAmount, brackets)
+                            - previousCalculatedTax
+            );
+            if (Math.abs(nextTax - grossedUpTax) <= 1) {
                 return new TaxOutcome(
                         appliedDeduction,
                         taxableAmount,
                         nextTax,
-                        giftAmount + nextTax,
-                        giftAmount
+                        Math.addExact(normalizedGiftAmount, nextTax),
+                        normalizedGiftAmount
                 );
             }
-            previousTax = nextTax;
+            grossedUpTax = nextTax;
         }
 
         throw new SimulationException(SimulationError.TAX_CALCULATION_NOT_CONVERGED);
@@ -73,7 +130,7 @@ public class SimulationCalculator {
         }
 
         TaxBracket bracket = brackets.stream()
-                .filter(item -> taxableAmount >= value(item.getLowerBound(), 0L))
+                .filter(item -> taxableAmount > value(item.getLowerBound(), 0L))
                 .filter(item -> item.getUpperBound() == null || taxableAmount <= item.getUpperBound())
                 .findFirst()
                 .orElseGet(() -> brackets.isEmpty() ? null : brackets.get(brackets.size() - 1));

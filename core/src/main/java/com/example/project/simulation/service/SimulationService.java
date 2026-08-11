@@ -58,7 +58,7 @@ import java.util.stream.Collectors;
 public class SimulationService {
 
     public static final String FORMULA_VERSION = "INVESTMENT_V2";
-    public static final String CALCULATION_VERSION = "GIFT_SIM_V4";
+    public static final String CALCULATION_VERSION = "GIFT_SIM_V5";
 
     private static final int DEDUCTION_WINDOW_YEARS = 10;
     private static final int MAX_PRODUCT_CANDIDATES = 3;
@@ -148,7 +148,8 @@ public class SimulationService {
                     giftDate.plusMonths(request.getInvestmentPeriodMonths());
             ScenarioAggregate immediate = immediateScenario(
                     request,
-                    remainingDeduction,
+                    previousGiftAmount,
+                    deductionLimit,
                     taxBrackets,
                     giftDate
             );
@@ -871,13 +872,15 @@ public class SimulationService {
 
     private ScenarioAggregate immediateScenario(
             SimulationExecuteRequest request,
-            long remainingDeduction,
+            long previousGiftAmount,
+            long deductionLimit,
             List<TaxBracket> brackets,
             LocalDate asOfDate
     ) {
         SimulationCalculator.TaxOutcome tax = calculator.calculateTax(
                 request.getRequestedAmount(),
-                remainingDeduction,
+                previousGiftAmount,
+                deductionLimit,
                 request.getTaxPaymentMethod(),
                 brackets
         );
@@ -927,9 +930,13 @@ public class SimulationService {
 
         long currentAmount = Math.min(amountLeft, remainingDeduction);
         if (currentAmount > 0) {
+            long previousAmount = history.stream()
+                    .mapToLong(GiftPoint::amount)
+                    .sum();
             SimulationCalculator.TaxOutcome tax = calculator.calculateTax(
                     currentAmount,
-                    remainingDeduction,
+                    previousAmount,
+                    fullDeductionLimit,
                     request.getTaxPaymentMethod(),
                     brackets
             );
@@ -949,9 +956,8 @@ public class SimulationService {
         while (amountLeft > 0 && guard++ < 100) {
             LocalDate calculationDate = nextDate;
             long used = history.stream()
-                    .filter(point -> point.date().isAfter(
-                            calculationDate.minusYears(DEDUCTION_WINDOW_YEARS)))
-                    .filter(point -> point.date().isBefore(calculationDate))
+                    .filter(point -> isWithinDeductionWindow(
+                            point.date(), calculationDate))
                     .mapToLong(GiftPoint::amount)
                     .sum();
             long available = Math.max(0, fullDeductionLimit - used);
@@ -962,7 +968,8 @@ public class SimulationService {
             long giftAmount = Math.min(amountLeft, available);
             SimulationCalculator.TaxOutcome tax = calculator.calculateTax(
                     giftAmount,
-                    available,
+                    used,
+                    fullDeductionLimit,
                     request.getTaxPaymentMethod(),
                     brackets
             );
@@ -2176,6 +2183,13 @@ public class SimulationService {
                 .filter(date -> date.isAfter(afterDate))
                 .min(LocalDate::compareTo)
                 .orElse(afterDate.plusYears(DEDUCTION_WINDOW_YEARS).plusDays(1));
+    }
+
+    static boolean isWithinDeductionWindow(LocalDate giftDate, LocalDate calculationDate) {
+        return giftDate != null
+                && calculationDate != null
+                && giftDate.isAfter(calculationDate.minusYears(DEDUCTION_WINDOW_YEARS))
+                && !giftDate.isAfter(calculationDate);
     }
 
     private String executeFingerprint(
