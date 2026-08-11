@@ -376,6 +376,7 @@
         spr.expected_future_value,
         COALESCE(MAX(br.base_rate_percent), e.annual_return_10y) AS base_annual_rate_percent,
         COALESCE(MAX(br.max_rate_percent), e.annual_return_10y) AS maximum_annual_rate_percent,
+        e.risk_level,
         COALESCE(d.min_month, sv.min_month) AS minimum_contract_months,
         COALESCE(d.max_month, sv.max_month) AS maximum_contract_months,
         spr.created_at
@@ -399,7 +400,8 @@
         GROUP BY spr.simulation_product_id, spr.simul_portfolio_id,
                  spr.kb_product_version_id, p.product_id, p.product_code,
                  pv.product_name, p.product_type, sv.savings_category,
-                 e.etf_category, e.annual_return_10y, d.min_month, d.max_month,
+                 e.etf_category, e.annual_return_10y, e.risk_level,
+                 d.min_month, d.max_month,
                  sv.min_month, sv.max_month, spr.is_selected,
                  spr.allocated_amount, spr.applied_annual_rate,
                  spr.expected_future_value, spr.created_at
@@ -424,7 +426,8 @@
         GROUP BY spr.simulation_product_id, spr.simul_portfolio_id,
                  spr.kb_product_version_id, p.product_id, p.product_code,
                  pv.product_name, p.product_type, sv.savings_category,
-                 e.etf_category, e.annual_return_10y, d.min_month, d.max_month,
+                 e.etf_category, e.annual_return_10y, e.risk_level,
+                 d.min_month, d.max_month,
                  sv.min_month, sv.max_month, spr.is_selected,
                  spr.allocated_amount, spr.applied_annual_rate,
                  spr.expected_future_value, spr.created_at
@@ -449,7 +452,8 @@
         GROUP BY spr.simulation_product_id, spr.simul_portfolio_id,
                  spr.kb_product_version_id, p.product_id, p.product_code,
                  pv.product_name, p.product_type, sv.savings_category,
-                 e.etf_category, e.annual_return_10y, d.min_month, d.max_month,
+                 e.etf_category, e.annual_return_10y, e.risk_level,
+                 d.min_month, d.max_month,
                  sv.min_month, sv.max_month, spr.is_selected,
                  spr.allocated_amount, spr.applied_annual_rate,
                  spr.expected_future_value, spr.created_at
@@ -556,6 +560,20 @@
         WHERE kb_product_version_id = #{productVersionId}
         ORDER BY holding_rank
         LIMIT #{limit}
+    </select>
+
+    <select id="selectRecentEtfPrices"
+            resultType="com.example.project.simulation.domain.EtfPriceRecord">
+        SELECT product_id, base_date, close_price
+        FROM (
+            SELECT product_id, base_date, close_price
+            FROM etf_history_price
+            WHERE product_id = #{productId}
+              AND base_date &lt;= #{asOfDate}
+            ORDER BY base_date DESC
+            LIMIT #{limit}
+        ) recent_prices
+        ORDER BY base_date
     </select>
 
     <sql id="historyWhere">

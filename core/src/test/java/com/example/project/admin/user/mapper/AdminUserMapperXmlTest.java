@@ -76,6 +76,25 @@ class AdminUserMapperXmlTest {
     }
 
     @Test
+    @DisplayName("회원 목록과 전체 건수는 일반 회원만 조회한다")
+    void listAndCountOnlyGeneralUsers() {
+        Map<String, Object> parameters = new HashMap<>();
+        parameters.put("userId", 7L);
+        parameters.put("email", "test@example.com");
+        parameters.put("name", "홍길동");
+        parameters.put("offset", 0L);
+        parameters.put("size", 20);
+
+        String countSql = sql("countUsers", parameters);
+        String selectSql = sql("selectUsers", parameters);
+
+        assertTrue(countSql.contains("WHERE u.role = 'USER'"));
+        assertTrue(selectSql.contains("WHERE u.role = 'USER'"));
+        assertTrue(countSql.contains("u.user_id = ?"));
+        assertTrue(selectSql.contains("u.user_id = ?"));
+    }
+
+    @Test
     @DisplayName("차단과 해제 SQL은 일반 회원과 현재 계정 상태를 조건으로 갱신한다")
     void mutateOnlyExpectedUserState() {
         Map<String, Object> blockParameters = new HashMap<>();

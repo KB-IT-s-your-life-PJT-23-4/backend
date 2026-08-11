@@ -97,7 +97,7 @@ class SimulationCalculatorTest {
     }
 
     @Test
-    @DisplayName("ETF는 최근 5년 연평균 수익률을 연복리로 계산한다")
+    @DisplayName("ETF는 최근 10년 연환산 수익률을 연복리로 계산한다")
     void calculateEtfCompoundReturn() {
         long result = calculator.calculateProductFutureValue(
                 CalculationType.COMPOUND_RETURN,

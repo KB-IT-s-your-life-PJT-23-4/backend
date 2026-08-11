@@ -3,6 +3,7 @@ package com.example.project.simulation.mapper;
 import com.example.project.simulation.domain.BaseRateRecord;
 import com.example.project.simulation.domain.DeductionRule;
 import com.example.project.simulation.domain.EtfHoldingRecord;
+import com.example.project.simulation.domain.EtfPriceRecord;
 import com.example.project.simulation.domain.FamilySnapshot;
 import com.example.project.simulation.domain.GiftHistoryRecord;
 import com.example.project.simulation.domain.PreferentialRateRecord;
@@ -131,6 +132,12 @@ public interface SimulationMapper {
 
     List<EtfHoldingRecord> selectEtfHoldings(
             @Param("productVersionId") Long productVersionId,
+            @Param("limit") Integer limit
+    );
+
+    List<EtfPriceRecord> selectRecentEtfPrices(
+            @Param("productId") Long productId,
+            @Param("asOfDate") LocalDate asOfDate,
             @Param("limit") Integer limit
     );
 

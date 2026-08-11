@@ -4,6 +4,13 @@ upload.location=${java.io.tmpdir}
 profile.image.max-size-bytes=10485760
 fastapi.base-url=http://localhost:8000
 
+# CLOVA OCR (네이버 클라우드 플랫폼 > CLOVA OCR > 도메인 생성 후 발급)
+# invoke-url 은 도메인의 APIGW Invoke URL, secret 은 Secret Key 다.
+# 증여 신고서는 저장하지 않고 메모리에서 인식만 하므로 업로드 상한만 둔다.
+clova.ocr.invoke-url=${CLOVA_OCR_INVOKE_URL:}
+clova.ocr.secret=${CLOVA_OCR_SECRET:}
+clova.ocr.max-size-bytes=10485760
+
 jwt.secret=${JWT_SECRET}
 jwt.expiration=${JWT_ACCESS_EXPIRATION:3600000}
 jwt.refresh-expiration=${JWT_REFRESH_EXPIRATION:604800000}
@@ -18,3 +25,6 @@ ai.conversation.crypto.key-v1=${AI_CONVERSATION_KEY_V1}
 # 향후 키 교체 시 이전 암호문을 복호화하기 위해 기존 키도 유지해야 합니다.
 # 값이 없으면 빈 문자열로 처리됩니다.
 ai.conversation.crypto.key-v2=${AI_CONVERSATION_KEY_V2:}
+
+kakao.local.base-url=https://dapi.kakao.com
+kakao.rest-api-key=${KAKAO_REST_API_KEY}
