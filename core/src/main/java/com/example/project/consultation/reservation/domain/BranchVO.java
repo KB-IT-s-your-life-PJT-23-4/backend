@@ -12,4 +12,5 @@ public class BranchVO {
     private String branchName;
     private BigDecimal latitude;
     private BigDecimal longitude;
+    private String address;
 }
