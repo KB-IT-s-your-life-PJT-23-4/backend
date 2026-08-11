@@ -165,13 +165,13 @@
         AND p.product_type IN ('DEPOSIT', 'SAVINGS')
     </select>
 
-    <!-- 판매중인 ETF 상품의 이름, 추종지수, 5년 연평균 수익률 조회 -->
+    <!-- 판매중인 ETF 상품의 이름, 추종지수, 10년 연환산 수익률 조회 -->
     <select id="selectAllOnSaleEtfProducts" resultType="com.example.project.consultation.domain.EtfVO">
         SELECT
             p.product_id AS productId,
             pv.product_name AS productName,
             e.tracking_index AS trackingIndex,
-            e.annual_return_5y AS annualReturn5y
+            e.annual_return_10y AS annualReturn10y
         FROM kb_product p
         JOIN kb_product_version pv
             ON pv.product_id = p.product_id

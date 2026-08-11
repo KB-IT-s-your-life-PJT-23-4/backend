@@ -52,7 +52,7 @@ public record ProductDetailResponse(
             String stockCode,
             String etfCategory,
             String trackingIndex,
-            BigDecimal annualizedReturn5yPercent,
+            BigDecimal annualizedReturn10yPercent,
             BigDecimal bondRatioPercent,
             String riskLevel,
             EtfVolatilityResponse volatility,

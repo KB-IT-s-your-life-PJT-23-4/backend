@@ -12,6 +12,6 @@ import java.math.BigDecimal;
 public record EtfProductData(
         String productName,
         String trackingIndex,
-        @JsonProperty("annual_return_5y")
-        BigDecimal annualReturn5y
+        @JsonProperty("annual_return_10y")
+        BigDecimal annualReturn10y
 ) {}

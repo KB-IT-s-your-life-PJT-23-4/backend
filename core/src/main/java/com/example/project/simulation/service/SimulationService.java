@@ -1399,7 +1399,7 @@ public class SimulationService {
         SimulationResponse.ReturnMetric metric =
                 product.getProductType() == ProductType.ETF
                         ? new SimulationResponse.ReturnMetric(
-                        "ANNUALIZED_RETURN_5Y",
+                        "ANNUALIZED_RETURN_10Y",
                         null,
                         null,
                         product.getBaseAnnualRatePercent()
@@ -1560,7 +1560,7 @@ public class SimulationService {
                 "FLOOR_TO_WON",
                 methods,
                 "END_OF_MONTH",
-                "ANNUALIZED_RETURN_5Y",
+                "ANNUALIZED_RETURN_10Y",
                 new SimulationResponse.ReinvestmentPolicy(
                         true,
                         true,
