@@ -25,6 +25,7 @@ import org.springframework.security.web.method.annotation.AuthenticationPrincipa
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -125,6 +126,39 @@ class GiftControllerTest {
         assertEquals(1, data.size());
         assertEquals(102L, data.get(0).get("giftId").asLong());
         assertEquals("COMPLETED", data.get(0).get("status").asText());
+    }
+
+    @Test
+    @DisplayName("신고 안내는 최근 10년 과거 증여를 합산해 누진구간과 증분세액을 계산한다")
+    void filingInfoUsesPreviousGiftsForProgressiveTax() throws Exception {
+        recipientMapper.add(recipient(30L, OWNER_ID, "누진세율가족"));
+        giftMapper.add(gift(
+                301L,
+                30L,
+                500_000_000L,
+                Status.COMPLETED,
+                LocalDate.of(2025, 4, 10)
+        ));
+        giftMapper.add(gift(
+                302L,
+                30L,
+                100_000_000L,
+                Status.PLANNED,
+                LocalDate.of(2026, 4, 10)
+        ));
+        authenticate(OWNER_ID);
+
+        MvcResult result = mockMvc.perform(get("/api/gm/gift/{giftId}/filing-info", 302L))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        JsonNode data = body(result).get("data");
+        assertEquals(500_000_000L, data.get("priorGiftAmount").asLong());
+        assertEquals(100_000_000L, data.get("taxableBase").asLong());
+        assertEquals(0.3, data.get("taxRate").asDouble());
+        assertEquals(25_000_000L, data.get("calculatedTax").asLong());
+        assertEquals(750_000L, data.get("filingCredit").asLong());
+        assertEquals(24_250_000L, data.get("payableTax").asLong());
     }
 
     @Test
@@ -380,7 +414,35 @@ class GiftControllerTest {
                 LocalDate baseDate,
                 Long excludeGiftId
         ) {
-            return List.of();
+            RecipientVO recipient = recipientMapper.selectRecipient(familyId, userId);
+            if (recipient == null) {
+                return List.of();
+            }
+
+            List<GiftVO> windowGifts = gifts.values().stream()
+                    .filter(gift -> familyId.equals(gift.getFamilyId()))
+                    .filter(gift -> excludeGiftId == null || !excludeGiftId.equals(gift.getGiftId()))
+                    .filter(gift -> !gift.getGiftDate().isBefore(windowStartDate))
+                    .filter(gift -> !gift.getGiftDate().isAfter(baseDate))
+                    .toList();
+            DeductionVO deduction = new DeductionVO();
+            deduction.setFamilyId(familyId);
+            deduction.setFamilyName(recipient.getFamilyName());
+            deduction.setRelation(recipient.getRelation());
+            deduction.setBirthDate(recipient.getBirthDate());
+            deduction.setDeductionLimit(50_000_000L);
+            deduction.setUsedAmount(windowGifts.stream()
+                    .filter(gift -> gift.getStatus() == Status.COMPLETED)
+                    .mapToLong(GiftVO::getAmount)
+                    .sum());
+            deduction.setPlannedAmount(windowGifts.stream()
+                    .filter(gift -> gift.getStatus() == Status.PLANNED)
+                    .mapToLong(GiftVO::getAmount)
+                    .sum());
+            deduction.setAggregatedCount((int) windowGifts.stream()
+                    .filter(gift -> gift.getStatus() == Status.COMPLETED)
+                    .count());
+            return List.of(deduction);
         }
 
         @Override
@@ -409,7 +471,24 @@ class GiftControllerTest {
 
         @Override
         public TaxBracketVO selectTaxBracket(LocalDate baseDate, Long taxableBase) {
-            return null;
+            TaxBracketVO bracket = new TaxBracketVO();
+            if (taxableBase <= 100_000_000L) {
+                bracket.setTaxRate(new BigDecimal("0.10"));
+                bracket.setProgressiveDeduction(0L);
+            } else if (taxableBase <= 500_000_000L) {
+                bracket.setTaxRate(new BigDecimal("0.20"));
+                bracket.setProgressiveDeduction(10_000_000L);
+            } else if (taxableBase <= 1_000_000_000L) {
+                bracket.setTaxRate(new BigDecimal("0.30"));
+                bracket.setProgressiveDeduction(60_000_000L);
+            } else if (taxableBase <= 3_000_000_000L) {
+                bracket.setTaxRate(new BigDecimal("0.40"));
+                bracket.setProgressiveDeduction(160_000_000L);
+            } else {
+                bracket.setTaxRate(new BigDecimal("0.50"));
+                bracket.setProgressiveDeduction(460_000_000L);
+            }
+            return bracket;
         }
 
         @Override
