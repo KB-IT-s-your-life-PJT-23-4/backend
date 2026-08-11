@@ -177,7 +177,8 @@ public class UserController {
     @DeleteMapping("/users/me")
     @ApiOperation(
             value = "회원탈퇴",
-            notes = "Access Token의 회원과 ON DELETE CASCADE로 연결된 사용자 데이터를 삭제합니다. "
+            notes = "Access Token의 회원 개인정보와 직접 연결된 데이터를 삭제하고, "
+                    + "ON DELETE CASCADE로 연결된 회원 소유 데이터도 함께 삭제합니다. "
                     + "클라이언트는 성공 후 로그아웃 API로 토큰을 폐기해야 합니다.",
             authorizations = @io.swagger.annotations.Authorization("Bearer")
     )
