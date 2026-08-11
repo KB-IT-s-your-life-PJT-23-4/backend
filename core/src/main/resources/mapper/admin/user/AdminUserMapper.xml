@@ -49,7 +49,7 @@
     <select id="countUsers" resultType="long">
         SELECT COUNT(*)
         FROM user u
-        WHERE 1 = 1
+        WHERE u.role = 'USER'
         <include refid="userFilters"/>
     </select>
 
@@ -59,7 +59,7 @@
         LEFT JOIN family f ON f.user_id = u.user_id
         LEFT JOIN gift g ON g.family_id = f.family_id
         LEFT JOIN simulation s ON s.family_id = f.family_id
-        WHERE 1 = 1
+        WHERE u.role = 'USER'
         <include refid="userFilters"/>
         GROUP BY u.user_id, u.email, u.user_name, u.role, u.account_status,
                  u.blocked_until, u.created_at, u.updated_at

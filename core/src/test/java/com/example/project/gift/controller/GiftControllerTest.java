@@ -428,8 +428,9 @@ class GiftControllerTest {
         }
 
         @Override
-        public List<com.example.project.simulation.domain.SimulationTrancheRecord>
-        selectTranchesByResultId(Long simulResultId) {
+        public List<com.example.project.simulation.domain.SimulationTrancheRecord> selectTranchesByResultId(
+                Long simulResultId
+        ) {
             return List.of();
         }
 
