@@ -1,5 +1,6 @@
 package com.example.project.config;
 
+import com.example.project.config.ocr.OCRWebClientConfig;
 import com.example.project.consultation.config.WebClientConfig;
 import com.example.project.security.SecurityConfig;
 import org.springframework.web.filter.CharacterEncodingFilter;
@@ -17,7 +18,7 @@ public class WebConfig extends AbstractAnnotationConfigDispatcherServletInitiali
 
     @Override
     protected Class<?>[] getRootConfigClasses() {
-        return new Class<?>[]{RootConfig.class, SecurityConfig.class, WebClientConfig.class};
+        return new Class<?>[]{RootConfig.class, SecurityConfig.class, WebClientConfig.class, OCRWebClientConfig.class};
     }
 
     @Override

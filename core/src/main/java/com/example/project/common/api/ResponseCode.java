@@ -67,6 +67,7 @@ public enum ResponseCode {
     INVALID_GIFT_DATE(421, "INVALID_GIFT_DATE", "확정된 증여는 오늘 이후 날짜로 기록할 수 없습니다"),
     SIMULATION_ALREADY_REGISTERED(422, "SIMULATION_ALREADY_REGISTERED", "이미 증여로 등록된 시뮬레이션입니다"),
     SIMULATION_NOT_REGISTRABLE(423, "SIMULATION_NOT_REGISTRABLE", "증여로 등록할 수 있는 시뮬레이션이 아닙니다"),
+    OCR_FIELD_NOT_FOUND(424, "OCR_FIELD_NOT_FOUND", "신고서에서 증여일과 금액을 찾지 못했습니다"),
 
     // 500번대: 서버 및 외부 시스템 오류
     INTERNAL_SERVER_ERROR(500, "INTERNAL_SERVER_ERROR", "서버 내부에서 알 수 없는 오류가 발생하였습니다"),
