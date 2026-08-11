@@ -43,13 +43,15 @@ public interface ConsultationMapper {
             Long aiConversationId,
             @Param("userId")
             Long userId,
+            @Param("transcriptJson")
+            String transcriptJson,
             @Param("processingStartedAt")
             LocalDateTime processingStartedAt,
             @Param("version")
             Long version
     );
 
-    int completedConversation(
+    int completeConversationTurn(
             @Param("aiConversationId")
             Long aiConversationId,
             @Param("userId")
