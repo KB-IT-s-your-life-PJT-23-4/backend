@@ -104,8 +104,8 @@ public class AdminProductService {
                 adminProductMapper.updateEtfDetail(
                         productVersionId, request.getStockCode(), request.getEtfCategory(),
                         request.getTrackingIndex(), request.getBondRatioPercent(), request.getRiskLevel());
-                if (request.getAnnualReturn5yPercent() != null) {
-                    adminProductMapper.updateEtfReturn(productVersionId, request.getAnnualReturn5yPercent());
+                if (request.getAnnualReturn10yPercent() != null) {
+                    adminProductMapper.updateEtfReturn(productVersionId, request.getAnnualReturn10yPercent());
                 }
             }
         }
@@ -161,7 +161,7 @@ public class AdminProductService {
             case "ETF" -> {
                 adminProductMapper.insertEtf(productVersionId, request.getStockCode(),
                         request.getEtfCategory(), request.getTrackingIndex(),
-                        request.getAnnualReturn5yPercent(), request.getBondRatioPercent(),
+                        request.getAnnualReturn10yPercent(), request.getBondRatioPercent(),
                         request.getRiskLevel());
                 insertEtfHoldings(productVersionId, request.getEtfHoldings());
             }
@@ -232,7 +232,7 @@ public class AdminProductService {
         for (AdminProductRow row : adminProductMapper.selectEtfProducts(sourceDataVersionId, null)) {
             Long newVersionId = cloneProductVersion(targetDataVersionId, row);
             adminProductMapper.insertEtf(newVersionId, row.getStockCode(), row.getEtfCategory(),
-                    row.getTrackingIndex(), row.getAnnualReturn5yPercent(),
+                    row.getTrackingIndex(), row.getAnnualReturn10yPercent(),
                     row.getBondRatioPercent(), row.getRiskLevel());
             cloneEtfHoldings(row.getProductVersionId(), newVersionId);
         }
@@ -566,7 +566,7 @@ public class AdminProductService {
                 .stockCode(row.getStockCode())
                 .etfCategory(row.getEtfCategory())
                 .trackingIndex(row.getTrackingIndex())
-                .annualReturn5yPercent(row.getAnnualReturn5yPercent())
+                .annualReturn10yPercent(row.getAnnualReturn10yPercent())
                 .bondRatioPercent(row.getBondRatioPercent())
                 .riskLevel(row.getRiskLevel())
                 .etfHoldings(etfHoldings)

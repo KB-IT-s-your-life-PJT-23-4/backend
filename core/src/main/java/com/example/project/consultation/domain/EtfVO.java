@@ -11,5 +11,5 @@ public class EtfVO {
     private Long productId;
     private String productName;
     private String trackingIndex;
-    private BigDecimal annualReturn5y;
+    private BigDecimal annualReturn10y;
 }

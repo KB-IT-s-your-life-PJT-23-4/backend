@@ -199,7 +199,7 @@ public class SimulationProductService {
         if (product.getStockCode() == null
                 || product.getEtfCategory() == null
                 || product.getTrackingIndex() == null
-                || product.getAnnualizedReturn5yPercent() == null
+                || product.getAnnualizedReturn10yPercent() == null
                 || product.getBondRatioPercent() == null
                 || product.getRiskLevel() == null) {
             throw new SimulationException(
@@ -223,7 +223,7 @@ public class SimulationProductService {
                 product.getStockCode(),
                 product.getEtfCategory(),
                 product.getTrackingIndex(),
-                product.getAnnualizedReturn5yPercent(),
+                product.getAnnualizedReturn10yPercent(),
                 product.getBondRatioPercent(),
                 product.getRiskLevel(),
                 "연 평균 수익률은 최근 5년 데이터를 기준으로 계산한 값이며, 미래 수익을 보장하지 않습니다.",
@@ -243,8 +243,8 @@ public class SimulationProductService {
                         com.example.project.simulation.domain.CalculationType.COMPOUND_RETURN,
                         simulation.getFormulaVersion(),
                         null,
-                        "ANNUALIZED_RETURN_5Y",
-                        "최근 5년 연환산수익률을 실제 운용 기간에 복리로 적용합니다."
+                        "ANNUALIZED_RETURN_10Y",
+                        "최근 10년 연환산수익률을 실제 운용 기간에 복리로 적용합니다."
                 )
         );
     }

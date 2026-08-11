@@ -44,7 +44,7 @@ public class AdminProductUpdateRequest {
     private BigDecimal bondRatioPercent;
     private String riskLevel;
     @DecimalMin(value = "0", inclusive = true)
-    private BigDecimal annualReturn5yPercent;
+    private BigDecimal annualReturn10yPercent;
 
     private List<AdminProductRateTierRequest> rateTiers;
 

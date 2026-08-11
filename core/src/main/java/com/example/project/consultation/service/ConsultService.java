@@ -281,7 +281,7 @@ public class ConsultService {
                 .map(e -> EtfProductData.builder()
                         .productName(e.getProductName())
                         .trackingIndex(e.getTrackingIndex())
-                        .annualReturn5y(e.getAnnualReturn5y())
+                        .annualReturn10y(e.getAnnualReturn10y())
                         .build())
                 .toList();
     }
