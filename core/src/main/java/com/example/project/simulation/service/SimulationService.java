@@ -956,9 +956,8 @@ public class SimulationService {
         while (amountLeft > 0 && guard++ < 100) {
             LocalDate calculationDate = nextDate;
             long used = history.stream()
-                    .filter(point -> point.date().isAfter(
-                            calculationDate.minusYears(DEDUCTION_WINDOW_YEARS)))
-                    .filter(point -> point.date().isBefore(calculationDate))
+                    .filter(point -> isWithinDeductionWindow(
+                            point.date(), calculationDate))
                     .mapToLong(GiftPoint::amount)
                     .sum();
             long available = Math.max(0, fullDeductionLimit - used);
@@ -2184,6 +2183,13 @@ public class SimulationService {
                 .filter(date -> date.isAfter(afterDate))
                 .min(LocalDate::compareTo)
                 .orElse(afterDate.plusYears(DEDUCTION_WINDOW_YEARS).plusDays(1));
+    }
+
+    static boolean isWithinDeductionWindow(LocalDate giftDate, LocalDate calculationDate) {
+        return giftDate != null
+                && calculationDate != null
+                && giftDate.isAfter(calculationDate.minusYears(DEDUCTION_WINDOW_YEARS))
+                && !giftDate.isAfter(calculationDate);
     }
 
     private String executeFingerprint(
