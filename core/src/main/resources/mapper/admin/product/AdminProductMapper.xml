@@ -140,7 +140,7 @@
         SELECT
         <include refid="adminProductColumns"/>,
         e.stock_code, e.etf_category, e.tracking_index,
-        e.annual_return_5y AS annual_return_5y_percent,
+        e.annual_return_10y AS annual_return_10y_percent,
         e.bond_ratio AS bond_ratio_percent,
         e.risk_level
         FROM kb_product_version pv
@@ -218,7 +218,7 @@
 
     <update id="updateEtfReturn">
         UPDATE etf
-        SET annual_return_5y = #{annualReturn5yPercent}
+        SET annual_return_10y = #{annualReturn10yPercent}
         WHERE kb_product_version_id = #{productVersionId}
     </update>
 
@@ -271,9 +271,9 @@
 
     <insert id="insertEtf">
         INSERT INTO etf
-        (kb_product_version_id, stock_code, etf_category, tracking_index, annual_return_5y, bond_ratio, risk_level)
+        (kb_product_version_id, stock_code, etf_category, tracking_index, annual_return_10y, bond_ratio, risk_level)
         VALUES
-        (#{productVersionId}, #{stockCode}, #{etfCategory}, #{trackingIndex}, #{annualReturn5yPercent}, #{bondRatioPercent}, #{riskLevel})
+        (#{productVersionId}, #{stockCode}, #{etfCategory}, #{trackingIndex}, #{annualReturn10yPercent}, #{bondRatioPercent}, #{riskLevel})
     </insert>
     <select id="selectPreferentialRates"
             resultType="com.example.project.admin.product.domain.AdminPreferentialRateRow">

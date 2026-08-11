@@ -81,7 +81,7 @@ public interface AdminProductMapper {
 
     int updateEtfReturn(
             @Param("productVersionId") Long productVersionId,
-            @Param("annualReturn5yPercent") BigDecimal annualReturn5yPercent);
+            @Param("annualReturn10yPercent") BigDecimal annualReturn10yPercent);
 
     int insertProductDataVersion(
             @Param("versionCode") String versionCode,
@@ -131,7 +131,7 @@ public interface AdminProductMapper {
             @Param("stockCode") String stockCode,
             @Param("etfCategory") String etfCategory,
             @Param("trackingIndex") String trackingIndex,
-            @Param("annualReturn5yPercent") BigDecimal annualReturn5yPercent,
+            @Param("annualReturn10yPercent") BigDecimal annualReturn10yPercent,
             @Param("bondRatioPercent") BigDecimal bondRatioPercent,
             @Param("riskLevel") String riskLevel);
 
