@@ -11,11 +11,11 @@
         SELECT
         branch_id AS branchId,
         branch_name AS branchName,
+        address,
         latitude,
         longitude
         FROM kb_branch
-        WHERE is_active = 1
-        AND geocoded_at IS NOT NULL
+        WHERE is_active = 1 AND geocoded_at IS NOT NULL
     </select>
 
     <!-- 번호표 발급 대상 지점 단건 조회 (존재/활성 여부 검증용) -->
