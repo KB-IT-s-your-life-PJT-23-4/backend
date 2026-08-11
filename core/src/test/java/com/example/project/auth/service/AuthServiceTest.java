@@ -119,6 +119,22 @@ class AuthServiceTest {
     }
 
     @Test
+    @DisplayName("탈퇴한 회원의 기존 Refresh Token으로는 재발급할 수 없다")
+    void rejectRefreshTokenAfterWithdrawal() {
+        AuthTokenResponse loginResponse = authService.login(
+                new LoginRequest("user@example.com", "password123!")
+        );
+        userMapper.deleteById(1L);
+
+        ServiceException exception = assertThrows(
+                ServiceException.class,
+                () -> authService.refresh(new TokenRefreshRequest(loginResponse.refreshToken()))
+        );
+
+        assertEquals(ResponseCode.MEMBER_NOT_FOUND, exception.getResponseCode());
+    }
+
+    @Test
     @DisplayName("로그아웃하면 전달된 Access Token과 Refresh Token을 폐기한다")
     void logout() {
         AuthTokenResponse response = authService.login(
@@ -182,6 +198,7 @@ class AuthServiceTest {
     private static class FakeUserMapper implements UserMapper {
 
         private final UserVO user;
+        private boolean deleted;
 
         private FakeUserMapper(UserVO user) {
             this.user = user;
@@ -189,12 +206,12 @@ class AuthServiceTest {
 
         @Override
         public UserVO findById(Long userId) {
-            return user.getUserId().equals(userId) ? user : null;
+            return !deleted && user.getUserId().equals(userId) ? user : null;
         }
 
         @Override
         public UserVO findByEmail(String email) {
-            return user.getEmail().equals(email) ? user : null;
+            return !deleted && user.getEmail().equals(email) ? user : null;
         }
 
         @Override
@@ -209,7 +226,11 @@ class AuthServiceTest {
 
         @Override
         public int deleteById(Long userId) {
-            return 0;
+            if (deleted || !user.getUserId().equals(userId)) {
+                return 0;
+            }
+            deleted = true;
+            return 1;
         }
     }
 }

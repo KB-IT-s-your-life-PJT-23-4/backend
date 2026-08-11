@@ -10,6 +10,7 @@ import com.example.project.user.dto.request.UserSignupRequest;
 import com.example.project.user.dto.request.UserUpdateRequest;
 import com.example.project.user.dto.response.EmailAvailabilityResponse;
 import com.example.project.user.mapper.UserMapper;
+import com.example.project.user.mapper.UserWithdrawalMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -17,6 +18,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 
 @Service
@@ -26,22 +29,25 @@ public class UserService {
     private final PasswordEncoder passwordEncoder;
     private final ProfileImageStorageService profileImageStorageService;
     private final AccountAccessService accountAccessService;
+    private final UserWithdrawalMapper userWithdrawalMapper;
 
     @Autowired
     public UserService(
             UserMapper userMapper,
             PasswordEncoder passwordEncoder,
             ProfileImageStorageService profileImageStorageService,
-            AccountAccessService accountAccessService
+            AccountAccessService accountAccessService,
+            UserWithdrawalMapper userWithdrawalMapper
     ) {
         this.userMapper = userMapper;
         this.passwordEncoder = passwordEncoder;
         this.profileImageStorageService = profileImageStorageService;
         this.accountAccessService = accountAccessService;
+        this.userWithdrawalMapper = userWithdrawalMapper;
     }
 
     public UserService(UserMapper userMapper, PasswordEncoder passwordEncoder) {
-        this(userMapper, passwordEncoder, null, null);
+        this(userMapper, passwordEncoder, null, null, null);
     }
 
     public UserService(
@@ -49,7 +55,25 @@ public class UserService {
             PasswordEncoder passwordEncoder,
             ProfileImageStorageService profileImageStorageService
     ) {
-        this(userMapper, passwordEncoder, profileImageStorageService, null);
+        this(userMapper, passwordEncoder, profileImageStorageService, null, null);
+    }
+
+    public UserService(
+            UserMapper userMapper,
+            PasswordEncoder passwordEncoder,
+            ProfileImageStorageService profileImageStorageService,
+            UserWithdrawalMapper userWithdrawalMapper
+    ) {
+        this(userMapper, passwordEncoder, profileImageStorageService, null, userWithdrawalMapper);
+    }
+
+    public UserService(
+            UserMapper userMapper,
+            PasswordEncoder passwordEncoder,
+            ProfileImageStorageService profileImageStorageService,
+            AccountAccessService accountAccessService
+    ) {
+        this(userMapper, passwordEncoder, profileImageStorageService, accountAccessService, null);
     }
 
     public UserDTO signup(UserSignupRequest signupRequest) {
@@ -182,15 +206,29 @@ public class UserService {
         }
     }
 
+    @Transactional
     public void deleteUser(Long userId) {
         UserVO user = findUser(userId);
+        UserWithdrawalMapper withdrawalMapper = requireWithdrawalMapper();
+        List<String> profileImagePaths = new ArrayList<>();
+        profileImagePaths.add(user.getImg());
+        profileImagePaths.addAll(withdrawalMapper.findFamilyImagePaths(userId));
+
+        withdrawalMapper.deleteAiSafetyReportsByTriggerEventUserId(userId);
+        withdrawalMapper.deleteAiSafetyReportsByUserId(userId);
+        withdrawalMapper.deleteAiConsultationEventsByUserId(userId);
+        withdrawalMapper.deleteAiConversationsByUserId(userId);
+        withdrawalMapper.deleteTicketsByUserId(userId);
 
         if (userMapper.deleteById(userId) != 1) {
             throw new ServiceException(ResponseCode.DATABASE_ERROR);
         }
 
         if (profileImageStorageService != null) {
-            profileImageStorageService.deleteManagedFile(user.getImg());
+            profileImagePaths.stream()
+                    .filter(path -> path != null && !path.isBlank())
+                    .distinct()
+                    .forEach(profileImageStorageService::deleteAfterCommit);
         }
     }
 
@@ -220,6 +258,13 @@ public class UserService {
             throw new ServiceException(ResponseCode.FILE_PROCESSING_ERROR);
         }
         return profileImageStorageService;
+    }
+
+    private UserWithdrawalMapper requireWithdrawalMapper() {
+        if (userWithdrawalMapper == null) {
+            throw new ServiceException(ResponseCode.DATABASE_ERROR);
+        }
+        return userWithdrawalMapper;
     }
 
     private boolean previousImageEquals(String previousImage, String updatedImage) {

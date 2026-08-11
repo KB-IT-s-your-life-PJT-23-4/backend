@@ -1,7 +1,9 @@
 package com.example.project.gift.controller;
 
+import com.example.project.config.IntegrationTestWebClientConfig;
 import com.example.project.config.RootConfig;
 import com.example.project.config.ServletConfig;
+import com.example.project.config.ocr.OCRWebClientConfig;
 import com.example.project.consultation.config.WebClientConfig;
 import com.example.project.security.SecurityConfig;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -16,6 +18,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.ContextHierarchy;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 import org.springframework.test.context.web.WebAppConfiguration;
 import org.springframework.test.web.servlet.MockMvc;
@@ -43,8 +46,20 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @WebAppConfiguration
 @ContextHierarchy({
         // WebConfig.getRootConfigClasses() 와 동일하게 맞춘다. SecurityConfig 에 PasswordEncoder 가 있다.
-        @ContextConfiguration(classes = {RootConfig.class, SecurityConfig.class, WebClientConfig.class}),
+        @ContextConfiguration(classes = {
+                RootConfig.class,
+                SecurityConfig.class,
+                WebClientConfig.class,
+                OCRWebClientConfig.class,
+                IntegrationTestWebClientConfig.class
+        }),
         @ContextConfiguration(classes = ServletConfig.class)
+})
+@TestPropertySource(properties = {
+        "jwt.secret=test-secret-key-for-integration-at-least-32-bytes",
+        "ai.conversation.crypto.active-key-id=v1",
+        "ai.conversation.crypto.key-v1=MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE=",
+        "ai.conversation.crypto.key-v2="
 })
 @Transactional
 class GiftDeductionApiTest {

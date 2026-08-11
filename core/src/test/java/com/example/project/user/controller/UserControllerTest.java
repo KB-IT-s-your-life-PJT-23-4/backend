@@ -3,6 +3,7 @@ package com.example.project.user.controller;
 import com.example.project.common.exception.CommonExceptionAdvice;
 import com.example.project.user.domain.UserVO;
 import com.example.project.user.mapper.UserMapper;
+import com.example.project.user.mapper.UserWithdrawalMapper;
 import com.example.project.user.service.UserService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -59,7 +60,7 @@ class UserControllerTest {
                 "홍길동"
         ));
 
-        UserService userService = new UserService(userMapper, passwordEncoder);
+        UserService userService = new UserService(userMapper, passwordEncoder, null, userMapper);
         UserController controller = new UserController(userService);
 
         LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
@@ -271,6 +272,12 @@ class UserControllerTest {
 
         assertEquals(204, body(result).get("statusCode").asInt());
         assertFalse(userMapper.users.containsKey(USER_ID));
+
+        MvcResult subsequentRequest = mockMvc.perform(get("/api/users/me")
+                        .principal(authentication(USER_ID)))
+                .andExpect(status().isNotFound())
+                .andReturn();
+        assertEquals(410, body(subsequentRequest).get("statusCode").asInt());
     }
 
     @Test
@@ -329,7 +336,7 @@ class UserControllerTest {
         );
     }
 
-    private static class FakeUserMapper implements UserMapper {
+    private static class FakeUserMapper implements UserMapper, UserWithdrawalMapper {
 
         private final Map<Long, UserVO> users = new HashMap<>();
         private long sequence = 100L;
@@ -371,6 +378,36 @@ class UserControllerTest {
             user.setUpdatedAt(LocalDateTime.of(2026, 1, 2, 10, 0));
             users.put(user.getUserId(), user);
             return 1;
+        }
+
+        @Override
+        public java.util.List<String> findFamilyImagePaths(Long userId) {
+            return java.util.List.of();
+        }
+
+        @Override
+        public int deleteAiSafetyReportsByTriggerEventUserId(Long userId) {
+            return 0;
+        }
+
+        @Override
+        public int deleteAiSafetyReportsByUserId(Long userId) {
+            return 0;
+        }
+
+        @Override
+        public int deleteAiConsultationEventsByUserId(Long userId) {
+            return 0;
+        }
+
+        @Override
+        public int deleteAiConversationsByUserId(Long userId) {
+            return 0;
+        }
+
+        @Override
+        public int deleteTicketsByUserId(Long userId) {
+            return 0;
         }
 
         @Override

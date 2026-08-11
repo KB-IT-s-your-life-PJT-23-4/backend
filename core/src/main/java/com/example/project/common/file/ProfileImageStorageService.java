@@ -141,6 +141,20 @@ public class ProfileImageStorageService {
         });
     }
 
+    public void deleteAfterCommit(String publicPath) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            deleteManagedFile(publicPath);
+            return;
+        }
+
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                deleteManagedFile(publicPath);
+            }
+        });
+    }
+
     private ValidatedImage validate(MultipartFile file) {
         if (file == null || file.isEmpty()) {
             throw new ServiceException(ResponseCode.FILE_FORMAT_INVALID);

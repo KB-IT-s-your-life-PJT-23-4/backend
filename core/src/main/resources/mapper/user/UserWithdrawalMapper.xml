@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.example.project.user.mapper.UserWithdrawalMapper">
+
+    <select id="findFamilyImagePaths"
+            parameterType="long"
+            resultType="string">
+        SELECT family_img
+        FROM family
+        WHERE user_id = #{userId}
+          AND family_img IS NOT NULL
+    </select>
+
+    <delete id="deleteAiSafetyReportsByTriggerEventUserId"
+            parameterType="long">
+        DELETE
+        FROM ai_safety_report
+        WHERE trigger_event_id IN (
+            SELECT ai_consultation_event_id
+            FROM ai_consultation_event
+            WHERE user_id = #{userId}
+        )
+    </delete>
+
+    <delete id="deleteAiSafetyReportsByUserId"
+            parameterType="long">
+        DELETE
+        FROM ai_safety_report
+        WHERE user_id = #{userId}
+    </delete>
+
+    <delete id="deleteAiConsultationEventsByUserId"
+            parameterType="long">
+        DELETE
+        FROM ai_consultation_event
+        WHERE user_id = #{userId}
+    </delete>
+
+    <delete id="deleteAiConversationsByUserId"
+            parameterType="long">
+        DELETE
+        FROM ai_conversation
+        WHERE user_id = #{userId}
+    </delete>
+
+    <delete id="deleteTicketsByUserId"
+            parameterType="long">
+        DELETE
+        FROM kb_ticket
+        WHERE user_id = #{userId}
+    </delete>
+
+</mapper>
