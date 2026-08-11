@@ -8,12 +8,9 @@ import org.springframework.stereotype.Component;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.ZoneId;
 
 @Component
 public class AIOtherIntentCounter {
-
-    private static final ZoneId SERVICE_ZONE = ZoneId.of("Asia/Seoul");
 
     private static final int TRIGGER_COUNT = 11;
 
@@ -23,15 +20,17 @@ public class AIOtherIntentCounter {
                     .expireAfterWrite(Duration.ofDays(2))
                     .build();
 
-    public CounterSnapshot increment(Long userId) {
+    public CounterSnapshot increment(Long userId, LocalDateTime occurredAt) {
         if (userId == null) {
             throw new IllegalArgumentException("userId는 null일 수 없습니다.");
         }
+        if (occurredAt == null) {
+            throw new IllegalArgumentException("occurredAt은 null일 수 없습니다.");
+        }
 
-        LocalDateTime now = LocalDateTime.now(SERVICE_ZONE);
         Key key = Key.builder()
                 .userId(userId)
-                .date(now.toLocalDate())
+                .date(occurredAt.toLocalDate())
                 .build();
 
         CounterState state = counters.asMap()
@@ -39,7 +38,7 @@ public class AIOtherIntentCounter {
                     if (existing == null) {
                         return new CounterState(
                                 1,
-                                now,
+                                occurredAt,
                                 null
                         );
                     }
@@ -49,7 +48,7 @@ public class AIOtherIntentCounter {
                     LocalDateTime thresholdReachedAt = existing.getThresholdReachedAt();
 
                     if (thresholdReachedAt == null && nextCount >= TRIGGER_COUNT) {
-                        thresholdReachedAt = now;
+                        thresholdReachedAt = occurredAt;
                     }
 
                     return new CounterState(

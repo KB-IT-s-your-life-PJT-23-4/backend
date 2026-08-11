@@ -211,8 +211,6 @@
 
         <result property="turnCount" column="turn_count"/>
 
-        <result property="version" column="version"/>
-
         <result property="lastMessageAt" column="last_message_at"/>
 
         <result property="closedAt" column="closed_at"/>
@@ -225,7 +223,7 @@
     <!-- 사용자 행 잠금 -->
     <select id="lockUser" resultType="long">
         SELECT user_id
-        FROM "user"
+        FROM `user`
         WHERE user_id = #{userId}
         FOR UPDATE
     </select>
@@ -241,7 +239,6 @@
             processing_started_at,
             transcript_json,
             turn_count,
-            version,
             last_message_at,
             closed_at,
             created_at,
@@ -264,7 +261,6 @@
             processing_started_at,
             transcript_json,
             turn_count,
-            version,
             last_message_at,
             closed_at,
             created_at,
@@ -286,7 +282,6 @@
             processing_started_at,
             transcript_json,
             turn_count,
-            version,
             last_message_at,
             closed_at,
             created_at,
@@ -310,16 +305,14 @@
             status,
             processing_status,
             transcript_json,
-            turn_count,
-            version
+            turn_count
         ) VALUES (
             #{conversationId},
             #{userId},
             #{status},
             #{processingStatus},
             CAST(#{transcriptJson} AS JSON),
-            #{turnCount},
-            #{version}
+            #{turnCount}
         )
     </insert>
 
@@ -335,7 +328,7 @@
 
         last_message_at = #{processingStartedAt},
 
-        version = version + 1
+        turn_count = turn_count + 1
 
         WHERE ai_conversation_id = #{aiConversationId}
 
@@ -344,8 +337,6 @@
         AND status = 'ACTIVE'
 
         AND processing_status = 'IDLE'
-
-        AND version = #{version}
     </update>
 
     <!-- 질문 완료 -->
@@ -365,11 +356,7 @@
 
         processing_started_at = NULL,
 
-        turn_count = turn_count + 1,
-
-        last_message_at = #{completedAt},
-
-        version = version + 1
+        last_message_at = #{completedAt}
 
         WHERE ai_conversation_id = #{aiConversationId}
 
@@ -378,8 +365,6 @@
         AND status = 'ACTIVE'
 
         AND processing_status = 'PROCESSING'
-
-        AND version = #{version}
     </update>
 
     <!-- 질문 실패 -->
@@ -392,16 +377,12 @@
 
         processing_started_at = NULL,
 
-        last_message_at = #{failedAt},
-
-        version = version + 1
+        last_message_at = #{failedAt}
 
         WHERE ai_conversation_id = #{aiConversationId}
 
         AND user_id = #{userId}
 
         AND processing_status = 'PROCESSING'
-
-        AND version = #{version}
     </update>
 </mapper>

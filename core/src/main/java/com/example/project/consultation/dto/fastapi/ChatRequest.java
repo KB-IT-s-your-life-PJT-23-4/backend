@@ -13,5 +13,6 @@ public record ChatRequest(
         List<FamilyData> families,
         List<ProductData> products,
         List<EtfProductData> etfProducts,
-        Map<String, Object> facts
+        Map<String, Object> facts,
+        List<ConversationContextMessage> conversationHistory
 ) {}

@@ -13,14 +13,9 @@ import java.util.Map;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class PreparedConversation {
+public class ConversationContextSnapshot {
 
-    private Long aiConversationId;
-    private Long userId;
-    private String conversationId;
-    private String requestId;
-    private Integer turnNo;
-    private String questionExcerpt;
-    private List<ConversationContextMessage> conversationHistory;
+    private List<ConversationContextMessage> messages;
+
     private Map<String, Object> facts;
 }

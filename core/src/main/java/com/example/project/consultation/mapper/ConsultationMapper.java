@@ -4,7 +4,6 @@ package com.example.project.consultation.mapper;
 import com.example.project.consultation.domain.*;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
-import org.springframework.security.core.parameters.P;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -46,9 +45,7 @@ public interface ConsultationMapper {
             @Param("transcriptJson")
             String transcriptJson,
             @Param("processingStartedAt")
-            LocalDateTime processingStartedAt,
-            @Param("version")
-            Long version
+            LocalDateTime processingStartedAt
     );
 
     int completeConversationTurn(
@@ -61,9 +58,7 @@ public interface ConsultationMapper {
             @Param("transcriptJson")
             String transcriptJson,
             @Param("completedAt")
-            LocalDateTime completedAt,
-            @Param("version")
-            Long version
+            LocalDateTime completedAt
     );
 
     int failConversationTurn(
@@ -74,9 +69,7 @@ public interface ConsultationMapper {
             @Param("transcriptJson")
             String transcriptJson,
             @Param("failedAt")
-            LocalDateTime failedAt,
-            @Param("version")
-            Long version
+            LocalDateTime failedAt
     );
 
 

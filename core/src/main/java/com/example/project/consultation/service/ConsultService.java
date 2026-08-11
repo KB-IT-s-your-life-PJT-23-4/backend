@@ -5,10 +5,12 @@ import com.example.project.common.exception.ServiceException;
 import com.example.project.consultation.client.FastApiClient;
 import com.example.project.consultation.domain.EtfVO;
 import com.example.project.consultation.domain.FamilyPreviousGiftVO;
+import com.example.project.consultation.domain.PreparedConversation;
 import com.example.project.consultation.domain.ProductVO;
 import com.example.project.consultation.dto.fastapi.*;
 import com.example.project.consultation.dto.request.ConsultClarificationRequest;
 import com.example.project.consultation.dto.response.ConsultResponse;
+import com.example.project.consultation.dto.response.ConversationHistoryResponse;
 import com.example.project.consultation.mapper.ConsultationMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
@@ -17,6 +19,8 @@ import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
 import java.time.LocalDate;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -38,7 +42,7 @@ public class ConsultService {
 
     private final FastApiClient fastApiClient;
     private final ConsultationMapper consultationMapper;
-    private final AiSafetyService aiSafetyService;
+    private final ConversationPersistenceService conversationPersistenceService;
 
     // 최초 질문
     //public ConsultResponse consult(String question, Long userId) { // 동기 처리
@@ -57,31 +61,44 @@ public class ConsultService {
         return ConsultResponse.from(response);*/
         return fetchFamiliesAsync(userId)
                 .flatMap(families -> {
-                    List<String> familyNames = families.stream()
-                            .map(FamilyData::getName)
-                            .filter(Objects::nonNull)
-                            .map(String::trim)
-                            .filter(name -> !name.isBlank())
-                            .distinct()
-                            .toList();
+                    List<String> familyNames = extractFamilyNames(families);
 
-                    ChatRequest request = new ChatRequest(
-                            null, // 최초 요청은 conversation_id가 null
+                    Map<String, Object> rawUserPayload = Map.of("question", question);
+
+                    return prepareTurnAsync(
+                            userId,
+                            "QUESTION",
                             question,
-                            families,
-                            fetchAllProducts(),
-                            fetchAllEtfProducts(),
-                            INITIAL_FACTS
-                    );
-                    return fastApiClient.startChat(request)
-                            .flatMap(response ->
-                                    aiSafetyService.process(
-                                            userId,
-                                            question,
-                                            familyNames,
-                                            response
-                                    ).thenReturn(response)
+                            rawUserPayload,
+                            familyNames
+                    ).flatMap(prepared -> {
+                            Map<String, Object> facts = mergeFacts(
+                                    null,
+                                    prepared.getFacts()
                             );
+
+                            ChatRequest request = new ChatRequest(
+                                prepared.getConversationId(),
+                                question,
+                                families,
+                                fetchAllProducts(),
+                                fetchAllEtfProducts(),
+                                facts,
+                                prepared.getConversationHistory()
+                        );
+
+                        Mono<ChatResponse> responseMono = fastApiClient.startChat(request)
+                                .onErrorResume(exception ->
+                                        failTurnAsync(prepared)
+                                                .then(Mono.error(exception)
+                                                )
+                                );
+
+                        return responseMono.flatMap(
+                                response -> completeTurnAsync(prepared, response)
+                                        .thenReturn(response)
+                        );
+                        });
                 })
                 .map(ConsultResponse::from);
     }
@@ -89,7 +106,7 @@ public class ConsultService {
     // 추가 답변 제출
     //public ConsultResponse answerClarification(ConsultClarificationRequest req, Long userId) { // 동가 처리
     public Mono<ConsultResponse> answerClarification(ConsultClarificationRequest req, Long userId) {
-        if (req.answers() == null || req.answers().isEmpty()) {
+        if (req.getAnswers() == null || req.getAnswers().isEmpty()) {
             throw new ServiceException(ResponseCode.BAD_REQUEST);
         }
         /* 동기처리
@@ -106,26 +123,58 @@ public class ConsultService {
 
         ChatResponse response = fastApiClient.submitClarification(request);
         return ConsultResponse.from(response);*/
+
+        validateQuestion(req.getQuestion());
+
         return fetchFamiliesAsync(userId)
                 .flatMap(families -> {
-                    ClarificationRequest request = new ClarificationRequest(
-                            req.conversationId(),
-                            req.question(),
-                            req.intent(),
-                            req.requiresCalculation(),
-                            req.facts(),
-                            req.answers(),
-                            families,
-                            fetchAllProducts(),
-                            fetchAllEtfProducts()
-                    );
-                    return fastApiClient.submitClarification(request);
+                    List<String> familyNames = extractFamilyNames(families);
+
+                    return prepareTurnAsync(
+                            userId,
+                            "CLARIFICATION",
+                            req.getQuestion(),
+                            req,
+                            familyNames
+                    ).flatMap(prepared -> {
+                        Map<String, Object> facts = mergeFacts(
+                                req.getFacts(),
+                                prepared.getFacts()
+                        );
+
+                        ClarificationRequest fastApiRequest = new ClarificationRequest(
+                                prepared.getConversationId(),
+                                req.getQuestion(),
+                                req.getIntent(),
+                                req.isRequiresCalculation(),
+                                facts,
+                                req.getAnswers(),
+                                families,
+                                fetchAllProducts(),
+                                fetchAllEtfProducts(),
+                                prepared.getConversationHistory()
+                        );
+
+                        Mono<ChatResponse> responseMono = fastApiClient
+                                .submitClarification(fastApiRequest)
+                        .onErrorResume(exception ->
+                            failTurnAsync(prepared)
+                                    .then(Mono.error(exception))
+                        );
+
+                        return responseMono.flatMap(response ->
+                                completeTurnAsync(prepared, response)
+                                        .thenReturn(response)
+                                );
+                    });
                 })
                 .map(ConsultResponse::from);
     }
 
     private void validateQuestion(String question) {
-        log.info("검증할 질문: [{}], 길이: {}", question, question == null ? -1 : question.length()); // 확인용
+        log.debug("AI 질문 검증 시작. length={}",
+                question == null ? -1 : question.length()
+        );
         if (question == null || question.isBlank()) {
             throw new ServiceException(ResponseCode.BAD_REQUEST);
         }
@@ -237,4 +286,81 @@ public class ConsultService {
                 .toList();
     }
 
+    private List<String> extractFamilyNames(List<FamilyData> families) {
+        return families.stream()
+                .map(FamilyData::getName)
+                .filter(Objects::nonNull)
+                .map(String::trim)
+                .filter(name -> !name.isBlank())
+                .distinct()
+                .toList();
+    }
+
+    private Map<String, Object> mergeFacts(
+            Map<String, Object> requestFacts,
+            Map<String, Object> storedFacts
+    ) {
+        Map<String, Object> merged = new HashMap<>(INITIAL_FACTS);
+
+        if (requestFacts != null) {
+            merged.putAll(requestFacts);
+        }
+
+        /*
+         * 서버가 보관한 사실을 마지막에 병합하여 클라이언트가 이전
+         * 상담에서 확정된 값을 임의로 덮어쓰지 못하게 합니다.
+         */
+        if (storedFacts != null) {
+            merged.putAll(storedFacts);
+        }
+
+        // FastAPI가 사실 값으로 null을 반환할 수 있으므로 null을 금지하는 Map.copyOf를 사용하지 않습니다.
+        return Collections.unmodifiableMap(merged);
+    }
+
+    private Mono<PreparedConversation> prepareTurnAsync(
+            Long userId,
+            String turnType,
+            String question,
+            Object rawUserPayload,
+            List<String> familyNames
+    ) {
+        return Mono.fromCallable(() ->
+                conversationPersistenceService.prepareTurn(
+                        userId,
+                        turnType,
+                        question,
+                        rawUserPayload,
+                        familyNames
+                )
+            ).subscribeOn(
+                    Schedulers.boundedElastic()
+        );
+    }
+
+    private Mono<Void> completeTurnAsync(PreparedConversation prepared, ChatResponse response) {
+        return Mono.fromRunnable(() ->
+                conversationPersistenceService.completeTurn(prepared, response)
+        ).subscribeOn(Schedulers.boundedElastic()).then();
+    }
+
+    private Mono<Void> failTurnAsync(PreparedConversation prepared) {
+        return Mono.fromRunnable(() ->
+            conversationPersistenceService.failTurn(prepared)
+        ).subscribeOn(Schedulers.boundedElastic()
+        ).then();
+    }
+
+    public Mono<ConversationHistoryResponse> getHistory(Long userId) {
+        if (userId == null) {
+            return Mono.error(
+                    new ServiceException(ResponseCode.UNAUTHORIZED)
+            );
+        }
+
+        return Mono.fromCallable(() ->
+            conversationPersistenceService.getCurrentHistory(userId)
+            ).subscribeOn(Schedulers.boundedElastic()
+        );
+    }
 }

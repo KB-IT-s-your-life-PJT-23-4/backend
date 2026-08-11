@@ -4,7 +4,9 @@ import com.example.project.common.api.ResponseCode;
 import com.example.project.common.exception.ServiceException;
 import com.example.project.consultation.crypto.domain.EncryptedPayload;
 import com.example.project.consultation.crypto.service.ConversationCryptoService;
+import com.example.project.consultation.domain.ConversationContextSnapshot;
 import com.example.project.consultation.dto.fastapi.ChatResponse;
+import com.example.project.consultation.dto.fastapi.ConversationContextMessage;
 import com.example.project.consultation.dto.response.ConversationHistoryResponse;
 import com.example.project.consultation.dto.response.ConversationTurnResponse;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -13,22 +15,26 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Qualifier;
 
-import javax.inject.Qualifier;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 public class ConversationJsonService {
 
     private static final int SCHEMA_VERSION = 1;
+    private static final int MAX_CONTEXT_CONTENT_LENGTH = 4000;
 
     private final ObjectMapper objectMapper;
     private final ConversationCryptoService cryptoService;
     private final QuestionExcerptMasker questionExcerptMasker;
 
-    private ConversationJsonService(
+    public ConversationJsonService(
             @Qualifier("fastApiObjectMapper")
             ObjectMapper objectMapper,
             ConversationCryptoService cryptoService,
@@ -142,7 +148,7 @@ public class ConversationJsonService {
         //민감 정보는 암호화 후 저장
         assistantNode.set("raw_encrypted", objectMapper.valueToTree(encryptedResponse));
 
-        turn.put("satus", "COMPLETED");
+        turn.put("status", "COMPLETED");
         turn.put("completed_at", completedAt.toString());
         turn.set("assistant", assistantNode);
 
@@ -164,7 +170,26 @@ public class ConversationJsonService {
         return writeJson(transcript);
     }
 
-    public ConversationHistoryResponse restoredHistory(
+    public String findLastProcessingRequestId(String transcriptJson) {
+        ObjectNode transcript = readObject(transcriptJson);
+        ArrayNode turns = getTurns(transcript);
+
+        for (int index = turns.size() - 1; index >= 0; index--) {
+            JsonNode turn = turns.get(index);
+
+            if ("PROCESSING".equals(turn.path("status").asText())) {
+                String requestId = turn.path("request_id").asText();
+
+                if (!requestId.isBlank()) {
+                    return requestId;
+                }
+            }
+        }
+
+        throw new ServiceException(ResponseCode.DATABASE_ERROR);
+    }
+
+    public ConversationHistoryResponse restoreHistory(
             Long userId,
             Long aiConversationId,
             String conversationId,
@@ -185,14 +210,33 @@ public class ConversationJsonService {
             LocalDateTime createdAt = parseDateTime(node.path("created_at"));
             LocalDateTime completedAt = parseDateTime(node.path("completed_at"));
             JsonNode encryptedUserNode = node.path("user").path("raw_encrypted");
-            EncryptedPayload encryptedUser = objectMapper.convertValue(encryptedUserNode, EncryptedPayload.class);
-            String rawUserJson = cryptoService.decrypt(
-                    encryptedUser,
-                    buildAad(userId, aiConversationId, requestId, "USER")
-            );
-            JsonNode rawUserPayload = readTree(rawUserJson);
+            JsonNode rawUserPayload;
+
+            if (encryptedUserNode.isMissingNode() || encryptedUserNode.isNull()) {
+                /*
+                 * 암호화 도입 전 데이터는 원문 복원이 불가능하므로
+                 * 마스킹된 내용과 복원 불가 상태만 반환합니다.
+                 */
+                ObjectNode migratedPayload = objectMapper.createObjectNode();
+                migratedPayload.put(
+                        "question",
+                        node.path("user").path("masked_content").asText("")
+                );
+                migratedPayload.put("restorable", false);
+                rawUserPayload = migratedPayload;
+            } else {
+                EncryptedPayload encryptedUser = objectMapper.convertValue(
+                        encryptedUserNode,
+                        EncryptedPayload.class
+                );
+                String rawUserJson = cryptoService.decrypt(
+                        encryptedUser,
+                        buildAad(userId, aiConversationId, requestId, "USER")
+                );
+                rawUserPayload = readTree(rawUserJson);
+            }
             ChatResponse assistantResponse = null;
-            JsonNode assistantNode = node.get("assistant");
+            JsonNode assistantNode = node.path("assistant");
 
             if (!assistantNode.isMissingNode() && !assistantNode.isNull()) {
                 JsonNode encryptedAssistantNode = assistantNode.path("raw_encrypted");
@@ -228,6 +272,75 @@ public class ConversationJsonService {
                 .status(status)
                 .turns(responses)
                 .build();
+    }
+
+    public ConversationContextSnapshot restoreContext(
+            Long userId,
+            Long aiConversationId,
+            String conversationId,
+            String status,
+            String transcriptJson,
+            int maxTurns
+    ) {
+        ConversationHistoryResponse history = restoreHistory(
+                userId,
+                aiConversationId,
+                conversationId,
+                status,
+                transcriptJson
+        );
+
+        List<ConversationTurnResponse> completedTurns = history.getTurns().stream()
+                .filter(turn -> "COMPLETED".equals(turn.getStatus()))
+                .filter(turn -> turn.getAssistantResponse() != null)
+                .toList();
+
+        int fromIndex = Math.max(0, completedTurns.size() - maxTurns);
+        List<ConversationContextMessage> messages = new ArrayList<>();
+        Map<String, Object> facts = new HashMap<>();
+
+        for (ConversationTurnResponse turn : completedTurns.subList(fromIndex, completedTurns.size())) {
+            String question = turn.getUserPayload().path("question").asText("");
+
+            if (!question.isBlank()) {
+                messages.add(
+                        ConversationContextMessage.builder()
+                                .role("user")
+                                .content(truncateContextContent(question))
+                                .build()
+                );
+            }
+
+            ChatResponse assistantResponse = turn.getAssistantResponse();
+
+            if (assistantResponse.answer() != null
+                    && !assistantResponse.answer().isBlank()) {
+                messages.add(
+                        ConversationContextMessage.builder()
+                                .role("assistant")
+                                .content(truncateContextContent(assistantResponse.answer()))
+                                .build()
+                );
+            }
+
+            if (assistantResponse.facts() != null) {
+                facts.putAll(assistantResponse.facts());
+            }
+        }
+
+        return ConversationContextSnapshot.builder()
+                .messages(List.copyOf(messages))
+                // FastAPI facts에는 null 값이 포함될 수 있으므로 Map.copyOf를 사용하지 않습니다.
+                .facts(Collections.unmodifiableMap(new HashMap<>(facts)))
+                .build();
+    }
+
+    private String truncateContextContent(String content) {
+        if (content.length() <= MAX_CONTEXT_CONTENT_LENGTH) {
+            return content;
+        }
+
+        return content.substring(0, MAX_CONTEXT_CONTENT_LENGTH);
     }
 
     private ObjectNode findTurn(ObjectNode transcript, String requestId) {

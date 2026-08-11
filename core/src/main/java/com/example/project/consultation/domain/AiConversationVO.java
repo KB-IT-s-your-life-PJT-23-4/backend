@@ -24,7 +24,6 @@ public class AiConversationVO {
      */
     private String transcriptJson;
     private Integer turnCount;
-    private Long version;
     private LocalDateTime lastMessageAt;
     private LocalDateTime closedAt;
     private LocalDateTime createdAt;
