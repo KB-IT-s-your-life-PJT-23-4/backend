@@ -398,5 +398,24 @@ class RecipientServiceTest {
             countCallCount++;
             return giftCounts.getOrDefault(familyId, 0);
         }
+
+        @Override
+        public com.example.project.gift.domain.SimulationGiftSource selectSimulationGiftSource(
+                Long simulationId,
+                Long userId
+        ) {
+            return null;
+        }
+
+        @Override
+        public List<com.example.project.simulation.domain.SimulationTrancheRecord>
+        selectTranchesByResultId(Long simulResultId) {
+            return List.of();
+        }
+
+        @Override
+        public int countGiftBySimulResultId(Long simulResultId) {
+            return 0;
+        }
     }
 }

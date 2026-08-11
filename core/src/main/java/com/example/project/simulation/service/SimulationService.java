@@ -834,8 +834,8 @@ public class SimulationService {
             SimulationPortfolioRecord second = optimized.portfolios().get(profile);
             SimulationPortfolioRecord selected;
             int valueCompare = Long.compare(
-                    first.getExpectedFutureValue(),
-                    second.getExpectedFutureValue()
+                    scenarioEndTotalValue(immediate, first),
+                    scenarioEndTotalValue(optimized, second)
             );
             if (valueCompare > 0) {
                 selected = first;
@@ -847,6 +847,25 @@ public class SimulationService {
             }
             selected.setRecommended(true);
             simulationMapper.markPortfolioRecommended(selected.getPortfolioId());
+        }
+    }
+
+    private long scenarioEndTotalValue(
+            PersistedScenario scenario,
+            SimulationPortfolioRecord portfolio
+    ) {
+        long remainingUninvestedPrincipal = Math.max(
+                0,
+                value(scenario.result().getPostTaxAmount())
+                        - value(scenario.result().getInvestmentPrincipal())
+        );
+        try {
+            return Math.addExact(
+                    value(portfolio.getExpectedFutureValue()),
+                    remainingUninvestedPrincipal
+            );
+        } catch (ArithmeticException exception) {
+            return Long.MAX_VALUE;
         }
     }
 
