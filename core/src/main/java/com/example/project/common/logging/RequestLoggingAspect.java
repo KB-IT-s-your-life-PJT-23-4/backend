@@ -59,7 +59,9 @@ public class RequestLoggingAspect {
 
         String requestBody = "-";
 
-        if(shouldLogBody(httpMethod)) {
+        if (isAiConsultationRequest(uri)) {
+            requestBody = "[MASKED]";
+        } else if(shouldLogBody(httpMethod)) {
             requestBody = serializeArguments(joinPoint.getArgs());
         }
 
@@ -120,6 +122,10 @@ public class RequestLoggingAspect {
         return "POST".equalsIgnoreCase(method)
                 || "PUT".equalsIgnoreCase(method)
                 || "PATCH".equalsIgnoreCase(method);
+    }
+
+    private boolean isAiConsultationRequest(String uri) {
+        return uri != null && uri.startsWith("/api/ai/consult");
     }
 
     //데이터 직렬화 매개변수 -> JSON

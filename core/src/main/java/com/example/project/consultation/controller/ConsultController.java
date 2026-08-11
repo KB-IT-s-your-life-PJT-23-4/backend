@@ -2,23 +2,24 @@ package com.example.project.consultation.controller;
 
 import com.example.project.common.api.ApiResponse;
 import com.example.project.common.api.ResponseCode;
+import com.example.project.common.exception.ServiceException;
 import com.example.project.common.logging.ApiLog;
 import com.example.project.common.web.CurrentUser;
 import com.example.project.consultation.dto.request.ConsultClarificationRequest;
 import com.example.project.consultation.dto.request.ConsultRequest;
 import com.example.project.consultation.dto.response.ConsultResponse;
+import com.example.project.consultation.dto.response.ConversationHistoryResponse;
 import com.example.project.consultation.service.ConsultService;
 import com.example.project.user.service.AccountAccessService;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 import org.springframework.web.context.request.async.DeferredResult;
+import reactor.core.Disposable;
 
+import javax.validation.Valid;
 import javax.servlet.http.HttpServletRequest;
 
 @ApiLog
@@ -31,7 +32,7 @@ public class ConsultController {
     private final ConsultService consultService;
     private final AccountAccessService accountAccessService;
 
-    private static final long TIMEOUT_MS = 20_000L;
+    private static final long TIMEOUT_MS = 35_000L;
 
     @ApiOperation(
             value = "AI 상담 시작",
@@ -39,7 +40,7 @@ public class ConsultController {
     )
     @PostMapping("/consult")
     public DeferredResult<ApiResponse<ConsultResponse>> consult(
-            @RequestBody ConsultRequest request,
+            @Valid @RequestBody ConsultRequest request,
             HttpServletRequest httpRequest,
             @AuthenticationPrincipal String principal
     ) {
@@ -47,13 +48,15 @@ public class ConsultController {
         Long userId = CurrentUser.id(principal);
         accountAccessService.requireRestrictedFeatureAccess(userId);
 
-        consultService.consult(request.question(), userId)
+        Disposable subscription = consultService.consult(request.question(), userId)
                 .subscribe(
                         data -> deferredResult.setResult(
                                 ApiResponse.success(ResponseCode.AI_RESPONSE_SUCCESS, httpRequest.getRequestURI(), data)
                         ),
                         deferredResult::setErrorResult // 예외를 그대로 넘기면 CommonExceptionAdvice가 처리
                 );
+
+        configureTimeout(deferredResult, subscription);
 
         return deferredResult;
     }
@@ -64,7 +67,7 @@ public class ConsultController {
     )
     @PostMapping("/consult/clarification")
     public DeferredResult<ApiResponse<ConsultResponse>> answerClarification(
-            @RequestBody ConsultClarificationRequest request,
+            @Valid @RequestBody ConsultClarificationRequest request,
             HttpServletRequest httpRequest,
             @AuthenticationPrincipal String principal
     ) {
@@ -72,7 +75,7 @@ public class ConsultController {
         Long userId = CurrentUser.id(principal);
         accountAccessService.requireRestrictedFeatureAccess(userId);
 
-        consultService.answerClarification(request, userId)
+        Disposable subscription = consultService.answerClarification(request, userId)
                 .subscribe(
                         data -> deferredResult.setResult(
                                 ApiResponse.success(ResponseCode.AI_RESPONSE_SUCCESS, httpRequest.getRequestURI(), data)
@@ -80,6 +83,50 @@ public class ConsultController {
                         deferredResult::setErrorResult
                 );
 
+        configureTimeout(deferredResult, subscription);
+
         return deferredResult;
+    }
+
+    @GetMapping("/consult/history")
+    public DeferredResult<ApiResponse<ConversationHistoryResponse>> getHistory(
+            HttpServletRequest httpRequest,
+            @AuthenticationPrincipal String principal
+    ) {
+        DeferredResult<ApiResponse<ConversationHistoryResponse>> deferredResult
+                = new DeferredResult<>(TIMEOUT_MS);
+
+        Long userId = CurrentUser.id(principal);
+
+        accountAccessService.requireRestrictedFeatureAccess(userId);
+
+        Disposable subscription = consultService.getHistory(userId)
+                .subscribe(
+                        data -> deferredResult.setResult(
+                                ApiResponse.success(
+                                        ResponseCode.SUCCESS,
+                                        httpRequest.getRequestURI(),
+                                        data
+                                )
+                        ),
+                        deferredResult::setErrorResult
+                );
+
+        configureTimeout(deferredResult, subscription);
+
+        return deferredResult;
+    }
+
+    private <T> void configureTimeout(
+            DeferredResult<ApiResponse<T>> deferredResult,
+            Disposable subscription
+    ) {
+        deferredResult.onTimeout(() -> {
+            subscription.dispose();
+            deferredResult.setErrorResult(
+                    new ServiceException(ResponseCode.REQUEST_TIMEOUT)
+            );
+        });
+        deferredResult.onCompletion(subscription::dispose);
     }
 }
