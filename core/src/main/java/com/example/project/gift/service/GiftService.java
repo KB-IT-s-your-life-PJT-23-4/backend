@@ -246,21 +246,18 @@ public class GiftService {
 
         long appliedDeduction = Math.min(Math.max(0L, deductionLimit - priorGiftAmount), giftAmount);
         long taxableBase = giftAmount - appliedDeduction;
+        long priorTaxableBase = Math.max(0L, priorGiftAmount - deductionLimit);
+        long cumulativeTaxableBase = Math.addExact(priorTaxableBase, taxableBase);
 
         BigDecimal taxRate = BigDecimal.ZERO;
         long calculatedTax = 0L;
 
-        // 과세표준 0 은 최저구간의 lower_bound 초과 조건에 걸려 행이 안 나온다. 조회 자체를 건너뛴다.
-        if (taxableBase > 0) {
-            TaxBracketVO bracket = giftMapper.selectTaxBracket(baseDate, taxableBase);
-
-            if (bracket == null) {
-                throw new ServiceException(ResponseCode.DATABASE_ERROR);
-            }
-
-            taxRate = bracket.getTaxRate();
-            calculatedTax = Math.max(0L, taxRate.multiply(BigDecimal.valueOf(taxableBase)).longValue()
-                    - bracket.getProgressiveDeduction());
+        // 과거분을 포함한 누적 과세표준으로 구간을 판정하고, 과거분 세액은 빼서 이번 증분세액만 산출한다.
+        if (cumulativeTaxableBase > 0) {
+            ProgressiveTax cumulativeTax = calculateProgressiveTax(baseDate, cumulativeTaxableBase);
+            ProgressiveTax priorTax = calculateProgressiveTax(baseDate, priorTaxableBase);
+            taxRate = cumulativeTax.taxRate();
+            calculatedTax = Math.max(0L, cumulativeTax.amount() - priorTax.amount());
         }
 
         long filingCredit = FILING_CREDIT_RATE.multiply(BigDecimal.valueOf(calculatedTax)).longValue();
@@ -273,6 +270,29 @@ public class GiftService {
         filingInfo.setPayableTax(calculatedTax - filingCredit);
 
         return filingInfo;
+    }
+
+    private ProgressiveTax calculateProgressiveTax(LocalDate baseDate, long taxableBase) {
+        if (taxableBase <= 0) {
+            return new ProgressiveTax(BigDecimal.ZERO, 0L);
+        }
+
+        TaxBracketVO bracket = giftMapper.selectTaxBracket(baseDate, taxableBase);
+        if (bracket == null) {
+            throw new ServiceException(ResponseCode.DATABASE_ERROR);
+        }
+
+        long amount = Math.max(
+                0L,
+                bracket.getTaxRate()
+                        .multiply(BigDecimal.valueOf(taxableBase))
+                        .longValue()
+                        - bracket.getProgressiveDeduction()
+        );
+        return new ProgressiveTax(bracket.getTaxRate(), amount);
+    }
+
+    private record ProgressiveTax(BigDecimal taxRate, long amount) {
     }
 
     /**
