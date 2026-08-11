@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 
 import java.io.InputStream;
 import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -94,6 +95,28 @@ class SimulationHistoryMapperXmlTest {
                 "spr.applied_annual_rate AS applied_annual_rate_percent"
         ));
         assertTrue(sql.contains("AND spr.is_selected = 1"));
+    }
+
+    @Test
+    @DisplayName("ETF 종가 이력을 기준일 이전의 최신 데이터부터 제한해 조회한다")
+    void selectRecentEtfPricesUpToAsOfDate() throws Exception {
+        Configuration configuration = configuration();
+        Map<String, Object> parameters = new HashMap<>();
+        parameters.put("productId", 101L);
+        parameters.put("asOfDate", LocalDate.of(2026, 8, 6));
+        parameters.put("limit", 253);
+
+        BoundSql boundSql = configuration.getMappedStatement(
+                NAMESPACE + "selectRecentEtfPrices"
+        ).getBoundSql(parameters);
+        String sql = normalize(boundSql.getSql());
+
+        assertTrue(sql.contains("FROM etf_history_price"));
+        assertTrue(sql.contains("WHERE product_id = ?"));
+        assertTrue(sql.contains("AND base_date <= ?"));
+        assertTrue(sql.contains("ORDER BY base_date DESC"));
+        assertTrue(sql.contains("LIMIT ?"));
+        assertTrue(sql.endsWith("ORDER BY base_date"));
     }
 
     private Configuration configuration() throws Exception {

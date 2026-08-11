@@ -36,7 +36,7 @@ public class AdminProductResponse {
     private final String stockCode;
     private final String etfCategory;
     private final String trackingIndex;
-    private final BigDecimal annualReturn5yPercent;
+    private final BigDecimal annualReturn10yPercent;
     private final BigDecimal bondRatioPercent;
     private final String riskLevel;
 

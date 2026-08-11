@@ -321,7 +321,7 @@ class SimulationHistoryServiceTest {
     private static final class UserValidatedSimulationService extends SimulationService {
 
         private UserValidatedSimulationService() {
-            super(null, null, null, null);
+            super(null, null, null, null, null);
         }
 
         @Override

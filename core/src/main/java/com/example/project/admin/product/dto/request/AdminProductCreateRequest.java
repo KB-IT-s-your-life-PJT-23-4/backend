@@ -45,7 +45,7 @@ public class AdminProductCreateRequest {
     private String etfCategory;
     private String trackingIndex;
     @DecimalMin(value = "0", inclusive = true)
-    private BigDecimal annualReturn5yPercent;
+    private BigDecimal annualReturn10yPercent;
     @DecimalMin(value = "0", inclusive = true)
     private BigDecimal bondRatioPercent;
     private String riskLevel;

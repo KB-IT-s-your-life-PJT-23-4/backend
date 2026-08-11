@@ -4,6 +4,7 @@ import com.example.project.config.ocr.OCRWebClientConfig;
 import com.example.project.consultation.config.WebClientConfig;
 import com.example.project.security.SecurityConfig;
 import org.springframework.web.filter.CharacterEncodingFilter;
+import com.example.project.consultation.reservation.config.KakaoWebClientConfig;
 import org.springframework.web.servlet.support.AbstractAnnotationConfigDispatcherServletInitializer;
 
 import javax.servlet.Filter;
@@ -18,7 +19,13 @@ public class WebConfig extends AbstractAnnotationConfigDispatcherServletInitiali
 
     @Override
     protected Class<?>[] getRootConfigClasses() {
-        return new Class<?>[]{RootConfig.class, SecurityConfig.class, WebClientConfig.class, OCRWebClientConfig.class};
+        return new Class<?>[]{
+                RootConfig.class,
+                SecurityConfig.class,
+                WebClientConfig.class,
+                KakaoWebClientConfig.class,
+                OCRWebClientConfig.class
+        };
     }
 
     @Override

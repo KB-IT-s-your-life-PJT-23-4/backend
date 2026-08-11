@@ -21,6 +21,7 @@ import com.example.project.simulation.domain.TaxPaymentMethod;
 import com.example.project.simulation.dto.request.SimulationExecuteRequest;
 import com.example.project.simulation.dto.request.SimulationSaveRequest;
 import com.example.project.simulation.dto.response.SimulationResponse;
+import com.example.project.simulation.dto.response.EtfVolatilityResponse;
 import com.example.project.simulation.dto.response.SimulationSaveResponse;
 import com.example.project.simulation.exception.SimulationError;
 import com.example.project.simulation.exception.SimulationException;
@@ -71,6 +72,7 @@ public class SimulationService {
     private final UserMapper userMapper;
     private final SimulationCalculator calculator;
     private final SimulationIdempotencyStore idempotencyStore;
+    private final EtfVolatilityCalculator volatilityCalculator;
 
     @Transactional
     public SimulationResponse execute(
@@ -447,7 +449,11 @@ public class SimulationService {
                     selectedResult,
                     selectedProducts,
                     selectedTranches,
-                    target
+                    target,
+                    volatilityByProductId(
+                            selectedProducts,
+                            target.getAsOfDate()
+                    )
             );
             SimulationSaveResponse response = new SimulationSaveResponse(
                     simulationId,
@@ -520,6 +526,8 @@ public class SimulationService {
                         SimulationResultRecord::getResultId,
                         Function.identity()
                 ));
+        Map<Long, EtfVolatilityResponse> volatilityByProductId =
+                volatilityByProductId(products, simulation.getAsOfDate());
 
         List<SimulationResponse.Recommendation> recommendations = portfolios.stream()
                 .filter(SimulationPortfolioRecord::isRecommended)
@@ -577,7 +585,8 @@ public class SimulationService {
                             selectedResult.getResultId(),
                             List.of()
                     ),
-                    simulation
+                    simulation,
+                    volatilityByProductId
             );
         }
 
@@ -611,7 +620,8 @@ public class SimulationService {
                                                 result.getResultId(),
                                                 List.of()
                                         ),
-                                        simulation
+                                        simulation,
+                                        volatilityByProductId
                                 ))
                                 .toList()
                 ))
@@ -824,8 +834,8 @@ public class SimulationService {
             SimulationPortfolioRecord second = optimized.portfolios().get(profile);
             SimulationPortfolioRecord selected;
             int valueCompare = Long.compare(
-                    first.getExpectedFutureValue(),
-                    second.getExpectedFutureValue()
+                    scenarioEndTotalValue(immediate, first),
+                    scenarioEndTotalValue(optimized, second)
             );
             if (valueCompare > 0) {
                 selected = first;
@@ -837,6 +847,25 @@ public class SimulationService {
             }
             selected.setRecommended(true);
             simulationMapper.markPortfolioRecommended(selected.getPortfolioId());
+        }
+    }
+
+    private long scenarioEndTotalValue(
+            PersistedScenario scenario,
+            SimulationPortfolioRecord portfolio
+    ) {
+        long remainingUninvestedPrincipal = Math.max(
+                0,
+                value(scenario.result().getPostTaxAmount())
+                        - value(scenario.result().getInvestmentPrincipal())
+        );
+        try {
+            return Math.addExact(
+                    value(portfolio.getExpectedFutureValue()),
+                    remainingUninvestedPrincipal
+            );
+        } catch (ArithmeticException exception) {
+            return Long.MAX_VALUE;
         }
     }
 
@@ -1310,7 +1339,8 @@ public class SimulationService {
             SimulationResultRecord result,
             List<SimulationProductRecord> products,
             List<SimulationTrancheRecord> tranches,
-            SimulationRecord simulation
+            SimulationRecord simulation,
+            Map<Long, EtfVolatilityResponse> volatilityByProductId
     ) {
         return new SimulationResponse.Portfolio(
                 portfolio.getPortfolioId(),
@@ -1332,7 +1362,8 @@ public class SimulationService {
                                 product,
                                 result.getInvestmentPrincipal(),
                                 tranches,
-                                simulation
+                                simulation,
+                                volatilityByProductId
                         ))
                         .toList()
         );
@@ -1342,7 +1373,8 @@ public class SimulationService {
             SimulationProductRecord product,
             long investmentPrincipal,
             List<SimulationTrancheRecord> tranches,
-            SimulationRecord simulation
+            SimulationRecord simulation,
+            Map<Long, EtfVolatilityResponse> volatilityByProductId
     ) {
         BigDecimal ratio = investmentPrincipal <= 0
                 ? BigDecimal.ZERO
@@ -1367,7 +1399,7 @@ public class SimulationService {
         SimulationResponse.ReturnMetric metric =
                 product.getProductType() == ProductType.ETF
                         ? new SimulationResponse.ReturnMetric(
-                        "ANNUALIZED_RETURN_5Y",
+                        "ANNUALIZED_RETURN_10Y",
                         null,
                         null,
                         product.getBaseAnnualRatePercent()
@@ -1397,6 +1429,10 @@ public class SimulationService {
                 product.getAppliedAnnualRatePercent(),
                 product.calculationType(),
                 metric,
+                product.getProductType() == ProductType.ETF
+                        ? product.getRiskLevel() : null,
+                product.getProductType() == ProductType.ETF
+                        ? volatilityByProductId.get(product.getProductId()) : null,
                 product.getExpectedFutureValue(),
                 product.getExpectedFutureValue() - product.getAllocatedAmount(),
                 product.isSelected(),
@@ -1416,7 +1452,8 @@ public class SimulationService {
             SimulationResultRecord result,
             List<SimulationProductRecord> selectedProducts,
             List<SimulationTrancheRecord> tranches,
-            SimulationRecord simulation
+            SimulationRecord simulation,
+            Map<Long, EtfVolatilityResponse> volatilityByProductId
     ) {
         long futureValue = selectedProducts.stream()
                 .mapToLong(item -> value(item.getExpectedFutureValue()))
@@ -1441,7 +1478,8 @@ public class SimulationService {
                                 product,
                                 result.getInvestmentPrincipal(),
                                 tranches,
-                                simulation
+                                simulation,
+                                volatilityByProductId
                         ))
                         .toList()
         );
@@ -1522,7 +1560,7 @@ public class SimulationService {
                 "FLOOR_TO_WON",
                 methods,
                 "END_OF_MONTH",
-                "ANNUALIZED_RETURN_5Y",
+                "ANNUALIZED_RETURN_10Y",
                 new SimulationResponse.ReinvestmentPolicy(
                         true,
                         true,
@@ -2206,6 +2244,31 @@ public class SimulationService {
         } catch (ArithmeticException exception) {
             return Long.MAX_VALUE;
         }
+    }
+
+    private Map<Long, EtfVolatilityResponse> volatilityByProductId(
+            List<SimulationProductRecord> products,
+            LocalDate asOfDate
+    ) {
+        return safeList(products).stream()
+                .filter(item -> item.getProductType() == ProductType.ETF)
+                .collect(Collectors.toMap(
+                        SimulationProductRecord::getProductId,
+                        Function.identity(),
+                        (left, right) -> left
+                ))
+                .entrySet().stream()
+                .collect(Collectors.toMap(
+                        Map.Entry::getKey,
+                        entry -> volatilityCalculator.calculate(
+                                safeList(simulationMapper.selectRecentEtfPrices(
+                                        entry.getKey(),
+                                        asOfDate,
+                                        EtfVolatilityCalculator.MAX_PRICE_OBSERVATIONS
+                                )),
+                                entry.getValue().getRiskLevel()
+                        )
+                ));
     }
 
     private long value(Long value) {

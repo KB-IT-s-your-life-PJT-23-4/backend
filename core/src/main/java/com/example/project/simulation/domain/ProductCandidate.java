@@ -27,7 +27,7 @@ public class ProductCandidate {
     private Long monthlyMinAmount;
     private Long monthlyMaxAmount;
     private String trackingIndex;
-    private BigDecimal annualizedReturn5yPercent;
+    private BigDecimal annualizedReturn10yPercent;
     private BigDecimal bondRatioPercent;
     private String riskLevel;
     private LocalDate productDataDate;

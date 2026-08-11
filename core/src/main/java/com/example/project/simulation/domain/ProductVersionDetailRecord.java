@@ -25,7 +25,7 @@ public class ProductVersionDetailRecord {
     private String stockCode;
     private String etfCategory;
     private String trackingIndex;
-    private BigDecimal annualizedReturn5yPercent;
+    private BigDecimal annualizedReturn10yPercent;
     private BigDecimal bondRatioPercent;
     private String riskLevel;
 }

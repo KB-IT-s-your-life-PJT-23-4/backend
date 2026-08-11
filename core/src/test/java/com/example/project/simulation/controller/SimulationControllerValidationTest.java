@@ -341,6 +341,7 @@ class SimulationControllerValidationTest {
                             null,
                             null,
                             null,
+                            null,
                             null
                     )),
                     Pagination.of(resolvedPage, resolvedSize, 1, 1)
