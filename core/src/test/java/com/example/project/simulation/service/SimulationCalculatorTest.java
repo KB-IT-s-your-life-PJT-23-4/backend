@@ -72,6 +72,41 @@ class SimulationCalculatorTest {
     }
 
     @Test
+    @DisplayName("재가입은 최대 가입기간부터 배치해 60개월을 36개월과 24개월로 나눈다")
+    void prioritizeMaximumContractMonthsForReinvestment() {
+        assertEquals(
+                List.of(36, 24),
+                calculator.reinvestmentPeriods(60, 12, 36)
+        );
+    }
+
+    @Test
+    @DisplayName("마지막 잔여기간이 최소 가입기간보다 짧으면 앞 회차를 조정한다")
+    void adjustEarlierContractWhenRemainderIsTooShort() {
+        assertEquals(
+                List.of(28, 12),
+                calculator.reinvestmentPeriods(40, 12, 36)
+        );
+    }
+
+    @Test
+    @DisplayName("재가입 회차마다 계약기간에 해당하는 서로 다른 금리를 적용한다")
+    void applyRateForEachReinvestmentContract() {
+        long result = calculator.calculateReinvestedProductFutureValue(
+                CalculationType.SIMPLE_INTEREST,
+                100_000_000L,
+                60,
+                12,
+                36,
+                months -> months == 36
+                        ? new BigDecimal("3.5")
+                        : new BigDecimal("3.0")
+        );
+
+        assertEquals(117_130_000L, result);
+    }
+
+    @Test
     @DisplayName("재가입을 반복해도 운용 기간을 정확히 채울 수 없으면 제외한다")
     void rejectProductWhenContractTermsCannotCoverInvestmentPeriod() {
         assertTrue(calculator.reinvestmentPeriods(35, 12, 12).isEmpty());

@@ -19,6 +19,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.function.IntFunction;
 
 @Component
 public class SimulationCalculator {
@@ -204,17 +205,20 @@ public class SimulationCalculator {
         }
 
         int contractCount = minimumContractCount;
-        int baseMonths = totalMonths / contractCount;
-        int remainder = totalMonths % contractCount;
-        if (baseMonths < minimumContractMonths
-                || baseMonths > maximumContractMonths
-                || (remainder > 0 && baseMonths + 1 > maximumContractMonths)) {
-            return List.of();
-        }
-
+        int remainingMonths = totalMonths;
         List<Integer> periods = new ArrayList<>(contractCount);
         for (int index = 0; index < contractCount; index++) {
-            periods.add(baseMonths + (index < remainder ? 1 : 0));
+            int remainingContracts = contractCount - index - 1;
+            int contractMonths = Math.min(
+                    maximumContractMonths,
+                    remainingMonths - remainingContracts * minimumContractMonths
+            );
+            if (contractMonths < minimumContractMonths
+                    || contractMonths > maximumContractMonths) {
+                return List.of();
+            }
+            periods.add(contractMonths);
+            remainingMonths -= contractMonths;
         }
         return List.copyOf(periods);
     }
@@ -227,11 +231,29 @@ public class SimulationCalculator {
             Integer minimumContractMonths,
             Integer maximumContractMonths
     ) {
+        return calculateReinvestedProductFutureValue(
+                calculationType,
+                principal,
+                totalMonths,
+                minimumContractMonths,
+                maximumContractMonths,
+                ignored -> annualRatePercent
+        );
+    }
+
+    public long calculateReinvestedProductFutureValue(
+            CalculationType calculationType,
+            long principal,
+            int totalMonths,
+            Integer minimumContractMonths,
+            Integer maximumContractMonths,
+            IntFunction<BigDecimal> annualRateResolver
+    ) {
         if (calculationType == CalculationType.COMPOUND_RETURN) {
             return calculateProductFutureValue(
                     calculationType,
                     principal,
-                    annualRatePercent,
+                    annualRateResolver.apply(totalMonths),
                     totalMonths
             );
         }
@@ -250,7 +272,7 @@ public class SimulationCalculator {
             maturityValue = calculateProductFutureValue(
                     calculationType,
                     maturityValue,
-                    annualRatePercent,
+                    annualRateResolver.apply(period),
                     period
             );
         }
@@ -263,6 +285,24 @@ public class SimulationCalculator {
             List<SimulationTrancheRecord> tranches,
             long investmentPrincipal,
             LocalDate evaluationDate
+    ) {
+        return calculateSelectedProductValue(
+                product,
+                allocatedAmount,
+                tranches,
+                investmentPrincipal,
+                evaluationDate,
+                ignored -> product.getAppliedAnnualRatePercent()
+        );
+    }
+
+    public long calculateSelectedProductValue(
+            SimulationProductRecord product,
+            long allocatedAmount,
+            List<SimulationTrancheRecord> tranches,
+            long investmentPrincipal,
+            LocalDate evaluationDate,
+            IntFunction<BigDecimal> annualRateResolver
     ) {
         if (allocatedAmount <= 0 || investmentPrincipal <= 0) {
             return 0;
@@ -280,10 +320,10 @@ public class SimulationCalculator {
             total += calculateReinvestedProductFutureValue(
                     product.calculationType(),
                     portions.get(index),
-                    product.getAppliedAnnualRatePercent(),
                     months,
                     product.getMinimumContractMonths(),
-                    product.getMaximumContractMonths()
+                    product.getMaximumContractMonths(),
+                    annualRateResolver
             );
         }
 

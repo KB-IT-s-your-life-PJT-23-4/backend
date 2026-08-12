@@ -1,5 +1,6 @@
 package com.example.project.simulation.service;
 
+import com.example.project.simulation.domain.BaseRateRecord;
 import com.example.project.simulation.domain.DeductionRule;
 import com.example.project.simulation.domain.FamilySnapshot;
 import com.example.project.simulation.domain.GiftHistoryRecord;
@@ -57,7 +58,7 @@ import java.util.stream.Collectors;
 @Log4j2
 public class SimulationService {
 
-    public static final String FORMULA_VERSION = "INVESTMENT_V2";
+    public static final String FORMULA_VERSION = "INVESTMENT_V3";
     public static final String CALCULATION_VERSION = "GIFT_SIM_V6";
 
     private static final int DEDUCTION_WINDOW_YEARS = 10;
@@ -375,17 +376,21 @@ public class SimulationService {
             List<SimulationProductRecord> selectedProducts = new ArrayList<>();
             for (SelectedProductPlan productPlan : selectionPlan.products()) {
                 SimulationProductRecord product = productPlan.product();
-                BigDecimal appliedRate = finalAppliedRate(
+                hydrateBaseRateTiers(product);
+                BigDecimal appliedRate = representativeAppliedRate(
                         product,
-                        productPlan.preferentialRates()
+                        productPlan.preferentialRates(),
+                        selectedTranches,
+                        target.getInvestmentEndDate()
                 );
                 product.setAppliedAnnualRatePercent(appliedRate);
-                long futureValue = calculator.calculateSelectedProductValue(
+                long futureValue = calculateSelectedProductValue(
                         product,
                         product.getAllocatedAmount(),
                         selectedTranches,
                         selectedResult.getInvestmentPrincipal(),
-                        target.getInvestmentEndDate()
+                        target.getInvestmentEndDate(),
+                        productPlan.preferentialRates()
                 );
                 product.setSelected(true);
                 product.setExpectedFutureValue(futureValue);
@@ -794,12 +799,29 @@ public class SimulationService {
                 .distinct()
                 .toList();
         List<ProductCandidate> eligible = safeList(candidates).stream()
-                .filter(candidate -> investmentPeriods.stream().allMatch(months ->
-                        calculator.canCoverWithReinvestment(
-                                months,
-                                candidate.getMinMonth(),
-                                candidate.getMaxMonth()
-                        )))
+                .filter(candidate -> investmentPeriods.stream().allMatch(months -> {
+                    List<Integer> contractPeriods = calculator.reinvestmentPeriods(
+                            months,
+                            candidate.getMinMonth(),
+                            candidate.getMaxMonth()
+                    );
+                    if (contractPeriods.isEmpty()) {
+                        return false;
+                    }
+                    try {
+                        contractPeriods.forEach(period -> requiredRateTier(
+                                candidate.getBaseRateTiers(),
+                                period
+                        ));
+                        return true;
+                    } catch (SimulationException exception) {
+                        if (exception.getError()
+                                == SimulationError.PRODUCT_DATA_NOT_READY) {
+                            return false;
+                        }
+                        throw exception;
+                    }
+                }))
                 .limit(MAX_PRODUCT_CANDIDATES)
                 .toList();
         if (eligible.isEmpty()) {
@@ -1079,12 +1101,14 @@ public class SimulationService {
         product.setAppliedAnnualRatePercent(candidate.getAppliedAnnualRatePercent());
         product.setMinimumContractMonths(candidate.getMinMonth());
         product.setMaximumContractMonths(candidate.getMaxMonth());
-        return calculator.calculateSelectedProductValue(
+        product.setBaseRateTiers(candidate.getBaseRateTiers());
+        return calculateSelectedProductValue(
                 product,
                 principal,
                 tranches,
                 principal,
-                investmentEndDate
+                investmentEndDate,
+                List.of()
         );
     }
 
@@ -1111,13 +1135,15 @@ public class SimulationService {
         product.setAppliedAnnualRatePercent(candidate.getAppliedAnnualRatePercent());
         product.setMinimumContractMonths(candidate.getMinMonth());
         product.setMaximumContractMonths(candidate.getMaxMonth());
+        product.setBaseRateTiers(candidate.getBaseRateTiers());
         long futureValue = investmentPrincipal <= 0 ? 0
-                : calculator.calculateSelectedProductValue(
+                : calculateSelectedProductValue(
                 product,
                 allocatedAmount,
                 tranches,
                 investmentPrincipal,
-                investmentEndDate
+                investmentEndDate,
+                List.of()
         );
         product.setExpectedFutureValue(futureValue);
         return product;
@@ -1265,21 +1291,121 @@ public class SimulationService {
         }
     }
 
-    private BigDecimal finalAppliedRate(
+    private BigDecimal representativeAppliedRate(
             SimulationProductRecord product,
-            List<PreferentialRateRecord> rates
+            List<PreferentialRateRecord> rates,
+            List<SimulationTrancheRecord> tranches,
+            LocalDate investmentEndDate
     ) {
         if (product.getProductType() == ProductType.ETF) {
             return product.getBaseAnnualRatePercent();
         }
-        BigDecimal additional = rates.stream()
+        int firstContractMonths = safeList(tranches).stream()
+                .filter(tranche -> tranche.getGiftDate() != null
+                        && !tranche.getGiftDate().isAfter(investmentEndDate)
+                        && value(tranche.getInvestmentAmount()) > 0)
+                .mapToInt(tranche -> calculator.remainingMonths(
+                        tranche.getGiftDate(),
+                        investmentEndDate
+                ))
+                .filter(months -> months > 0)
+                .mapToObj(months -> calculator.reinvestmentPeriods(
+                        months,
+                        product.getMinimumContractMonths(),
+                        product.getMaximumContractMonths()
+                ))
+                .filter(periods -> !periods.isEmpty())
+                .mapToInt(periods -> periods.get(0))
+                .findFirst()
+                .orElseThrow(() -> new SimulationException(
+                        SimulationError.PRODUCT_LIMIT_EXCEEDED));
+        return appliedRateForContract(product, rates, firstContractMonths);
+    }
+
+    private long calculateSelectedProductValue(
+            SimulationProductRecord product,
+            long allocatedAmount,
+            List<SimulationTrancheRecord> tranches,
+            long investmentPrincipal,
+            LocalDate investmentEndDate,
+            List<PreferentialRateRecord> preferentialRates
+    ) {
+        if (product.getProductType() == ProductType.ETF) {
+            return calculator.calculateSelectedProductValue(
+                    product,
+                    allocatedAmount,
+                    tranches,
+                    investmentPrincipal,
+                    investmentEndDate
+            );
+        }
+        hydrateBaseRateTiers(product);
+        return calculator.calculateSelectedProductValue(
+                product,
+                allocatedAmount,
+                tranches,
+                investmentPrincipal,
+                investmentEndDate,
+                contractMonths -> appliedRateForContract(
+                        product,
+                        preferentialRates,
+                        contractMonths
+                )
+        );
+    }
+
+    private BigDecimal appliedRateForContract(
+            SimulationProductRecord product,
+            List<PreferentialRateRecord> preferentialRates,
+            int contractMonths
+    ) {
+        BaseRateRecord tier = requiredRateTier(
+                product.getBaseRateTiers(),
+                contractMonths
+        );
+        BigDecimal additional = safeList(preferentialRates).stream()
                 .map(PreferentialRateRecord::getAdditionalRatePercent)
                 .filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal calculated = product.getBaseAnnualRatePercent().add(additional);
-        BigDecimal maximum = product.getMaximumAnnualRatePercent();
+        BigDecimal calculated = tier.getBaseRatePercent().add(additional);
+        BigDecimal maximum = tier.getMaximumRatePercent();
         return maximum == null || calculated.compareTo(maximum) <= 0
                 ? calculated : maximum;
+    }
+
+    private BaseRateRecord requiredRateTier(
+            List<BaseRateRecord> tiers,
+            int contractMonths
+    ) {
+        return safeList(tiers).stream()
+                .filter(tier -> tier.getMinimumMonths() != null
+                        && tier.getMinimumMonths() <= contractMonths)
+                .filter(tier -> tier.getMaximumMonths() == null
+                        || contractMonths <= tier.getMaximumMonths())
+                .sorted(Comparator
+                        .comparing(BaseRateRecord::getMinimumMonths)
+                        .reversed()
+                        .thenComparing(
+                                tier -> tier.getMaximumMonths() == null
+                                        ? Integer.MAX_VALUE : tier.getMaximumMonths()
+                        ))
+                .findFirst()
+                .orElseThrow(() -> new SimulationException(
+                        SimulationError.PRODUCT_DATA_NOT_READY));
+    }
+
+    private void hydrateBaseRateTiers(SimulationProductRecord product) {
+        if (product.getProductType() == ProductType.ETF
+                || (product.getBaseRateTiers() != null
+                && !product.getBaseRateTiers().isEmpty())) {
+            return;
+        }
+        List<BaseRateRecord> tiers = safeList(
+                simulationMapper.selectBaseRates(product.getProductVersionId()));
+        if (tiers.isEmpty()) {
+            throw new SimulationException(SimulationError.PRODUCT_DATA_NOT_READY);
+        }
+        product.setBaseRateTiers(tiers);
     }
 
     private void restoreSimulationProducts(SimulationRecord simulation) {
@@ -1302,14 +1428,21 @@ public class SimulationService {
                     safeList(simulationMapper.selectPortfolioProducts(
                             portfolio.getPortfolioId()
                     ))) {
-                BigDecimal baseRate = product.getBaseAnnualRatePercent();
+                hydrateBaseRateTiers(product);
+                BigDecimal baseRate = representativeAppliedRate(
+                        product,
+                        List.of(),
+                        tranches.getOrDefault(result.getResultId(), List.of()),
+                        simulation.getInvestmentEndDate()
+                );
                 product.setAppliedAnnualRatePercent(baseRate);
-                long value = calculator.calculateSelectedProductValue(
+                long value = calculateSelectedProductValue(
                         product,
                         product.getAllocatedAmount(),
                         tranches.getOrDefault(result.getResultId(), List.of()),
                         result.getInvestmentPrincipal(),
-                        simulation.getInvestmentEndDate()
+                        simulation.getInvestmentEndDate(),
+                        List.of()
                 );
                 int restored = simulationMapper.restoreSimulationProduct(
                         product.getSimulationProductId(),
@@ -1366,6 +1499,7 @@ public class SimulationService {
             SimulationRecord simulation,
             Map<Long, EtfVolatilityResponse> volatilityByProductId
     ) {
+        hydrateBaseRateTiers(product);
         BigDecimal ratio = investmentPrincipal <= 0
                 ? BigDecimal.ZERO
                 : BigDecimal.valueOf(product.getAllocatedAmount())
@@ -1428,6 +1562,11 @@ public class SimulationService {
                 product.isSelected(),
                 product.getMinimumContractMonths(),
                 product.getMaximumContractMonths(),
+                contractRateSchedule(
+                        product,
+                        tranches,
+                        simulation.getInvestmentEndDate()
+                ),
                 reinvestmentSchedule(
                         product,
                         tranches,
@@ -1864,19 +2003,21 @@ public class SimulationService {
             int investmentPeriodMonths
     ) {
         List<ProductCandidate> eligible = requireCandidates(candidates).stream()
-                .filter(candidate -> calculator.canCoverWithReinvestment(
-                        investmentPeriodMonths,
-                        candidate.getMinMonth(),
-                        candidate.getMaxMonth()
+                .filter(candidate -> prepareCandidateRateTiers(
+                        candidate,
+                        investmentPeriodMonths
                 ))
                 .sorted(Comparator.comparingLong((ProductCandidate candidate) ->
                         calculator.calculateReinvestedProductFutureValue(
                                 candidate.calculationType(),
                                 100_000_000L,
-                                candidate.getAppliedAnnualRatePercent(),
                                 investmentPeriodMonths,
                                 candidate.getMinMonth(),
-                                candidate.getMaxMonth()
+                                candidate.getMaxMonth(),
+                                contractMonths -> requiredRateTier(
+                                        candidate.getBaseRateTiers(),
+                                        contractMonths
+                                ).getBaseRatePercent()
                         )).reversed())
                 .toList();
         if (eligible.isEmpty()) {
@@ -1884,6 +2025,41 @@ public class SimulationService {
                     SimulationError.PRODUCT_CANDIDATE_NOT_FOUND);
         }
         return eligible;
+    }
+
+    private boolean prepareCandidateRateTiers(
+            ProductCandidate candidate,
+            int investmentPeriodMonths
+    ) {
+        List<Integer> periods = calculator.reinvestmentPeriods(
+                investmentPeriodMonths,
+                candidate.getMinMonth(),
+                candidate.getMaxMonth()
+        );
+        if (periods.isEmpty()) {
+            return false;
+        }
+        List<BaseRateRecord> tiers = safeList(
+                simulationMapper.selectBaseRates(candidate.getProductVersionId()));
+        if (tiers.isEmpty()) {
+            return false;
+        }
+        candidate.setBaseRateTiers(tiers);
+        try {
+            for (Integer period : periods) {
+                requiredRateTier(tiers, period);
+            }
+            BaseRateRecord firstTier = requiredRateTier(tiers, periods.get(0));
+            candidate.setBaseAnnualRatePercent(firstTier.getBaseRatePercent());
+            candidate.setMaximumAnnualRatePercent(firstTier.getMaximumRatePercent());
+            candidate.setAppliedAnnualRatePercent(firstTier.getBaseRatePercent());
+            return true;
+        } catch (SimulationException exception) {
+            if (exception.getError() == SimulationError.PRODUCT_DATA_NOT_READY) {
+                return false;
+            }
+            throw exception;
+        }
     }
 
     private Map<RiskProfile, List<ProductCandidate>> loadEtfCandidates(
@@ -2146,6 +2322,61 @@ public class SimulationService {
                         - request.getClientCalculation().getExpectedFutureValue(),
                 serverProfit - request.getClientCalculation().getExpectedProfit()
         );
+    }
+
+    private List<SimulationResponse.ContractRate> contractRateSchedule(
+            SimulationProductRecord product,
+            List<SimulationTrancheRecord> tranches,
+            LocalDate investmentEndDate
+    ) {
+        if (product.getProductType() == ProductType.ETF) {
+            return List.of();
+        }
+
+        List<SimulationResponse.ContractRate> schedule = new ArrayList<>();
+        List<PreferentialRateRecord> preferentialRates =
+                safeList(product.getSelectedPreferentialConditions());
+        for (SimulationTrancheRecord tranche : safeList(tranches)) {
+            if (tranche.getGiftDate() == null
+                    || tranche.getGiftDate().isAfter(investmentEndDate)
+                    || value(tranche.getInvestmentAmount()) <= 0) {
+                continue;
+            }
+            int totalMonths = calculator.remainingMonths(
+                    tranche.getGiftDate(),
+                    investmentEndDate
+            );
+            List<Integer> periods = calculator.reinvestmentPeriods(
+                    totalMonths,
+                    product.getMinimumContractMonths(),
+                    product.getMaximumContractMonths()
+            );
+            LocalDate contractStartDate = tranche.getGiftDate();
+            for (int index = 0; index < periods.size(); index++) {
+                int contractMonths = periods.get(index);
+                LocalDate contractEndDate = contractStartDate.plusMonths(contractMonths);
+                BaseRateRecord tier = requiredRateTier(
+                        product.getBaseRateTiers(),
+                        contractMonths
+                );
+                schedule.add(new SimulationResponse.ContractRate(
+                        tranche.getSequenceNo(),
+                        index + 1,
+                        contractStartDate,
+                        contractEndDate,
+                        contractMonths,
+                        tier.getBaseRatePercent(),
+                        tier.getMaximumRatePercent(),
+                        appliedRateForContract(
+                                product,
+                                preferentialRates,
+                                contractMonths
+                        )
+                ));
+                contractStartDate = contractEndDate;
+            }
+        }
+        return List.copyOf(schedule);
     }
 
     private long resolveDeductionLimit(FamilySnapshot family, LocalDate giftDate) {

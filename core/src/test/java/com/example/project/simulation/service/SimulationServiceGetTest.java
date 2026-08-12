@@ -1,6 +1,7 @@
 package com.example.project.simulation.service;
 
 import com.example.project.simulation.domain.ProductDataVersionRecord;
+import com.example.project.simulation.domain.BaseRateRecord;
 import com.example.project.simulation.domain.ProductType;
 import com.example.project.simulation.domain.PreferentialRateRecord;
 import com.example.project.simulation.domain.RiskProfile;
@@ -405,6 +406,7 @@ class SimulationServiceGetTest {
                         case "selectProductSnapshots" -> products;
                         case "selectProductDataVersion" -> productDataVersion;
                         case "selectSelectedPreferentialRates" -> selectedPreferentialRates;
+                        case "selectBaseRates" -> List.of(baseRate((Long) args[0]));
                         case "toString" -> "SimulationMapperFixture";
                         case "hashCode" -> System.identityHashCode(proxy);
                         case "equals" -> proxy == args[0];
@@ -499,6 +501,17 @@ class SimulationServiceGetTest {
         product.setAppliedAnnualRatePercent(new BigDecimal("3.00"));
         product.setExpectedFutureValue(allocatedAmount + 100L);
         return product;
+    }
+
+    private static BaseRateRecord baseRate(long productVersionId) {
+        BaseRateRecord rate = new BaseRateRecord();
+        rate.setBaseInterestRateId(productVersionId + 10_000L);
+        rate.setProductVersionId(productVersionId);
+        rate.setMinimumMonths(1);
+        rate.setMaximumMonths(240);
+        rate.setBaseRatePercent(new BigDecimal("3.00"));
+        rate.setMaximumRatePercent(new BigDecimal("3.50"));
+        return rate;
     }
 
     private static UserVO user() {

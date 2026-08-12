@@ -1,6 +1,7 @@
 package com.example.project.simulation.service;
 
 import com.example.project.simulation.domain.FamilySnapshot;
+import com.example.project.simulation.domain.BaseRateRecord;
 import com.example.project.simulation.domain.PreferentialRateRecord;
 import com.example.project.simulation.domain.ProductType;
 import com.example.project.simulation.domain.ProductVersionDetailRecord;
@@ -495,6 +496,7 @@ class SimulationServiceSaveTest {
                         case "selectProductVersionDetail" -> detail;
                         case "selectPreferentialRatesByCodes" ->
                                 List.of(preferentialRate);
+                        case "selectBaseRates" -> List.of(baseRate());
                         case "selectPortfolios" -> List.of(portfolio);
                         case "selectResults" -> List.of(result);
                         case "selectTranches" -> List.of(tranche);
@@ -659,6 +661,17 @@ class SimulationServiceSaveTest {
         rate.setProductVersionId(401L);
         rate.setConditionCode("SALARY");
         rate.setAdditionalRatePercent(new BigDecimal("1.00"));
+        return rate;
+    }
+
+    private static BaseRateRecord baseRate() {
+        BaseRateRecord rate = new BaseRateRecord();
+        rate.setBaseInterestRateId(701L);
+        rate.setProductVersionId(401L);
+        rate.setMinimumMonths(1);
+        rate.setMaximumMonths(60);
+        rate.setBaseRatePercent(new BigDecimal("3.00"));
+        rate.setMaximumRatePercent(new BigDecimal("4.00"));
         return rate;
     }
 

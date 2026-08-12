@@ -27,6 +27,7 @@ public class SimulationProductRecord {
     private Integer maximumContractMonths;
     private Long expectedFutureValue;
     private List<PreferentialRateRecord> selectedPreferentialConditions;
+    private List<BaseRateRecord> baseRateTiers;
     private LocalDateTime createdAt;
 
     public CalculationType calculationType() {

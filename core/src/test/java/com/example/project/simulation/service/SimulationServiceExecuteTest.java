@@ -1,6 +1,7 @@
 package com.example.project.simulation.service;
 
 import com.example.project.simulation.domain.DeductionRule;
+import com.example.project.simulation.domain.BaseRateRecord;
 import com.example.project.simulation.domain.FamilySnapshot;
 import com.example.project.simulation.domain.GiftHistoryRecord;
 import com.example.project.simulation.domain.ProductCandidate;
@@ -529,6 +530,14 @@ class SimulationServiceExecuteTest {
                                 : List.of();
                         case "selectSavingsCandidates" -> List.of(candidate(
                                 ProductType.SAVINGS, 201L, new BigDecimal("3.10")));
+                        case "selectBaseRates" -> List.of(baseRate(
+                                (Long) args[0],
+                                (Long) args[0] == 1_101L
+                                        ? new BigDecimal("3.40")
+                                        : new BigDecimal("3.10"),
+                                1,
+                                240
+                        ));
                         case "selectEtfCandidates" -> List.of(etfCandidate(
                                 (RiskProfile) args[1]));
                         case "insertSimulation" -> insertSimulation((SimulationRecord) args[0]);
@@ -679,6 +688,22 @@ class SimulationServiceExecuteTest {
         candidate.setMaxMonth(240);
         candidate.setMonthlyMaxAmount(null);
         return candidate;
+    }
+
+    private static BaseRateRecord baseRate(
+            long productVersionId,
+            BigDecimal rate,
+            int minimumMonths,
+            int maximumMonths
+    ) {
+        BaseRateRecord tier = new BaseRateRecord();
+        tier.setBaseInterestRateId(productVersionId + 10_000L);
+        tier.setProductVersionId(productVersionId);
+        tier.setMinimumMonths(minimumMonths);
+        tier.setMaximumMonths(maximumMonths);
+        tier.setBaseRatePercent(rate);
+        tier.setMaximumRatePercent(rate);
+        return tier;
     }
 
     private static ProductCandidate etfCandidate(RiskProfile profile) {
