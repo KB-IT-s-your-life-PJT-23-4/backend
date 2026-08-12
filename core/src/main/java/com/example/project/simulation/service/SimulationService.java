@@ -58,7 +58,7 @@ import java.util.stream.Collectors;
 public class SimulationService {
 
     public static final String FORMULA_VERSION = "INVESTMENT_V2";
-    public static final String CALCULATION_VERSION = "GIFT_SIM_V5";
+    public static final String CALCULATION_VERSION = "GIFT_SIM_V6";
 
     private static final int DEDUCTION_WINDOW_YEARS = 10;
     private static final int MAX_PRODUCT_CANDIDATES = 3;
@@ -159,7 +159,6 @@ public class SimulationService {
                     deductionLimit,
                     taxBrackets,
                     giftDate,
-                    renewalDate,
                     completedGifts,
                     investmentEndDate
             );
@@ -910,8 +909,7 @@ public class SimulationService {
             long remainingDeduction,
             long fullDeductionLimit,
             List<TaxBracket> brackets,
-            LocalDate asOfDate,
-            LocalDate renewalDate,
+            LocalDate giftDate,
             List<GiftHistoryRecord> completedGifts,
             LocalDate investmentEndDate
     ) {
@@ -928,44 +926,36 @@ public class SimulationService {
         long totalInvestment = 0;
         int sequence = 1;
 
-        long currentAmount = Math.min(amountLeft, remainingDeduction);
-        if (currentAmount > 0) {
-            long previousAmount = history.stream()
-                    .mapToLong(GiftPoint::amount)
-                    .sum();
-            SimulationCalculator.TaxOutcome tax = calculator.calculateTax(
-                    currentAmount,
-                    previousAmount,
-                    fullDeductionLimit,
-                    request.getTaxPaymentMethod(),
-                    brackets
-            );
-            tranches.add(tranche(sequence++, asOfDate, currentAmount, tax, true));
-            history.add(new GiftPoint(asOfDate, currentAmount));
-            amountLeft -= currentAmount;
-            totalDeduction += tax.deductionAmount();
-            totalTaxable += tax.taxableAmount();
-            totalTax += tax.giftTax();
-            totalDonorRequired += tax.donorRequiredAmount();
-            totalPostTaxAmount += tax.investmentAmount();
-            totalInvestment += tax.investmentAmount();
-        }
-
-        LocalDate nextDate = renewalDate;
+        LocalDate trancheDate = giftDate;
         int guard = 0;
         while (amountLeft > 0 && guard++ < 100) {
-            LocalDate calculationDate = nextDate;
+            LocalDate calculationDate = trancheDate;
             long used = history.stream()
                     .filter(point -> isWithinDeductionWindow(
                             point.date(), calculationDate))
                     .mapToLong(GiftPoint::amount)
                     .sum();
-            long available = Math.max(0, fullDeductionLimit - used);
-            if (available == 0) {
-                nextDate = nextReleaseDate(history, nextDate);
+            long available = sequence == 1
+                    ? remainingDeduction
+                    : Math.max(0, fullDeductionLimit - used);
+
+            List<GiftPoint> nextDateBasis = new ArrayList<>(history);
+            if (available > 0) {
+                nextDateBasis.add(new GiftPoint(trancheDate, available));
+            }
+            LocalDate nextDate = nextDateBasis.isEmpty()
+                    ? null
+                    : nextReleaseDate(nextDateBasis, trancheDate);
+            boolean hasNextDeductionDate = nextDate != null
+                    && !nextDate.isAfter(investmentEndDate);
+            long giftAmount = hasNextDeductionDate
+                    ? Math.min(amountLeft, available)
+                    : amountLeft;
+
+            if (giftAmount == 0) {
+                trancheDate = nextDate;
                 continue;
             }
-            long giftAmount = Math.min(amountLeft, available);
             SimulationCalculator.TaxOutcome tax = calculator.calculateTax(
                     giftAmount,
                     used,
@@ -973,20 +963,18 @@ public class SimulationService {
                     request.getTaxPaymentMethod(),
                     brackets
             );
-            boolean included = !nextDate.isAfter(investmentEndDate);
-            tranches.add(tranche(sequence++, nextDate, giftAmount, tax, included));
-            history.add(new GiftPoint(nextDate, giftAmount));
+            tranches.add(tranche(sequence++, trancheDate, giftAmount, tax, true));
+            history.add(new GiftPoint(trancheDate, giftAmount));
             amountLeft -= giftAmount;
             totalDeduction += tax.deductionAmount();
             totalTaxable += tax.taxableAmount();
             totalTax += tax.giftTax();
             totalDonorRequired += tax.donorRequiredAmount();
             totalPostTaxAmount += tax.investmentAmount();
-            if (included) {
-                totalInvestment += tax.investmentAmount();
-            }
+            totalInvestment += tax.investmentAmount();
+
             if (amountLeft > 0) {
-                nextDate = nextReleaseDate(history, nextDate);
+                trancheDate = nextReleaseDate(history, trancheDate);
             }
         }
         if (amountLeft > 0) {
