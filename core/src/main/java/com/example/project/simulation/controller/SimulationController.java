@@ -1,6 +1,7 @@
 package com.example.project.simulation.controller;
 
 import com.example.project.common.api.ApiResponse;
+import com.example.project.common.logging.ApiLog;
 import com.example.project.security.JwtProvider;
 import com.example.project.security.JwtUtil;
 import com.example.project.simulation.dto.request.SimulationExecuteRequest;
@@ -39,6 +40,7 @@ import javax.validation.Valid;
 import java.net.URI;
 import java.util.concurrent.TimeUnit;
 
+@ApiLog
 @RestController
 @RequestMapping("/api/gs")
 @RequiredArgsConstructor

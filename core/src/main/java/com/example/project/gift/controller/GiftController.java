@@ -2,6 +2,7 @@ package com.example.project.gift.controller;
 
 import com.example.project.common.api.ApiResponse;
 import com.example.project.common.api.ResponseCode;
+import com.example.project.common.logging.ApiLog;
 import com.example.project.common.web.CurrentUser;
 import com.example.project.gift.domain.Status;
 import com.example.project.gift.dto.request.GiftRequest;
@@ -19,6 +20,7 @@ import org.springframework.web.bind.annotation.*;
 import javax.servlet.http.HttpServletRequest;
 import java.util.List;
 
+@ApiLog
 @Log4j2
 @RestController
 @RequestMapping("/api/gm")
