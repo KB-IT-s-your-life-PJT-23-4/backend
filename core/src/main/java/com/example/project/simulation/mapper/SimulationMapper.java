@@ -53,14 +53,12 @@ public interface SimulationMapper {
 
     List<ProductCandidate> selectDepositCandidates(
             @Param("productDataVersionId") Long productDataVersionId,
-            @Param("investmentPeriodMonths") Integer investmentPeriodMonths,
-            @Param("limit") Integer limit
+            @Param("investmentPeriodMonths") Integer investmentPeriodMonths
     );
 
     List<ProductCandidate> selectSavingsCandidates(
             @Param("productDataVersionId") Long productDataVersionId,
-            @Param("investmentPeriodMonths") Integer investmentPeriodMonths,
-            @Param("limit") Integer limit
+            @Param("investmentPeriodMonths") Integer investmentPeriodMonths
     );
 
     List<ProductCandidate> selectEtfCandidates(

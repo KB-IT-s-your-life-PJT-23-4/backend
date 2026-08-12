@@ -104,12 +104,12 @@ class SimulationDatabaseIntegrationTest {
                 // 재가입 회차마다 해당 가입기간의 금리 구간이 존재하는지 검증한다.
                 assertCandidateRateTiersCoverContractTerms(
                         mapper,
-                        mapper.selectDepositCandidates(980001L, 36, 9),
+                        mapper.selectDepositCandidates(980001L, 36),
                         36
                 );
                 assertCandidateRateTiersCoverContractTerms(
                         mapper,
-                        mapper.selectSavingsCandidates(980001L, 36, 9),
+                        mapper.selectSavingsCandidates(980001L, 36),
                         36
                 );
             }

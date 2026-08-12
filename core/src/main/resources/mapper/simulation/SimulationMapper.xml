@@ -100,12 +100,15 @@
         WHERE pv.kb_product_data_version_id = #{productDataVersionId}
           AND pv.sales_status = 'ON_SALE'
           AND p.product_type = 'DEPOSIT'
+          AND d.min_month &gt; 0
+          AND d.max_month &gt;= d.min_month
+          AND CEIL(#{investmentPeriodMonths} / d.max_month)
+              &lt;= FLOOR(#{investmentPeriodMonths} / d.min_month)
         GROUP BY pv.kb_product_version_id, pv.kb_product_data_version_id,
                  p.product_id, p.product_code, pv.product_name, p.product_type,
                  pv.description, pv.product_url, pv.sales_status, dv.data_date,
                  d.min_month, d.max_month, d.min_amount, d.max_amount
         ORDER BY applied_annual_rate_percent DESC, pv.kb_product_version_id
-        LIMIT #{limit}
     </select>
 
     <select id="selectSavingsCandidates"
@@ -130,13 +133,16 @@
         WHERE pv.kb_product_data_version_id = #{productDataVersionId}
           AND pv.sales_status = 'ON_SALE'
           AND p.product_type = 'SAVINGS'
+          AND s.min_month &gt; 0
+          AND s.max_month &gt;= s.min_month
+          AND CEIL(#{investmentPeriodMonths} / s.max_month)
+              &lt;= FLOOR(#{investmentPeriodMonths} / s.min_month)
         GROUP BY pv.kb_product_version_id, pv.kb_product_data_version_id,
                  p.product_id, p.product_code, pv.product_name, p.product_type,
                  pv.description, pv.product_url, pv.sales_status, dv.data_date,
                  s.savings_category, s.min_month, s.max_month,
                  s.monthly_min_amount, s.monthly_max_amount
         ORDER BY applied_annual_rate_percent DESC, pv.kb_product_version_id
-        LIMIT #{limit}
     </select>
 
     <select id="selectEtfCandidates"

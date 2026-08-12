@@ -34,6 +34,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -357,6 +358,28 @@ class SimulationServiceExecuteTest {
     }
 
     @Test
+    @DisplayName("상위 상품이 부적합해도 뒤 순위의 적합한 예금 상품을 추천한다")
+    void recommendEligibleDepositAfterHigherRankedCandidatesAreFilteredOut() {
+        LocalDate giftDate = futureDate();
+        Fixture fixture = adultFixture(giftDate);
+        fixture.depositCandidates = List.of(
+                candidate(ProductType.DEPOSIT, 101L, new BigDecimal("4.00")),
+                candidate(ProductType.DEPOSIT, 102L, new BigDecimal("3.90")),
+                candidate(ProductType.DEPOSIT, 103L, new BigDecimal("3.80")),
+                candidate(ProductType.DEPOSIT, 104L, new BigDecimal("3.70"))
+        );
+        fixture.missingBaseRateProductVersionIds = Set.of(1_101L, 1_102L, 1_103L);
+
+        SimulationResponse response = fixture.execute(80_000_000L, 36, giftDate);
+
+        // 회귀 방지: 수익률 상위 3개가 금리 구간 미비로 제외돼도 4위 적합 상품을 누락하지 않는다.
+        assertTrue(response.results().stream()
+                .flatMap(result -> result.portfolios().stream())
+                .flatMap(portfolio -> portfolio.productCandidates().stream())
+                .anyMatch(product -> Objects.equals(product.productId(), 104L)));
+    }
+
+    @Test
     @DisplayName("DRAFT 재조회는 현재 기준으로 재계산하지 않고 실행 당시 스냅샷을 반환한다")
     void retrieveDraftWithoutRecalculation() {
         LocalDate giftDate = futureDate();
@@ -494,6 +517,9 @@ class SimulationServiceExecuteTest {
         private boolean deductionRuleAvailable = true;
         private boolean productVersionAvailable = true;
         private boolean depositCandidatesAvailable = true;
+        private List<ProductCandidate> depositCandidates = List.of(candidate(
+                ProductType.DEPOSIT, 101L, new BigDecimal("3.40")));
+        private Set<Long> missingBaseRateProductVersionIds = Set.of();
         private int insertSimulationCount;
         private long resultSequence = 9_100L;
         private long trancheSequence = 9_200L;
@@ -545,19 +571,21 @@ class SimulationServiceExecuteTest {
                                 "selectProductDataVersion" -> productVersionAvailable
                                 ? productDataVersion : null;
                         case "selectDepositCandidates" -> depositCandidatesAvailable
-                                ? List.of(candidate(
-                                ProductType.DEPOSIT, 101L, new BigDecimal("3.40")))
+                                ? depositCandidates
                                 : List.of();
                         case "selectSavingsCandidates" -> List.of(candidate(
                                 ProductType.SAVINGS, 201L, new BigDecimal("3.10")));
-                        case "selectBaseRates" -> List.of(baseRate(
-                                (Long) args[0],
-                                (Long) args[0] == 1_101L
-                                        ? new BigDecimal("3.40")
-                                        : new BigDecimal("3.10"),
-                                1,
-                                240
-                        ));
+                        case "selectBaseRates" ->
+                                missingBaseRateProductVersionIds.contains((Long) args[0])
+                                        ? List.of()
+                                        : List.of(baseRate(
+                                        (Long) args[0],
+                                        (Long) args[0] == 1_101L
+                                                ? new BigDecimal("3.40")
+                                                : new BigDecimal("3.10"),
+                                        1,
+                                        240
+                                ));
                         case "selectEtfCandidates" -> List.of(etfCandidate(
                                 (RiskProfile) args[1]));
                         case "insertSimulation" -> insertSimulation((SimulationRecord) args[0]);

@@ -63,7 +63,6 @@ public class SimulationService {
 
     private static final int DEDUCTION_WINDOW_YEARS = 10;
     private static final int MAX_PRODUCT_CANDIDATES = 3;
-    private static final int PRODUCT_CANDIDATE_QUERY_LIMIT = 100;
     private static final int MAX_INVESTMENT_MONTHS = 240;
     static final Period DRAFT_RETENTION = Period.ofMonths(1);
     private static final long CALCULATION_TOLERANCE_WON = 1L;
@@ -1985,8 +1984,7 @@ public class SimulationService {
                 prepareReinvestableCandidates(
                         simulationMapper.selectDepositCandidates(
                                 dataVersionId,
-                                months,
-                                PRODUCT_CANDIDATE_QUERY_LIMIT
+                                months
                         ),
                         months
                 )
@@ -1996,8 +1994,7 @@ public class SimulationService {
                 prepareReinvestableCandidates(
                         simulationMapper.selectSavingsCandidates(
                                 dataVersionId,
-                                months,
-                                PRODUCT_CANDIDATE_QUERY_LIMIT
+                                months
                         ),
                         months
                 )
