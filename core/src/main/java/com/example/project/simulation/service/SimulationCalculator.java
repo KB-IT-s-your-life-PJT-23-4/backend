@@ -26,6 +26,7 @@ public class SimulationCalculator {
     private static final MathContext MC = new MathContext(18, RoundingMode.HALF_UP);
     private static final BigDecimal ONE_HUNDRED = BigDecimal.valueOf(100);
     private static final BigDecimal TWELVE = BigDecimal.valueOf(12);
+    private static final long MINIMUM_TAXABLE_BASE = 500_000L;
     private static final int MAX_GROSS_UP_ITERATIONS = 50;
 
     public TaxOutcome calculateTax(
@@ -125,7 +126,8 @@ public class SimulationCalculator {
     }
 
     public long calculateProgressiveTax(long taxableAmount, List<TaxBracket> brackets) {
-        if (taxableAmount <= 0) {
+        // 상속세 및 증여세법 제55조 제2항: 과세표준이 50만 원 미만이면 증여세를 부과하지 않는다.
+        if (taxableAmount < MINIMUM_TAXABLE_BASE) {
             return 0;
         }
 

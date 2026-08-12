@@ -126,6 +126,36 @@ class SimulationCalculatorTest {
     }
 
     @Test
+    @DisplayName("과세표준이 50만 원 미만이면 증여세를 부과하지 않는다")
+    void exemptTaxableBaseBelowFiveHundredThousandWon() {
+        SimulationCalculator.TaxOutcome result = calculator.calculateTax(
+                50_499_999L,
+                50_000_000L,
+                TaxPaymentMethod.RECIPIENT_PAYS,
+                brackets()
+        );
+
+        assertEquals(499_999L, result.taxableAmount());
+        assertEquals(0L, result.giftTax());
+        assertEquals(50_499_999L, result.investmentAmount());
+    }
+
+    @Test
+    @DisplayName("과세표준이 정확히 50만 원이면 누진세율을 적용한다")
+    void taxTaxableBaseAtFiveHundredThousandWon() {
+        SimulationCalculator.TaxOutcome result = calculator.calculateTax(
+                50_500_000L,
+                50_000_000L,
+                TaxPaymentMethod.RECIPIENT_PAYS,
+                brackets()
+        );
+
+        assertEquals(500_000L, result.taxableAmount());
+        assertEquals(50_000L, result.giftTax());
+        assertEquals(50_450_000L, result.investmentAmount());
+    }
+
+    @Test
     @DisplayName("증여자가 세금을 대납하면 수증자의 투자 원금은 증여액 전액이다")
     void donorPaysGiftTaxWithoutReducingRecipientPrincipal() {
         SimulationCalculator.TaxOutcome result = calculator.calculateTax(
