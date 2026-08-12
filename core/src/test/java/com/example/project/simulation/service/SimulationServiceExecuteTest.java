@@ -17,6 +17,8 @@ import com.example.project.simulation.domain.TaxBracket;
 import com.example.project.simulation.domain.TaxPaymentMethod;
 import com.example.project.simulation.dto.request.SimulationExecuteRequest;
 import com.example.project.simulation.dto.response.SimulationResponse;
+import com.example.project.simulation.exception.SimulationError;
+import com.example.project.simulation.exception.SimulationException;
 import com.example.project.simulation.mapper.SimulationMapper;
 import com.example.project.user.domain.UserVO;
 import com.example.project.user.mapper.UserMapper;
@@ -37,6 +39,8 @@ import java.util.Objects;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class SimulationServiceExecuteTest {
@@ -230,12 +234,162 @@ class SimulationServiceExecuteTest {
         assertEquals(0L, optimized.giftTax());
     }
 
+    @Test
+    @DisplayName("동일 멱등성 키와 동일 실행 요청은 최초 응답을 재사용한다")
+    void reuseIdempotentExecuteResponse() {
+        LocalDate giftDate = futureDate();
+        Fixture fixture = adultFixture(giftDate);
+        SimulationService service = fixture.service();
+        SimulationExecuteRequest request = request(80_000_000L, 240, giftDate);
+
+        SimulationResponse first = service.execute(request, USER_ID, "execute-key");
+        SimulationResponse second = service.execute(request, USER_ID, "execute-key");
+
+        // 회귀 방지: 네트워크 재시도가 동일 시뮬레이션을 두 번 생성하지 않도록 한다.
+        assertSame(first, second);
+        assertEquals(1, fixture.insertSimulationCount);
+        assertEquals(2, fixture.results.size());
+    }
+
+    @Test
+    @DisplayName("같은 멱등성 키에 다른 실행 요청이 오면 충돌로 처리한다")
+    void rejectDifferentExecuteRequestWithSameIdempotencyKey() {
+        LocalDate giftDate = futureDate();
+        Fixture fixture = adultFixture(giftDate);
+        SimulationService service = fixture.service();
+        service.execute(request(80_000_000L, 240, giftDate), USER_ID, "execute-key");
+
+        SimulationException exception = assertThrows(
+                SimulationException.class,
+                () -> service.execute(
+                        request(90_000_000L, 240, giftDate),
+                        USER_ID,
+                        "execute-key"
+                )
+        );
+
+        // 회귀 방지: 같은 키를 다른 금액에 재사용해 최초 요청 의미가 변조되는 것을 막는다.
+        assertEquals(SimulationError.IDEMPOTENCY_KEY_CONFLICT, exception.getError());
+        assertEquals(1, fixture.insertSimulationCount);
+    }
+
+    @Test
+    @DisplayName("주는 분이 세금을 준비하면 운용 원금은 유지되고 총 준비 금액이 증가한다")
+    void calculateDonorPaysScenario() {
+        LocalDate giftDate = futureDate();
+        Fixture fixture = adultFixture(giftDate);
+        SimulationExecuteRequest request = request(80_000_000L, 36, giftDate);
+        request.setTaxPaymentMethod(TaxPaymentMethod.DONOR_PAYS);
+
+        SimulationResponse response = fixture.service().execute(request, USER_ID, null);
+        SimulationResponse.Result immediate = result(response, ScenarioType.IMMEDIATE);
+
+        // 회귀 방지: 세금 대납 시 세금을 증여액에서 차감하는 수증자 납부 계산을 적용하지 않는다.
+        assertEquals(80_000_000L, immediate.investmentPrincipal());
+        assertEquals(80_000_000L, immediate.postTaxAmount());
+        assertTrue(immediate.giftTax() > 0);
+        assertEquals(80_000_000L + immediate.giftTax(), immediate.donorRequiredAmount());
+    }
+
+    @Test
+    @DisplayName("필수 기준 데이터가 없으면 불완전한 결과를 저장하지 않고 명시적으로 실패한다")
+    void rejectExecutionWhenReferenceDataIsMissing() {
+        LocalDate giftDate = futureDate();
+
+        Fixture missingDeduction = adultFixture(giftDate);
+        missingDeduction.deductionRuleAvailable = false;
+        assertExecutionError(
+                missingDeduction,
+                giftDate,
+                SimulationError.DEDUCTION_RULE_NOT_FOUND
+        );
+
+        Fixture missingTaxBrackets = adultFixture(giftDate);
+        missingTaxBrackets.taxBrackets = List.of();
+        assertExecutionError(
+                missingTaxBrackets,
+                giftDate,
+                SimulationError.TAX_BRACKET_NOT_FOUND
+        );
+
+        Fixture missingProductVersion = adultFixture(giftDate);
+        missingProductVersion.productVersionAvailable = false;
+        assertExecutionError(
+                missingProductVersion,
+                giftDate,
+                SimulationError.PRODUCT_DATA_NOT_READY
+        );
+
+        Fixture missingCandidates = adultFixture(giftDate);
+        missingCandidates.depositCandidatesAvailable = false;
+        assertExecutionError(
+                missingCandidates,
+                giftDate,
+                SimulationError.PRODUCT_CANDIDATE_NOT_FOUND
+        );
+
+        // 회귀 방지: 기준 데이터가 일부 누락된 상태로 DRAFT 스냅샷이 생성되지 않아야 한다.
+        assertEquals(0, missingDeduction.insertSimulationCount);
+        assertEquals(0, missingTaxBrackets.insertSimulationCount);
+        assertEquals(0, missingProductVersion.insertSimulationCount);
+        assertEquals(0, missingCandidates.insertSimulationCount);
+    }
+
+    @Test
+    @DisplayName("DRAFT 재조회는 현재 기준으로 재계산하지 않고 실행 당시 스냅샷을 반환한다")
+    void retrieveDraftWithoutRecalculation() {
+        LocalDate giftDate = futureDate();
+        Fixture fixture = adultFixture(giftDate);
+        SimulationService service = fixture.service();
+        SimulationResponse executed = service.execute(
+                request(80_000_000L, 240, giftDate),
+                USER_ID,
+                null
+        );
+
+        fixture.deductionRuleAvailable = false;
+        fixture.taxBrackets = List.of();
+        fixture.depositCandidatesAvailable = false;
+        SimulationResponse retrieved = service.get(executed.simulationId(), USER_ID);
+
+        // 회귀 방지: 재조회 시 변경된 공제·세율·상품 후보로 과거 결과를 임의 재계산하지 않는다.
+        assertEquals(resultSnapshotSignatures(executed), resultSnapshotSignatures(retrieved));
+        assertEquals(executed.recommendations(), retrieved.recommendations());
+        assertEquals(executed.giftHistorySummary(), retrieved.giftHistorySummary());
+    }
+
     private static Fixture adultFixture(LocalDate giftDate) {
         return new Fixture(giftDate.minusYears(30));
     }
 
     private static LocalDate futureDate() {
         return LocalDate.now().plusDays(1);
+    }
+
+    private static SimulationExecuteRequest request(
+            long amount,
+            int months,
+            LocalDate giftDate
+    ) {
+        SimulationExecuteRequest request = new SimulationExecuteRequest();
+        request.setFamilyId(FAMILY_ID);
+        request.setRequestedAmount(amount);
+        request.setTaxPaymentMethod(TaxPaymentMethod.RECIPIENT_PAYS);
+        request.setInvestmentPeriodMonths(months);
+        request.setGiftDate(giftDate);
+        return request;
+    }
+
+    private static void assertExecutionError(
+            Fixture fixture,
+            LocalDate giftDate,
+            SimulationError expected
+    ) {
+        SimulationException exception = assertThrows(
+                SimulationException.class,
+                () -> fixture.execute(80_000_000L, 36, giftDate)
+        );
+        assertEquals(expected, exception.getError());
     }
 
     private static SimulationResponse.Result result(
@@ -274,6 +428,33 @@ class SimulationServiceExecuteTest {
         return portfolioValue + uninvested;
     }
 
+    private static List<String> resultSnapshotSignatures(SimulationResponse response) {
+        return response.results().stream()
+                .map(result -> result.scenarioType() + "|"
+                        + result.deductionAmount() + "|"
+                        + result.taxableAmount() + "|"
+                        + result.giftTax() + "|"
+                        + result.donorRequiredAmount() + "|"
+                        + result.postTaxAmount() + "|"
+                        + result.investmentPrincipal() + "|"
+                        + result.tranches() + "|"
+                        + result.portfolios().stream()
+                        .map(portfolio -> portfolio.portfolioId() + ":"
+                                + portfolio.portfolioType() + ":"
+                                + portfolio.allocation() + ":"
+                                + portfolio.expectedFutureValue() + ":"
+                                + portfolio.recommended() + ":"
+                                + portfolio.productCandidates().stream()
+                                .map(product -> product.simulationProductId() + ":"
+                                        + product.kbProductVersionId() + ":"
+                                        + product.allocatedAmount() + ":"
+                                        + product.appliedAnnualRatePercent() + ":"
+                                        + product.expectedFutureValue())
+                                .toList())
+                        .toList())
+                .toList();
+    }
+
     private static final class Fixture {
         private static final long SIMULATION_ID = 9_001L;
         private static final long PRODUCT_DATA_VERSION_ID = 51L;
@@ -288,6 +469,11 @@ class SimulationServiceExecuteTest {
         private final ProductDataVersionRecord productDataVersion = productDataVersion();
         private SimulationRecord simulation;
         private LocalDate lastCompletedGiftQueryEnd;
+        private List<TaxBracket> taxBrackets = taxBrackets();
+        private boolean deductionRuleAvailable = true;
+        private boolean productVersionAvailable = true;
+        private boolean depositCandidatesAvailable = true;
+        private int insertSimulationCount;
         private long resultSequence = 9_100L;
         private long trancheSequence = 9_200L;
         private long portfolioSequence = 9_300L;
@@ -310,13 +496,7 @@ class SimulationServiceExecuteTest {
         }
 
         private SimulationResponse execute(long amount, int months, LocalDate giftDate) {
-            SimulationExecuteRequest request = new SimulationExecuteRequest();
-            request.setFamilyId(FAMILY_ID);
-            request.setRequestedAmount(amount);
-            request.setTaxPaymentMethod(TaxPaymentMethod.RECIPIENT_PAYS);
-            request.setInvestmentPeriodMonths(months);
-            request.setGiftDate(giftDate);
-            return service().execute(request, USER_ID, null);
+            return service().execute(request(amount, months, giftDate), USER_ID, null);
         }
 
         private SimulationService service() {
@@ -339,11 +519,14 @@ class SimulationServiceExecuteTest {
                                 (Boolean) args[1], (LocalDate) args[2]);
                         case "selectCompletedGifts" -> completedGifts(
                                 (LocalDate) args[1], (LocalDate) args[2]);
-                        case "selectTaxBrackets" -> taxBrackets();
+                        case "selectTaxBrackets" -> taxBrackets;
                         case "selectLatestCompletedProductDataVersion",
-                                "selectProductDataVersion" -> productDataVersion;
-                        case "selectDepositCandidates" -> List.of(candidate(
-                                ProductType.DEPOSIT, 101L, new BigDecimal("3.40")));
+                                "selectProductDataVersion" -> productVersionAvailable
+                                ? productDataVersion : null;
+                        case "selectDepositCandidates" -> depositCandidatesAvailable
+                                ? List.of(candidate(
+                                ProductType.DEPOSIT, 101L, new BigDecimal("3.40")))
+                                : List.of();
                         case "selectSavingsCandidates" -> List.of(candidate(
                                 ProductType.SAVINGS, 201L, new BigDecimal("3.10")));
                         case "selectEtfCandidates" -> List.of(etfCandidate(
@@ -388,6 +571,9 @@ class SimulationServiceExecuteTest {
 
         private DeductionRule deductionRule(boolean minor, LocalDate date) {
             deductionQueries.add(new Query(date, minor));
+            if (!deductionRuleAvailable) {
+                return null;
+            }
             DeductionRule rule = new DeductionRule();
             rule.setDeductionLimitId(minor ? 1L : 2L);
             rule.setRelation("LINEAL_DESCENDANT");
@@ -410,6 +596,7 @@ class SimulationServiceExecuteTest {
         }
 
         private int insertSimulation(SimulationRecord record) {
+            insertSimulationCount++;
             record.setSimulationId(SIMULATION_ID);
             record.setUserId(USER_ID);
             record.setFamilyName(family.getFamilyName());

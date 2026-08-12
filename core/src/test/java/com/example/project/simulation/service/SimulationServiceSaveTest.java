@@ -29,6 +29,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -152,6 +153,204 @@ class SimulationServiceSaveTest {
         assertEquals(List.of(PRODUCT_ID), fixture.restoredProductIds);
     }
 
+    @Test
+    @DisplayName("만료된 DRAFT는 최종 저장할 수 없다")
+    void rejectExpiredDraftOnSave() {
+        Fixture fixture = new Fixture();
+        fixture.simulation.setExpiredAt(LocalDateTime.now().minusSeconds(1));
+
+        SimulationException exception = assertThrows(
+                SimulationException.class,
+                () -> fixture.service().save(
+                        SIMULATION_ID, fixture.request(), USER_ID, null)
+        );
+
+        // 회귀 방지: 보존 기간이 끝난 계산 결과가 뒤늦게 확정되는 것을 막는다.
+        assertEquals(SimulationError.SIMULATION_EXPIRED, exception.getError());
+        assertEquals(0, fixture.saveCount.get());
+    }
+
+    @Test
+    @DisplayName("조회한 버전보다 시뮬레이션 버전이 높으면 저장을 거부한다")
+    void rejectStaleSimulationVersion() {
+        Fixture fixture = new Fixture();
+        fixture.simulation.setVersion(3L);
+        SimulationSaveRequest request = fixture.request();
+        request.setVersion(2L);
+
+        SimulationException exception = assertThrows(
+                SimulationException.class,
+                () -> fixture.service().save(SIMULATION_ID, request, USER_ID, null)
+        );
+
+        // 회귀 방지: 오래 열린 화면이 더 최신의 상품 선택 결과를 덮어쓰지 못하게 한다.
+        assertEquals(SimulationError.SIMULATION_VERSION_CONFLICT, exception.getError());
+        Map<?, ?> data = (Map<?, ?>) exception.getData();
+        assertEquals(2L, data.get("requestedVersion"));
+        assertEquals(3L, data.get("currentVersion"));
+    }
+
+    @Test
+    @DisplayName("기존 SAVED가 있으면 사용자의 대체 확인 없이 새 결과를 저장하지 않는다")
+    void requireConfirmationBeforeReplacingSavedSimulation() {
+        Fixture fixture = new Fixture();
+        fixture.activeSaved = previousSavedSimulation();
+
+        SimulationException exception = assertThrows(
+                SimulationException.class,
+                () -> fixture.service().save(
+                        SIMULATION_ID, fixture.request(), USER_ID, null)
+        );
+
+        // 회귀 방지: 단순 저장 클릭으로 기존 확정 결과가 자동 DRAFT 전환되지 않도록 한다.
+        assertEquals(SimulationError.ACTIVE_SAVED_SIMULATION_EXISTS,
+                exception.getError());
+        assertTrue(fixture.resetSimulationIds.isEmpty());
+    }
+
+    @Test
+    @DisplayName("사용자가 확인한 기존 SAVED ID가 현재 값과 다르면 대체를 중단한다")
+    void rejectReplacementWhenExistingSavedChanged() {
+        Fixture fixture = new Fixture();
+        fixture.activeSaved = previousSavedSimulation();
+        SimulationSaveRequest request = fixture.request();
+        request.setReplaceExistingSaved(true);
+        request.setExpectedExistingSavedSimulationId(8_999L);
+
+        SimulationException exception = assertThrows(
+                SimulationException.class,
+                () -> fixture.service().save(SIMULATION_ID, request, USER_ID, null)
+        );
+
+        // 회귀 방지: 확인창을 띄운 뒤 다른 요청이 SAVED를 바꾼 경우 엉뚱한 이력을 대체하지 않는다.
+        assertEquals(SimulationError.EXISTING_SAVED_SIMULATION_CHANGED,
+                exception.getError());
+        assertTrue(fixture.resetSimulationIds.isEmpty());
+    }
+
+    @Test
+    @DisplayName("다른 시뮬레이션의 포트폴리오는 저장할 수 없다")
+    void rejectPortfolioFromAnotherSimulation() {
+        Fixture fixture = new Fixture();
+        fixture.portfolio.setSimulationId(99_999L);
+
+        SimulationException exception = assertThrows(
+                SimulationException.class,
+                () -> fixture.service().save(
+                        SIMULATION_ID, fixture.request(), USER_ID, null)
+        );
+
+        // 회귀 방지: Path의 simulationId와 무관한 포트폴리오를 주입하지 못하게 한다.
+        assertEquals(SimulationError.PORTFOLIO_NOT_IN_SIMULATION,
+                exception.getError());
+    }
+
+    @Test
+    @DisplayName("자동 추천되지 않은 포트폴리오는 최종 저장할 수 없다")
+    void rejectNonRecommendedPortfolio() {
+        Fixture fixture = new Fixture();
+        fixture.portfolio.setRecommended(false);
+
+        SimulationException exception = assertThrows(
+                SimulationException.class,
+                () -> fixture.service().save(
+                        SIMULATION_ID, fixture.request(), USER_ID, null)
+        );
+
+        // 회귀 방지: 프론트 요청 변조로 비추천 시나리오가 확정되는 것을 막는다.
+        assertEquals(SimulationError.PORTFOLIO_NOT_RECOMMENDED,
+                exception.getError());
+    }
+
+    @Test
+    @DisplayName("동일 상품 후보를 중복 선택하면 저장을 거부한다")
+    void rejectDuplicateProductSelection() {
+        Fixture fixture = new Fixture();
+        SimulationSaveRequest request = fixture.request();
+        request.setProductSelections(List.of(
+                request.getProductSelections().get(0),
+                request.getProductSelections().get(0)
+        ));
+
+        SimulationException exception = assertThrows(
+                SimulationException.class,
+                () -> fixture.service().save(SIMULATION_ID, request, USER_ID, null)
+        );
+
+        // 회귀 방지: 같은 상품을 두 번 합산해 포트폴리오 금액과 수익이 부풀려지지 않게 한다.
+        assertEquals(SimulationError.DUPLICATE_PRODUCT_SELECTION,
+                exception.getError());
+    }
+
+    @Test
+    @DisplayName("프론트 계산식 버전이 서버와 다르면 재조회를 요구한다")
+    void rejectDifferentClientFormulaVersion() {
+        Fixture fixture = new Fixture();
+        SimulationSaveRequest request = fixture.request();
+        request.setClientCalculation(clientCalculation("INVESTMENT_V1", 1_030L, 30L));
+
+        SimulationException exception = assertThrows(
+                SimulationException.class,
+                () -> fixture.service().save(SIMULATION_ID, request, USER_ID, null)
+        );
+
+        // 회귀 방지: 서로 다른 계산 공식을 사용한 미리보기와 서버 확정값을 혼용하지 않는다.
+        assertEquals(SimulationError.CALCULATION_VERSION_CONFLICT,
+                exception.getError());
+    }
+
+    @Test
+    @DisplayName("프론트 예상값이 달라도 유효한 요청이면 서버 계산값으로 저장하고 차이를 알린다")
+    void adjustDifferentClientCalculationToServerValue() {
+        Fixture fixture = new Fixture();
+        SimulationSaveRequest request = fixture.request();
+        request.setClientCalculation(clientCalculation(
+                SimulationService.FORMULA_VERSION,
+                1_000L,
+                0L
+        ));
+
+        SimulationSaveResponse response = fixture.service().save(
+                SIMULATION_ID, request, USER_ID, null
+        );
+
+        // 회귀 방지: 프론트 미리보기 차이를 그대로 확정하지 않고 서버 값을 최종 기준으로 삼는다.
+        assertTrue(response.calculationAdjusted());
+        assertEquals(1_040L, response.serverCalculation().expectedFutureValue());
+        assertEquals(40L, response.clientServerDifference().futureValueDifference());
+        assertEquals(40L, response.clientServerDifference().profitDifference());
+    }
+
+    @Test
+    @DisplayName("낙관적 잠금 갱신이 실패하면 저장 성공으로 응답하지 않는다")
+    void rejectSaveWhenOptimisticUpdateLosesRace() {
+        Fixture fixture = new Fixture();
+        fixture.saveResult = 0;
+
+        SimulationException exception = assertThrows(
+                SimulationException.class,
+                () -> fixture.service().save(
+                        SIMULATION_ID, fixture.request(), USER_ID, null)
+        );
+
+        // 회귀 방지: 검증 이후 발생한 동시 저장 충돌도 성공으로 오인하지 않는다.
+        assertEquals(SimulationError.SIMULATION_VERSION_CONFLICT,
+                exception.getError());
+    }
+
+    private static SimulationSaveRequest.ClientCalculation clientCalculation(
+            String formulaVersion,
+            long futureValue,
+            long profit
+    ) {
+        SimulationSaveRequest.ClientCalculation calculation =
+                new SimulationSaveRequest.ClientCalculation();
+        calculation.setFormulaVersion(formulaVersion);
+        calculation.setExpectedFutureValue(futureValue);
+        calculation.setExpectedProfit(profit);
+        return calculation;
+    }
+
     private static final class Fixture {
         private final SimulationRecord simulation = simulation();
         private final FamilySnapshot family = family();
@@ -169,6 +368,7 @@ class SimulationServiceSaveTest {
         private final List<Long> restoredProductIds = new ArrayList<>();
         private SimulationRecord activeSaved;
         private int markSelectedResult = 1;
+        private int saveResult = 1;
 
         private SimulationSaveRequest request() {
             SimulationSaveRequest request = new SimulationSaveRequest();
@@ -223,7 +423,7 @@ class SimulationServiceSaveTest {
                         }
                         case "saveSimulation" -> {
                             saveCount.incrementAndGet();
-                            yield 1;
+                            yield saveResult;
                         }
                         case "toString" -> "SimulationMapperSaveFixture";
                         case "hashCode" -> System.identityHashCode(proxy);

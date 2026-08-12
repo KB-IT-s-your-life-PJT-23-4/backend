@@ -240,6 +240,93 @@ class SimulationServiceGetTest {
         );
     }
 
+    @Test
+    @DisplayName("존재하지 않는 시뮬레이션을 조회하면 NOT_FOUND로 처리한다")
+    void rejectMissingSimulation() {
+        Fixture fixture = new Fixture();
+        fixture.simulationAvailable = false;
+
+        SimulationException exception = assertThrows(
+                SimulationException.class,
+                () -> fixture.service().get(SIMULATION_ID, USER_ID)
+        );
+
+        // 회귀 방지: 삭제되었거나 잘못된 ID를 빈 정상 응답으로 반환하지 않는다.
+        assertEquals(SimulationError.SIMULATION_NOT_FOUND, exception.getError());
+    }
+
+    @Test
+    @DisplayName("DRAFT에 저장 완료 시각이 남아 있으면 불완전한 상태로 처리한다")
+    void rejectDraftWithSavedTimestamp() {
+        Fixture fixture = new Fixture();
+        fixture.simulation.setSavedAt(LocalDateTime.now().minusMinutes(1));
+
+        SimulationException exception = assertThrows(
+                SimulationException.class,
+                () -> fixture.service().get(SIMULATION_ID, USER_ID)
+        );
+
+        // 회귀 방지: SAVED를 DRAFT로 되돌릴 때 saved_at 정리가 누락된 상태를 노출하지 않는다.
+        assertEquals(SimulationError.SIMULATION_SNAPSHOT_INCOMPLETE,
+                exception.getError());
+    }
+
+    @Test
+    @DisplayName("한 투자 성향에 추천 포트폴리오가 둘 이상이면 조회를 거부한다")
+    void rejectDuplicateRecommendationForProfile() {
+        Fixture fixture = new Fixture();
+        fixture.portfolios.stream()
+                .filter(item -> item.getScenarioType() == ScenarioType.TAX_OPTIMIZED)
+                .filter(item -> item.getPortfolioType() == RiskProfile.CONSERVATIVE)
+                .findFirst()
+                .orElseThrow()
+                .setRecommended(true);
+
+        SimulationException exception = assertThrows(
+                SimulationException.class,
+                () -> fixture.service().get(SIMULATION_ID, USER_ID)
+        );
+
+        // 회귀 방지: 동일 성향에 상충하는 추천 시나리오 두 건이 프론트로 전달되지 않게 한다.
+        assertEquals(SimulationError.SIMULATION_RECOMMENDATION_INCOMPLETE,
+                exception.getError());
+    }
+
+    @Test
+    @DisplayName("상품 스냅샷 배분액이 포트폴리오 배분과 다르면 조회를 거부한다")
+    void rejectProductAllocationSnapshotMismatch() {
+        Fixture fixture = new Fixture();
+        fixture.products.get(0).setAllocatedAmount(899L);
+
+        SimulationException exception = assertThrows(
+                SimulationException.class,
+                () -> fixture.service().get(SIMULATION_ID, USER_ID)
+        );
+
+        // 회귀 방지: 일부 상품 스냅샷이 손상된 결과에서 잘못된 미래가치를 보여주지 않는다.
+        assertEquals(SimulationError.SIMULATION_SNAPSHOT_INCOMPLETE,
+                exception.getError());
+    }
+
+    @Test
+    @DisplayName("SAVED인데 선택 상품이 없으면 선택 스냅샷 불완전으로 처리한다")
+    void rejectSavedSimulationWithoutSelectedProduct() {
+        Fixture fixture = new Fixture();
+        SimulationPortfolioRecord selectedPortfolio = fixture.portfolios.get(0);
+        fixture.simulation.setStatus(SimulationStatus.SAVED);
+        fixture.simulation.setSelectedPortfolioId(selectedPortfolio.getPortfolioId());
+        fixture.simulation.setSavedAt(LocalDateTime.now().minusMinutes(1));
+
+        SimulationException exception = assertThrows(
+                SimulationException.class,
+                () -> fixture.service().get(SIMULATION_ID, USER_ID)
+        );
+
+        // 회귀 방지: 확정 포트폴리오만 있고 실제 선택 상품이 사라진 SAVED를 정상 처리하지 않는다.
+        assertEquals(SimulationError.SAVED_SELECTION_INCOMPLETE,
+                exception.getError());
+    }
+
     private static final class Fixture {
         private final SimulationRecord simulation = simulation();
         private final List<SimulationResultRecord> results = new ArrayList<>();
@@ -248,6 +335,7 @@ class SimulationServiceGetTest {
         private final List<SimulationProductRecord> products = new ArrayList<>();
         private final ProductDataVersionRecord productDataVersion = productDataVersion();
         private List<PreferentialRateRecord> selectedPreferentialRates = List.of();
+        private boolean simulationAvailable = true;
 
         private Fixture() {
             addScenario(1L, ScenarioType.IMMEDIATE, 900L, true, 100L);
@@ -310,7 +398,7 @@ class SimulationServiceGetTest {
                     SimulationMapper.class.getClassLoader(),
                     new Class<?>[]{SimulationMapper.class},
                     (proxy, method, args) -> switch (method.getName()) {
-                        case "selectSimulation" -> simulation;
+                        case "selectSimulation" -> simulationAvailable ? simulation : null;
                         case "selectResults" -> results;
                         case "selectTranches" -> tranches;
                         case "selectPortfolios" -> portfolios;
