@@ -155,8 +155,8 @@ class SimulationCalculatorTest {
         );
 
         assertEquals(70_000_000L, result.taxableAmount());
-        assertEquals(7_000_000L, result.giftTax());
-        assertEquals(93_000_000L, result.investmentAmount());
+        assertEquals(6_790_000L, result.giftTax());
+        assertEquals(93_210_000L, result.investmentAmount());
         assertEquals(100_000_000L, result.donorRequiredAmount());
     }
 
@@ -186,8 +186,8 @@ class SimulationCalculatorTest {
         );
 
         assertEquals(500_000L, result.taxableAmount());
-        assertEquals(50_000L, result.giftTax());
-        assertEquals(50_450_000L, result.investmentAmount());
+        assertEquals(48_500L, result.giftTax());
+        assertEquals(50_451_500L, result.investmentAmount());
     }
 
     @Test
@@ -220,8 +220,8 @@ class SimulationCalculatorTest {
 
         assertEquals(0L, result.deductionAmount());
         assertEquals(100_000_000L, result.taxableAmount());
-        assertEquals(25_000_000L, result.giftTax());
-        assertEquals(75_000_000L, result.investmentAmount());
+        assertEquals(24_250_000L, result.giftTax());
+        assertEquals(75_750_000L, result.investmentAmount());
     }
 
     @Test
@@ -235,8 +235,8 @@ class SimulationCalculatorTest {
                 brackets()
         );
 
-        assertEquals(35_714_285L, result.giftTax());
-        assertEquals(135_714_285L, result.donorRequiredAmount());
+        assertEquals(34_203_103L, result.giftTax());
+        assertEquals(134_203_103L, result.donorRequiredAmount());
         assertEquals(100_000_000L, result.investmentAmount());
     }
 

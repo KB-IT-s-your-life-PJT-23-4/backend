@@ -156,7 +156,7 @@ class SimulationServiceExecuteTest {
         assertEquals(List.of(50_000_000L, 70_000_000L), giftAmounts(optimized));
         assertEquals(100_000_000L, optimized.deductionAmount());
         assertEquals(20_000_000L, optimized.taxableAmount());
-        assertEquals(2_000_000L, optimized.giftTax());
+        assertEquals(1_940_000L, optimized.giftTax());
     }
 
     @Test
@@ -173,7 +173,7 @@ class SimulationServiceExecuteTest {
         assertEquals(20_000_000L, response.giftHistorySummary().previousGiftAmount());
         assertEquals(30_000_000L, response.giftHistorySummary().remainingDeductionAmount());
         assertEquals(10_000_000L, optimized.taxableAmount());
-        assertEquals(1_000_000L, optimized.giftTax());
+        assertEquals(970_000L, optimized.giftTax());
         assertEquals(giftDate, fixture.lastCompletedGiftQueryEnd);
     }
 
@@ -192,7 +192,7 @@ class SimulationServiceExecuteTest {
                 .noneMatch(tranche -> tranche.giftDate().isAfter(response.input().investmentEndDate())));
         assertEquals(80_000_000L, optimized.tranches().get(0).giftAmount());
         assertEquals(30_000_000L, optimized.taxableAmount());
-        assertEquals(3_000_000L, optimized.giftTax());
+        assertEquals(2_910_000L, optimized.giftTax());
     }
 
     @Test

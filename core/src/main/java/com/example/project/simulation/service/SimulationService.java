@@ -58,7 +58,7 @@ import java.util.stream.Collectors;
 @Log4j2
 public class SimulationService {
 
-    public static final String FORMULA_VERSION = "INVESTMENT_V3";
+    public static final String FORMULA_VERSION = "INVESTMENT_V4";
     public static final String CALCULATION_VERSION = "GIFT_SIM_V6";
 
     private static final int DEDUCTION_WINDOW_YEARS = 10;

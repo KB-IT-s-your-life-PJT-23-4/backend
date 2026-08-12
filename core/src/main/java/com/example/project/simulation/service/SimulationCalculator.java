@@ -27,6 +27,7 @@ public class SimulationCalculator {
     private static final MathContext MC = new MathContext(18, RoundingMode.HALF_UP);
     private static final BigDecimal ONE_HUNDRED = BigDecimal.valueOf(100);
     private static final BigDecimal TWELVE = BigDecimal.valueOf(12);
+    private static final BigDecimal FILING_TAX_CREDIT_RATE = new BigDecimal("0.03");
     private static final long MINIMUM_TAXABLE_BASE = 500_000L;
     private static final int MAX_GROSS_UP_ITERATIONS = 50;
 
@@ -85,17 +86,18 @@ public class SimulationCalculator {
                     previousTaxableAmount,
                     currentTaxableAmount
             );
-            long tax = Math.max(
+            long calculatedTax = Math.max(
                     0L,
                     calculateProgressiveTax(cumulativeTaxableAmount, brackets)
                             - previousCalculatedTax
             );
+            long payableTax = calculatePayableTax(calculatedTax);
             return new TaxOutcome(
                     appliedDeduction,
                     currentTaxableAmount,
-                    tax,
+                    payableTax,
                     normalizedGiftAmount,
-                    Math.max(0, normalizedGiftAmount - tax)
+                    Math.max(0, normalizedGiftAmount - payableTax)
             );
         }
 
@@ -106,21 +108,22 @@ public class SimulationCalculator {
                     previousTaxableAmount,
                     taxableAmount
             );
-            long nextTax = Math.max(
+            long calculatedTax = Math.max(
                     0L,
                     calculateProgressiveTax(cumulativeTaxableAmount, brackets)
                             - previousCalculatedTax
             );
-            if (Math.abs(nextTax - grossedUpTax) <= 1) {
+            long nextPayableTax = calculatePayableTax(calculatedTax);
+            if (Math.abs(nextPayableTax - grossedUpTax) <= 1) {
                 return new TaxOutcome(
                         appliedDeduction,
                         taxableAmount,
-                        nextTax,
-                        Math.addExact(normalizedGiftAmount, nextTax),
+                        nextPayableTax,
+                        Math.addExact(normalizedGiftAmount, nextPayableTax),
                         normalizedGiftAmount
                 );
             }
-            grossedUpTax = nextTax;
+            grossedUpTax = nextPayableTax;
         }
 
         throw new SimulationException(SimulationError.TAX_CALCULATION_NOT_CONVERGED);
@@ -152,6 +155,15 @@ public class SimulationCalculator {
                 .subtract(BigDecimal.valueOf(value(bracket.getProgressiveDeduction(), 0L)))
                 .setScale(0, RoundingMode.HALF_UP)
                 .longValue());
+    }
+
+    public long calculatePayableTax(long calculatedTax) {
+        long normalizedTax = Math.max(0L, calculatedTax);
+        long filingTaxCredit = BigDecimal.valueOf(normalizedTax)
+                .multiply(FILING_TAX_CREDIT_RATE, MC)
+                .setScale(0, RoundingMode.HALF_UP)
+                .longValue();
+        return Math.max(0L, normalizedTax - filingTaxCredit);
     }
 
     public long calculateProductFutureValue(

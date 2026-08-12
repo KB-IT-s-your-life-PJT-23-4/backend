@@ -79,7 +79,7 @@ class SimulationServiceOptimizedScenarioTest {
         );
         assertEquals(100_000_000L, snapshot.result().getDeductionAmount());
         assertEquals(20_000_000L, snapshot.result().getTaxableAmount());
-        assertEquals(2_000_000L, snapshot.result().getGiftTax());
+        assertEquals(1_940_000L, snapshot.result().getGiftTax());
     }
 
     @Test
@@ -97,7 +97,7 @@ class SimulationServiceOptimizedScenarioTest {
         assertTranche(snapshot.tranches().get(0), 1, GIFT_DATE, 120_000_000L);
         assertEquals(50_000_000L, snapshot.result().getDeductionAmount());
         assertEquals(70_000_000L, snapshot.result().getTaxableAmount());
-        assertEquals(7_000_000L, snapshot.result().getGiftTax());
+        assertEquals(6_790_000L, snapshot.result().getGiftTax());
     }
 
     @Test
