@@ -952,9 +952,10 @@ public class SimulationService {
                     .mapToLong(GiftPoint::amount)
                     .sum();
             long trancheDeductionLimit = deductionLimitResolver.apply(trancheDate);
-            long available = sequence == 1
-                    ? remainingDeduction
-                    : Math.max(0, trancheDeductionLimit - used);
+            long recalculatedAvailable = Math.max(0, trancheDeductionLimit - used);
+            long available = trancheDate.equals(giftDate)
+                    ? Math.min(Math.max(0, remainingDeduction), recalculatedAvailable)
+                    : recalculatedAvailable;
 
             List<GiftPoint> nextDateBasis = new ArrayList<>(history);
             if (available > 0) {

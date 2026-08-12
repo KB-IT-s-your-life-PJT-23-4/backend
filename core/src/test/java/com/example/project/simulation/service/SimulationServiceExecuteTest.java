@@ -32,13 +32,10 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.EnumMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -107,6 +104,29 @@ class SimulationServiceExecuteTest {
         assertEquals(priorGiftDate.plusYears(10).plusDays(1),
                 optimized.tranches().get(0).giftDate());
         assertEquals(40_000_000L, optimized.tranches().get(0).giftAmount());
+        assertEquals(0L, optimized.giftTax());
+    }
+
+    @Test
+    @DisplayName("남은 공제가 0원이어도 서로 다른 공제 해제일의 일부 공제를 순서대로 사용한다")
+    void usePartiallyReleasedDeductionsWhenCurrentRemainingDeductionIsZero() {
+        LocalDate giftDate = futureDate();
+        Fixture fixture = adultFixture(giftDate);
+        LocalDate firstPriorGiftDate = giftDate.minusYears(9);
+        LocalDate secondPriorGiftDate = giftDate.minusYears(6);
+        fixture.addCompletedGift(20_000_000L, firstPriorGiftDate);
+        fixture.addCompletedGift(30_000_000L, secondPriorGiftDate);
+
+        SimulationResponse response = fixture.execute(50_000_000L, 60, giftDate);
+        SimulationResponse.Result optimized = result(response, ScenarioType.TAX_OPTIMIZED);
+
+        // 회귀 방지: 최초 남은 공제가 0원이더라도 첫 해제일에 생긴 2천만 원의 공제를 건너뛰지 않는다.
+        assertEquals(List.of(20_000_000L, 30_000_000L), giftAmounts(optimized));
+        assertEquals(List.of(
+                        firstPriorGiftDate.plusYears(10).plusDays(1),
+                        secondPriorGiftDate.plusYears(10).plusDays(1)
+                ),
+                giftDates(optimized));
         assertEquals(0L, optimized.giftTax());
     }
 
