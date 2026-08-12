@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.example.project.admin.audit.mapper.AdminAuditLogMapper">
+
+    <resultMap id="adminAuditLogResultMap" type="com.example.project.admin.audit.domain.AdminAuditLogVO">
+        <id property="adminAuditLogId" column="admin_audit_log_id"/>
+
+        <result property="actorUserId" column="actor_user_id"/>
+        <result property="actorRole" column="actor_role"/>
+        <result property="actionType" column="action_type"/>
+        <result property="targetType" column="target_type"/>
+        <result property="targetId" column="target_id"/>
+        <result property="actionSummary" column="action_summary"/>
+        <result property="changeData" column="change_data" javaType="java.lang.String"/>
+        <result property="result" column="result"/>
+        <result property="requestId" column="request_id"/>
+        <result property="httpMethod" column="http_method"/>
+        <result property="requestPath" column="request_path"/>
+        <result property="ipAddress" column="ip_address"/>
+        <result property="userAgent" column="user_agent"/>
+        <result property="occurredAt" column="occurred_at"/>
+        <result property="createdAt" column="created_at"/>
+    </resultMap>
+
+    <insert id="insertAuditLog"
+            parameterType="com.example.project.admin.audit.domain.AdminAuditLogVO"
+            useGeneratedKeys="true"
+            keyProperty="adminAuditLogId"
+            keyColumn="admin_audit_log_id"
+    >
+        INSERT INTO admin_audit_log (
+            actor_user_id,
+            actor_role,
+            action_type,
+            target_type,
+            target_id,
+            action_summary,
+            change_data,
+            result,
+            request_id,
+            http_method,
+            request_path,
+            ip_address,
+            user_agent,
+            occurred_at
+        ) VALUES (
+            #{actorUserId},
+            #{actorRole},
+            #{actionType},
+            #{targetType},
+            #{targetId},
+            #{actionSummary},
+            CAST(#{changeData} AS JSON),
+            #{result},
+            #{requestId},
+            #{httpMethod},
+            #{requestPath},
+            #{ipAddress},
+            #{userAgent},
+            #{occurredAt}
+        )
+    </insert>
+
+    <sql id="auditLogFilter">
+        <where>
+            <if test="actorUserId != null">
+                actor_user_id = #{actorUserId}
+            </if>
+
+            <if test="actionType != null">
+                AND action_type = #{actionType}
+            </if>
+
+            <if test="targetType != null">
+                AND target_type = #{targetType}
+            </if>
+
+            <if test="targetId != null">
+                AND target_id = #{targetId}
+            </if>
+
+            <if test="from != null">
+                AND occurred_at <![CDATA[>=]]> #{from}
+            </if>
+
+            <if test="to != null">
+                AND occurred_at <![CDATA[<]]> #{to}
+            </if>
+        </where>
+    </sql>
+
+    <select id="countAuditLogs" resultType="long">
+        SELECT COUNT(*)
+        FROM admin_audit_log
+
+        <include refid="auditLogFilter"></include>
+    </select>
+
+    <select id="selectedAuditLogsPage" resultMap="adminAuditLogResultMap">
+        SELECT
+            admin_audit_log_id,
+            actor_user_id,
+            actor_role,
+            action_type,
+            target_type,
+            target_id,
+            action_summary,
+            change_data,
+            result,
+            request_id,
+            http_method,
+            request_path,
+            ip_address,
+            user_agent,
+            occurred_at,
+            created_at
+        FROM admin_audit_log
+
+        <include refid="auditLogFilter"/>
+
+        ORDER BY
+            occurred_at DESC,
+            admin_audit_log_id DESC
+
+        LIMIT #{size}
+        OFFSET #{offset}
+    </select>
+
+</mapper>
