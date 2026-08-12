@@ -128,8 +128,8 @@ class SimulationServiceSaveTest {
     }
 
     @Test
-    @DisplayName("새 결과로 교체해도 기존 저장 이력의 선택 결과는 보존한다")
-    void preservePreviousSavedSelectionWhenReplacing() {
+    @DisplayName("새 결과로 교체하면 기존 SAVED의 선택 정보를 제거하고 DRAFT로 되돌린다")
+    void clearPreviousSavedSelectionWhenReplacing() {
         Fixture fixture = new Fixture();
         fixture.activeSaved = previousSavedSimulation();
         SimulationSaveRequest request = fixture.request();
@@ -149,9 +149,12 @@ class SimulationServiceSaveTest {
                 response.replacement().previousSimulation().simulationId()
         );
         assertEquals(List.of(PREVIOUS_SIMULATION_ID), fixture.resetSimulationIds);
-        assertEquals(List.of(SIMULATION_ID), fixture.clearedSimulationIds);
-        assertEquals(List.of(SIMULATION_ID), fixture.deletedConditionSimulationIds);
-        assertEquals(List.of(PRODUCT_ID), fixture.restoredProductIds);
+        assertEquals(List.of(PREVIOUS_SIMULATION_ID, SIMULATION_ID),
+                fixture.clearedSimulationIds);
+        assertEquals(List.of(PREVIOUS_SIMULATION_ID, SIMULATION_ID),
+                fixture.deletedConditionSimulationIds);
+        // 기존 SAVED 상품을 실행 당시 기본 계산값으로 복구한 후 새 선택 상품을 다시 계산한다.
+        assertEquals(List.of(PRODUCT_ID, PRODUCT_ID), fixture.restoredProductIds);
     }
 
     @Test

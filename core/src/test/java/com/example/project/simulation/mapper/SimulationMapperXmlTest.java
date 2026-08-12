@@ -110,7 +110,8 @@ class SimulationMapperXmlTest {
                 namespace + "resetSavedSimulation",
                 Map.of(
                         "simulationId", 1L,
-                        "expiredAt", LocalDateTime.of(2026, 9, 6, 13, 15)
+                        "expiredAt", LocalDateTime.of(2026, 9, 6, 13, 15),
+                        "updatedAt", LocalDateTime.of(2026, 8, 6, 13, 15)
                 )
         );
 
@@ -153,10 +154,10 @@ class SimulationMapperXmlTest {
         assertTrue(selectEtfHoldings.contains("holding_rank"));
         assertFalse(selectEtfHoldings.contains("holding_rank AS `rank`"));
         assertTrue(resetSavedSimulation.contains("status = 'DRAFT'"));
+        assertTrue(resetSavedSimulation.contains("selected_portfolio_id = NULL"));
         assertTrue(resetSavedSimulation.contains("saved_at = NULL"));
         assertTrue(resetSavedSimulation.contains("expired_at = ?"));
-        assertFalse(resetSavedSimulation.contains("selected_portfolio_id"));
-        assertFalse(resetSavedSimulation.contains("updated_at"));
+        assertTrue(resetSavedSimulation.contains("updated_at = ?"));
     }
 
     private String sql(Configuration configuration, String statement, Object parameter) {

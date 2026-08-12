@@ -353,12 +353,18 @@ public class SimulationService {
                 LocalDateTime previousExpiry = now.plus(DRAFT_RETENTION);
                 int reset = simulationMapper.resetSavedSimulation(
                         activeSaved.getSimulationId(),
-                        previousExpiry
+                        previousExpiry,
+                        now
                 );
                 if (reset != 1) {
                     throw new SimulationException(
                             SimulationError.PREVIOUS_SIMULATION_RESET_FAILED);
                 }
+                restoreSimulationProducts(activeSaved);
+                simulationMapper.deleteSimulationPreferentialConditions(
+                        activeSaved.getSimulationId());
+                simulationMapper.clearSimulationSelections(
+                        activeSaved.getSimulationId());
                 previousSimulation = new SimulationSaveResponse.PreviousSimulation(
                         activeSaved.getSimulationId(),
                         SimulationStatus.SAVED,
@@ -2154,7 +2160,8 @@ public class SimulationService {
             throw new SimulationException(SimulationError.SIMULATION_EXPIRED);
         }
         if (simulation.getStatus() == SimulationStatus.DRAFT
-                && simulation.getSavedAt() != null) {
+                && (simulation.getSavedAt() != null
+                || simulation.getSelectedPortfolioId() != null)) {
             throw incompleteSnapshot();
         }
         if (simulation.getStatus() == SimulationStatus.SAVED

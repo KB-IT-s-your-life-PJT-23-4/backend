@@ -194,22 +194,21 @@ class SimulationServiceGetTest {
     }
 
     @Test
-    @DisplayName("이전에 저장된 DRAFT 단건 조회도 보존된 선택 결과를 복원한다")
-    void getPreviouslySavedDraftSelection() {
+    @DisplayName("DRAFT에 과거 확정 포트폴리오가 남아 있으면 불완전한 상태로 처리한다")
+    void rejectDraftWithPreviousSavedSelection() {
         Fixture fixture = new Fixture();
         SimulationPortfolioRecord selectedPortfolio = fixture.portfolios.get(0);
         fixture.simulation.setSelectedPortfolioId(selectedPortfolio.getPortfolioId());
         fixture.products.get(0).setSelected(true);
 
-        SimulationResponse response = fixture.service().get(SIMULATION_ID, USER_ID);
-
-        assertEquals(SimulationStatus.DRAFT, response.status());
-        assertEquals(
-                selectedPortfolio.getPortfolioId(),
-                response.selection().selectedPortfolioId()
+        SimulationException exception = assertThrows(
+                SimulationException.class,
+                () -> fixture.service().get(SIMULATION_ID, USER_ID)
         );
-        assertEquals(1, response.selection().selectedProducts().size());
-        assertEquals(100L, response.selection().estimatedGiftTax());
+
+        // 회귀 방지: SAVED를 DRAFT로 되돌린 뒤 과거 확정 선택이 화면에 다시 노출되지 않아야 한다.
+        assertEquals(SimulationError.SIMULATION_SNAPSHOT_INCOMPLETE,
+                exception.getError());
     }
 
     @Test
