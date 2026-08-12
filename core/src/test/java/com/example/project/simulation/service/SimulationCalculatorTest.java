@@ -42,7 +42,25 @@ class SimulationCalculatorTest {
                 36
         );
 
-        assertEquals(38_012_140L, result);
+        assertEquals(38_012_141L, result);
+    }
+
+    @Test
+    @DisplayName("상품 예상 미래가치는 최종 원 단위에서 반올림한다")
+    void roundProductFutureValueToNearestWon() {
+        // 프론트의 Math.round와 동일하게 1.5원을 2원으로 반올림한다.
+        assertEquals(2L, calculator.calculateProductFutureValue(
+                CalculationType.SIMPLE_INTEREST,
+                1L,
+                new BigDecimal("50"),
+                12
+        ));
+        assertEquals(2L, calculator.calculateProductFutureValue(
+                CalculationType.COMPOUND_RETURN,
+                1L,
+                new BigDecimal("50"),
+                12
+        ));
     }
 
     @Test

@@ -401,8 +401,8 @@ public class SimulationCalculator {
                 .multiply(BigDecimal.valueOf(months).divide(TWELVE, MC), MC);
         return BigDecimal.valueOf(principal)
                 .add(interest)
-                .setScale(0, RoundingMode.FLOOR)
-                .longValue();
+                .setScale(0, RoundingMode.HALF_UP)
+                .longValueExact();
     }
 
     private long calculateSavings(long totalContribution, BigDecimal annualRatePercent, int months) {
@@ -422,8 +422,8 @@ public class SimulationCalculator {
 
         return monthlyContribution
                 .multiply(annuityFactor, MC)
-                .setScale(0, RoundingMode.FLOOR)
-                .longValue();
+                .setScale(0, RoundingMode.HALF_UP)
+                .longValueExact();
     }
 
     private long calculateEtf(long principal, BigDecimal annualRatePercent, int months) {
@@ -432,7 +432,7 @@ public class SimulationCalculator {
                 1 + annualRatePercent.divide(ONE_HUNDRED, MC).doubleValue()
         );
         double value = principal * Math.pow(annualGrowth, months / 12.0);
-        return (long) Math.floor(value);
+        return Math.round(value);
     }
 
     private List<Long> splitAcrossTranches(
