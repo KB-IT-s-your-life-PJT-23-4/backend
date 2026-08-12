@@ -338,6 +338,103 @@ class SimulationServiceSaveTest {
                 exception.getError());
     }
 
+    @Test
+    @DisplayName("같은 SAVED 시뮬레이션을 다시 저장하면 다른 이력을 대체하지 않고 선택만 갱신한다")
+    void resaveSameSavedSimulation() {
+        Fixture fixture = new Fixture();
+        fixture.simulation.setStatus(SimulationStatus.SAVED);
+        fixture.simulation.setSelectedPortfolioId(PORTFOLIO_ID);
+        fixture.simulation.setSavedAt(LocalDateTime.now().minusMinutes(5));
+        fixture.simulation.setExpiredAt(null);
+        fixture.activeSaved = fixture.simulation;
+
+        SimulationSaveResponse response = fixture.service().save(
+                SIMULATION_ID, fixture.request(), USER_ID, null
+        );
+
+        // 회귀 방지: 동일 이력의 상품 변경을 다른 SAVED 이력 대체로 잘못 판단하지 않는다.
+        assertTrue(!response.replacement().replaced());
+        assertTrue(fixture.resetSimulationIds.isEmpty());
+        assertEquals(1, fixture.saveCount.get());
+    }
+
+    @Test
+    @DisplayName("포트폴리오에 필요한 상품 유형을 일부만 선택하면 저장을 거부한다")
+    void rejectIncompleteProductTypeSelection() {
+        Fixture fixture = new Fixture();
+        fixture.portfolio.setDepositAmount(800L);
+        fixture.portfolio.setEtfAmount(200L);
+        fixture.product.setAllocatedAmount(800L);
+
+        SimulationException exception = assertThrows(
+                SimulationException.class,
+                () -> fixture.service().save(
+                        SIMULATION_ID, fixture.request(), USER_ID, null)
+        );
+
+        // 회귀 방지: ETF 배분이 있는 포트폴리오를 예금 한 종목만으로 확정하지 않는다.
+        assertEquals(SimulationError.PRODUCT_TYPE_SELECTION_INCOMPLETE,
+                exception.getError());
+    }
+
+    @Test
+    @DisplayName("ETF에 우대금리 조건을 전달하면 저장을 거부한다")
+    void rejectPreferentialConditionForEtf() {
+        Fixture fixture = new Fixture();
+        fixture.portfolio.setDepositAmount(0L);
+        fixture.portfolio.setEtfAmount(1_000L);
+        fixture.product.setProductType(ProductType.ETF);
+        fixture.detail.setProductType(ProductType.ETF);
+
+        SimulationException exception = assertThrows(
+                SimulationException.class,
+                () -> fixture.service().save(
+                        SIMULATION_ID, fixture.request(), USER_ID, null)
+        );
+
+        // 회귀 방지: 예적금 전용 우대조건을 ETF 예상 수익률에 더하지 못하게 한다.
+        assertEquals(SimulationError.ETF_PREFERENTIAL_CONDITION_NOT_ALLOWED,
+                exception.getError());
+    }
+
+    @Test
+    @DisplayName("선택한 예금 금액이 최소 가입금액보다 작으면 저장을 거부한다")
+    void rejectProductBelowMinimumAmount() {
+        Fixture fixture = new Fixture();
+        fixture.detail.setMinimumAmount(2_000L);
+
+        SimulationException exception = assertThrows(
+                SimulationException.class,
+                () -> fixture.service().save(
+                        SIMULATION_ID, fixture.request(), USER_ID, null)
+        );
+
+        // 회귀 방지: 실제 가입할 수 없는 금액으로 계산된 상품 조합을 확정하지 않는다.
+        assertEquals(SimulationError.PRODUCT_LIMIT_EXCEEDED,
+                exception.getError());
+    }
+
+    @Test
+    @DisplayName("기존 SAVED의 DRAFT 전환이 실패하면 새 결과 저장도 중단한다")
+    void stopReplacementWhenPreviousSavedResetFails() {
+        Fixture fixture = new Fixture();
+        fixture.activeSaved = previousSavedSimulation();
+        fixture.resetResult = 0;
+        SimulationSaveRequest request = fixture.request();
+        request.setReplaceExistingSaved(true);
+        request.setExpectedExistingSavedSimulationId(PREVIOUS_SIMULATION_ID);
+
+        SimulationException exception = assertThrows(
+                SimulationException.class,
+                () -> fixture.service().save(SIMULATION_ID, request, USER_ID, null)
+        );
+
+        // 회귀 방지: 기존·신규 결과가 동시에 SAVED가 되는 부분 실패 상태를 막는다.
+        assertEquals(SimulationError.PREVIOUS_SIMULATION_RESET_FAILED,
+                exception.getError());
+        assertEquals(0, fixture.saveCount.get());
+    }
+
     private static SimulationSaveRequest.ClientCalculation clientCalculation(
             String formulaVersion,
             long futureValue,
@@ -369,6 +466,7 @@ class SimulationServiceSaveTest {
         private SimulationRecord activeSaved;
         private int markSelectedResult = 1;
         private int saveResult = 1;
+        private int resetResult = 1;
 
         private SimulationSaveRequest request() {
             SimulationSaveRequest request = new SimulationSaveRequest();
@@ -415,7 +513,7 @@ class SimulationServiceSaveTest {
                         case "insertSelectedPreferentialCondition" -> 1;
                         case "resetSavedSimulation" -> {
                             resetSimulationIds.add((Long) args[0]);
-                            yield 1;
+                            yield resetResult;
                         }
                         case "markSimulationProductSelected" -> {
                             markSelectedCount.incrementAndGet();
