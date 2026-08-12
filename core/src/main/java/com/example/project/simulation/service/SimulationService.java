@@ -98,16 +98,7 @@ public class SimulationService {
             }
 
             FamilySnapshot family = requireFamily(request.getFamilyId(), userId);
-            int age = Period.between(family.getBirthDate(), giftDate).getYears();
-            boolean minor = age < 19;
-            DeductionRule rule = simulationMapper.selectDeductionRule(
-                    family.getRelation(),
-                    minor,
-                    asOfDate
-            );
-            if (rule == null || rule.getDeductionLimit() == null) {
-                throw new SimulationException(SimulationError.DEDUCTION_RULE_NOT_FOUND);
-            }
+            long deductionLimit = resolveDeductionLimit(family, giftDate);
 
             LocalDate lookbackStart = giftDate.minusYears(DEDUCTION_WINDOW_YEARS);
             List<GiftHistoryRecord> completedGifts = safeList(
@@ -120,10 +111,8 @@ public class SimulationService {
             long previousGiftAmount = completedGifts.stream()
                     .mapToLong(gift -> value(gift.getAmount()))
                     .sum();
-            long deductionLimit = rule.getDeductionLimit();
             long usedDeduction = Math.min(previousGiftAmount, deductionLimit);
             long remainingDeduction = Math.max(0, deductionLimit - usedDeduction);
-            LocalDate renewalDate = resolveDeductionRenewalDate(completedGifts, giftDate);
 
             List<TaxBracket> taxBrackets = safeList(simulationMapper.selectTaxBrackets(asOfDate));
             if (taxBrackets.isEmpty()) {
@@ -156,11 +145,16 @@ public class SimulationService {
             ScenarioAggregate optimized = optimizedScenario(
                     request,
                     remainingDeduction,
-                    deductionLimit,
                     taxBrackets,
                     giftDate,
                     completedGifts,
-                    investmentEndDate
+                    investmentEndDate,
+                    date -> resolveDeductionLimit(family, date)
+            );
+            LocalDate renewalDate = resolveDeductionRenewalDate(
+                    completedGifts,
+                    optimized.tranches(),
+                    giftDate
             );
 
             LocalDateTime now = LocalDateTime.now();
@@ -907,11 +901,11 @@ public class SimulationService {
     private ScenarioAggregate optimizedScenario(
             SimulationExecuteRequest request,
             long remainingDeduction,
-            long fullDeductionLimit,
             List<TaxBracket> brackets,
             LocalDate giftDate,
             List<GiftHistoryRecord> completedGifts,
-            LocalDate investmentEndDate
+            LocalDate investmentEndDate,
+            Function<LocalDate, Long> deductionLimitResolver
     ) {
         long amountLeft = request.getRequestedAmount();
         List<SimulationTrancheRecord> tranches = new ArrayList<>();
@@ -935,9 +929,10 @@ public class SimulationService {
                             point.date(), calculationDate))
                     .mapToLong(GiftPoint::amount)
                     .sum();
+            long trancheDeductionLimit = deductionLimitResolver.apply(trancheDate);
             long available = sequence == 1
                     ? remainingDeduction
-                    : Math.max(0, fullDeductionLimit - used);
+                    : Math.max(0, trancheDeductionLimit - used);
 
             List<GiftPoint> nextDateBasis = new ArrayList<>(history);
             if (available > 0) {
@@ -959,7 +954,7 @@ public class SimulationService {
             SimulationCalculator.TaxOutcome tax = calculator.calculateTax(
                     giftAmount,
                     used,
-                    fullDeductionLimit,
+                    trancheDeductionLimit,
                     request.getTaxPaymentMethod(),
                     brackets
             );
@@ -2153,16 +2148,40 @@ public class SimulationService {
         );
     }
 
+    private long resolveDeductionLimit(FamilySnapshot family, LocalDate giftDate) {
+        int age = Period.between(family.getBirthDate(), giftDate).getYears();
+        boolean minor = age < 19;
+        DeductionRule rule = simulationMapper.selectDeductionRule(
+                family.getRelation(),
+                minor,
+                giftDate
+        );
+        if (rule == null || rule.getDeductionLimit() == null) {
+            throw new SimulationException(SimulationError.DEDUCTION_RULE_NOT_FOUND);
+        }
+        return rule.getDeductionLimit();
+    }
+
     private LocalDate resolveDeductionRenewalDate(
             List<GiftHistoryRecord> gifts,
-            LocalDate asOfDate
+            List<SimulationTrancheRecord> plannedTranches,
+            LocalDate giftDate
     ) {
-        return gifts.stream()
+        List<LocalDate> giftDates = new ArrayList<>();
+        safeList(gifts).stream()
                 .map(GiftHistoryRecord::getGiftDate)
                 .filter(Objects::nonNull)
-                .min(LocalDate::compareTo)
+                .forEach(giftDates::add);
+        safeList(plannedTranches).stream()
+                .map(SimulationTrancheRecord::getGiftDate)
+                .filter(Objects::nonNull)
+                .forEach(giftDates::add);
+
+        return giftDates.stream()
                 .map(date -> date.plusYears(DEDUCTION_WINDOW_YEARS).plusDays(1))
-                .orElse(asOfDate);
+                .filter(date -> date.isAfter(giftDate))
+                .min(LocalDate::compareTo)
+                .orElse(giftDate.plusYears(DEDUCTION_WINDOW_YEARS).plusDays(1));
     }
 
     private LocalDate nextReleaseDate(List<GiftPoint> history, LocalDate afterDate) {

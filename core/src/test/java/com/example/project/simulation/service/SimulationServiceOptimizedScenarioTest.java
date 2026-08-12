@@ -12,6 +12,7 @@ import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.function.Function;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -35,7 +36,8 @@ class SimulationServiceOptimizedScenarioTest {
                 80_000_000L,
                 50_000_000L,
                 List.of(),
-                240
+                240,
+                date -> 50_000_000L
         );
 
         assertEquals(2, snapshot.tranches().size());
@@ -56,7 +58,8 @@ class SimulationServiceOptimizedScenarioTest {
                 120_000_000L,
                 30_000_000L,
                 List.of(previousGift),
-                240
+                240,
+                date -> 50_000_000L
         );
 
         assertEquals(4, snapshot.tranches().size());
@@ -86,7 +89,8 @@ class SimulationServiceOptimizedScenarioTest {
                 120_000_000L,
                 50_000_000L,
                 List.of(),
-                36
+                36,
+                date -> 50_000_000L
         );
 
         assertEquals(1, snapshot.tranches().size());
@@ -96,11 +100,65 @@ class SimulationServiceOptimizedScenarioTest {
         assertEquals(7_000_000L, snapshot.result().getGiftTax());
     }
 
+    @Test
+    void futureTrancheUsesDeductionLimitForRecipientAgeAtThatDate()
+            throws Exception {
+        ScenarioSnapshot snapshot = optimizedScenario(
+                70_000_000L,
+                20_000_000L,
+                List.of(),
+                240,
+                date -> date.isBefore(LocalDate.of(2030, 1, 1))
+                        ? 20_000_000L
+                        : 50_000_000L
+        );
+
+        assertEquals(2, snapshot.tranches().size());
+        assertTranche(snapshot.tranches().get(0), 1, GIFT_DATE, 20_000_000L);
+        assertTranche(snapshot.tranches().get(1), 2, SECOND_GIFT_DATE, 50_000_000L);
+        assertEquals(70_000_000L, snapshot.result().getDeductionAmount());
+        assertEquals(0L, snapshot.result().getTaxableAmount());
+        assertEquals(0L, snapshot.result().getGiftTax());
+    }
+
+    @Test
+    void noGiftHistorySetsRenewalDateFromFirstPlannedTranche() throws Exception {
+        assertEquals(
+                SECOND_GIFT_DATE,
+                renewalDate(List.of(), List.of(plannedTranche(GIFT_DATE)))
+        );
+    }
+
+    @Test
+    void renewalDateUsesAllPastAndPlannedTranches() throws Exception {
+        GiftHistoryRecord expiredAtGiftDate = giftHistory(
+                1L,
+                10_000_000L,
+                LocalDate.of(2016, 8, 11)
+        );
+        GiftHistoryRecord pastGift = giftHistory(
+                2L,
+                20_000_000L,
+                LocalDate.of(2021, 1, 1)
+        );
+
+        LocalDate renewalDate = renewalDate(
+                List.of(expiredAtGiftDate, pastGift),
+                List.of(
+                        plannedTranche(GIFT_DATE),
+                        plannedTranche(LocalDate.of(2031, 1, 2))
+                )
+        );
+
+        assertEquals(LocalDate.of(2031, 1, 2), renewalDate);
+    }
+
     private ScenarioSnapshot optimizedScenario(
             long requestedAmount,
             long remainingDeduction,
             List<GiftHistoryRecord> completedGifts,
-            int investmentPeriodMonths
+            int investmentPeriodMonths,
+            Function<LocalDate, Long> deductionLimitResolver
     ) throws Exception {
         SimulationExecuteRequest request = new SimulationExecuteRequest();
         request.setFamilyId(1L);
@@ -113,22 +171,22 @@ class SimulationServiceOptimizedScenarioTest {
                 "optimizedScenario",
                 SimulationExecuteRequest.class,
                 long.class,
-                long.class,
                 List.class,
                 LocalDate.class,
                 List.class,
-                LocalDate.class
+                LocalDate.class,
+                Function.class
         );
         optimizedScenario.setAccessible(true);
         Object aggregate = optimizedScenario.invoke(
                 service,
                 request,
                 remainingDeduction,
-                50_000_000L,
                 taxBrackets(),
                 GIFT_DATE,
                 completedGifts,
-                GIFT_DATE.plusMonths(investmentPeriodMonths)
+                GIFT_DATE.plusMonths(investmentPeriodMonths),
+                deductionLimitResolver
         );
 
         Method resultAccessor = aggregate.getClass().getDeclaredMethod("result");
@@ -158,6 +216,34 @@ class SimulationServiceOptimizedScenarioTest {
         second.setTaxRate(new BigDecimal("0.20"));
         second.setProgressiveDeduction(10_000_000L);
         return List.of(first, second);
+    }
+
+    private LocalDate renewalDate(
+            List<GiftHistoryRecord> gifts,
+            List<SimulationTrancheRecord> plannedTranches
+    ) throws Exception {
+        Method method = SimulationService.class.getDeclaredMethod(
+                "resolveDeductionRenewalDate",
+                List.class,
+                List.class,
+                LocalDate.class
+        );
+        method.setAccessible(true);
+        return (LocalDate) method.invoke(service, gifts, plannedTranches, GIFT_DATE);
+    }
+
+    private GiftHistoryRecord giftHistory(long id, long amount, LocalDate giftDate) {
+        GiftHistoryRecord gift = new GiftHistoryRecord();
+        gift.setGiftId(id);
+        gift.setAmount(amount);
+        gift.setGiftDate(giftDate);
+        return gift;
+    }
+
+    private SimulationTrancheRecord plannedTranche(LocalDate giftDate) {
+        SimulationTrancheRecord tranche = new SimulationTrancheRecord();
+        tranche.setGiftDate(giftDate);
+        return tranche;
     }
 
     private void assertTranche(
