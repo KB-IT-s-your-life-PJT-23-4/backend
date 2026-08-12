@@ -35,7 +35,7 @@
         WHERE family_id = #{familyId}
           AND status = 'COMPLETED'
           AND gift_date &gt;= #{windowStart}
-          AND gift_date &lt; #{asOfDate}
+          AND gift_date &lt;= #{giftDate}
         ORDER BY gift_date, gift_id
     </select>
 

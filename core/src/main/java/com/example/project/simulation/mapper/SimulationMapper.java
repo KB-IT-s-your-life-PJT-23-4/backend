@@ -42,7 +42,7 @@ public interface SimulationMapper {
     List<GiftHistoryRecord> selectCompletedGifts(
             @Param("familyId") Long familyId,
             @Param("windowStart") LocalDate windowStart,
-            @Param("asOfDate") LocalDate asOfDate
+            @Param("giftDate") LocalDate giftDate
     );
 
     List<TaxBracket> selectTaxBrackets(@Param("asOfDate") LocalDate asOfDate);

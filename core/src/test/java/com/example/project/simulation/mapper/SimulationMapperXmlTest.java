@@ -12,6 +12,7 @@ import com.example.project.simulation.domain.SimulationTrancheRecord;
 
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Map;
 
@@ -68,6 +69,15 @@ class SimulationMapperXmlTest {
                 namespace + "selectSimulation",
                 1L
         );
+        String selectCompletedGifts = sql(
+                configuration,
+                namespace + "selectCompletedGifts",
+                Map.of(
+                        "familyId", 1L,
+                        "windowStart", LocalDate.of(2016, 8, 12),
+                        "giftDate", LocalDate.of(2026, 8, 12)
+                )
+        );
         String insertTranche = sql(configuration, namespace + "insertTranche",
                 new SimulationTrancheRecord());
         String selectTranches = sql(configuration, namespace + "selectTranches", 1L);
@@ -116,6 +126,9 @@ class SimulationMapperXmlTest {
         assertTrue(selectSimulation.contains(
                 "s.kb_product_data_version_id AS product_data_version_id"));
         assertTrue(selectSimulation.contains("s.gift_date"));
+        assertTrue(selectCompletedGifts.contains("gift_date >= ?"));
+        assertTrue(selectCompletedGifts.contains("gift_date <= ?"));
+        assertFalse(selectCompletedGifts.contains("gift_date < ?"));
         assertTrue(insertTranche.contains("simulation_tranche ( simul_result_id,"));
         assertTrue(insertTranche.contains("investment_amount, created_at"));
         assertTrue(insertTranche.contains("NOW()"));
