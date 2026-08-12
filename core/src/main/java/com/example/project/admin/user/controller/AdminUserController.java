@@ -100,9 +100,10 @@ public class AdminUserController {
     @DeleteMapping("/{userId}")
     public ApiResponse<Void> deleteUser(
             @PathVariable @Min(1) Long userId,
+            Authentication authentication,
             HttpServletRequest request
     ) {
-        adminUserService.deleteUser(userId);
+        adminUserService.deleteUser(authentication, userId);
         return ApiResponse.success(ResponseCode.DELETED, request.getRequestURI(), null);
     }
 }

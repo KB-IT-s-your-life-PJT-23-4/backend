@@ -58,16 +58,16 @@ CREATE TABLE `user`
     `user_id`        BIGINT       NOT NULL AUTO_INCREMENT,
     `password`       VARCHAR(255) NOT NULL,
     `user_name`      VARCHAR(100) NOT NULL,
-    `birth_date`     DATE NULL,
+    `birth_date`     DATE         NULL,
     `phone`          VARCHAR(20)  NOT NULL,
-    `role`           ENUM('ROOT', 'MIDDLE', 'DEFAULT', 'USER')
+    `role`           ENUM ('ROOT', 'MIDDLE', 'DEFAULT', 'USER')
         NOT NULL DEFAULT 'USER',
     -- [추가] 권한(role)과 계정 차단 상태를 분리
-    `account_status` ENUM('ACTIVE', 'BLOCKED')
+    `account_status` ENUM ('ACTIVE', 'BLOCKED')
         NOT NULL DEFAULT 'ACTIVE'
         COMMENT '계정 이용 상태',
     -- [추가] 기간 차단 만료 시각
-    `blocked_until`  DATETIME NULL
+    `blocked_until`  DATETIME     NULL
         COMMENT '계정 차단 만료 시각',
     `created_at`     DATETIME     NOT NULL
         DEFAULT CURRENT_TIMESTAMP,
@@ -95,10 +95,10 @@ CREATE TABLE `user`
             ),
 
     -- [추가] 만료된 차단 계정 조회용 인덱스
-    INDEX            `idx_user_account_status_blocked_until` (`account_status`, `blocked_until`)
-) ENGINE=InnoDB
-  DEFAULT CHARSET=utf8mb4
-  COLLATE=utf8mb4_unicode_ci;
+    INDEX `idx_user_account_status_blocked_until` (`account_status`, `blocked_until`)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_unicode_ci;
 
 
 CREATE TABLE `family`
@@ -106,10 +106,10 @@ CREATE TABLE `family`
     `family_id`   BIGINT       NOT NULL AUTO_INCREMENT,
     `user_id`     BIGINT       NOT NULL,
     `family_name` VARCHAR(100) NOT NULL,
-    `relation`    ENUM(
+    `relation`    ENUM (
         'LINEAL_DESCENDANT',
         'OTHER'
-        ) NOT NULL,
+        )                      NOT NULL,
     `birth_date`  DATE         NOT NULL,
     `created_at`  DATETIME     NOT NULL
         DEFAULT CURRENT_TIMESTAMP,
@@ -125,19 +125,19 @@ CREATE TABLE `family`
             REFERENCES `user` (`user_id`)
             ON DELETE CASCADE
             ON UPDATE CASCADE
-) ENGINE=InnoDB
-  DEFAULT CHARSET=utf8mb4
-  COLLATE=utf8mb4_unicode_ci;
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_unicode_ci;
 
 
 CREATE TABLE `kb_product_data_version`
 (
-    `kb_product_data_version_id` BIGINT      NOT NULL AUTO_INCREMENT,
-    `version_code`               VARCHAR(30) NOT NULL,
-    `data_date`                  DATE        NOT NULL,
-    `status`                     ENUM('LOADING', 'COMPLETED', 'FAILED') NOT NULL,
-    `created_at`                 DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    `completed_at`               DATETIME NULL,
+    `kb_product_data_version_id` BIGINT                                  NOT NULL AUTO_INCREMENT,
+    `version_code`               VARCHAR(30)                             NOT NULL,
+    `data_date`                  DATE                                    NOT NULL,
+    `status`                     ENUM ('LOADING', 'COMPLETED', 'FAILED') NOT NULL,
+    `created_at`                 DATETIME                                NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `completed_at`               DATETIME                                NULL,
 
     CONSTRAINT `pk_kb_product_data_version`
         PRIMARY KEY (`kb_product_data_version_id`),
@@ -150,20 +150,20 @@ CREATE TABLE `kb_product_data_version`
             `status` <> 'COMPLETED'
                 OR `completed_at` IS NOT NULL
             )
-) ENGINE=InnoDB
-  DEFAULT CHARSET=utf8mb4
-  COLLATE=utf8mb4_unicode_ci;
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_unicode_ci;
 
 
 CREATE TABLE `kb_product`
 (
     `product_id`   BIGINT      NOT NULL AUTO_INCREMENT,
     `product_code` VARCHAR(50) NOT NULL,
-    `product_type` ENUM(
+    `product_type` ENUM (
         'DEPOSIT',
         'SAVINGS',
         'ETF'
-        ) NOT NULL,
+        )                      NOT NULL,
     `created_at`   DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT `pk_kb_product`
@@ -171,21 +171,21 @@ CREATE TABLE `kb_product`
 
     CONSTRAINT `uk_kb_product_code`
         UNIQUE (`product_code`)
-) ENGINE=InnoDB
-  DEFAULT CHARSET=utf8mb4
-  COLLATE=utf8mb4_unicode_ci;
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_unicode_ci;
 
 
 CREATE TABLE `kb_product_version`
 (
-    `kb_product_version_id`      BIGINT       NOT NULL AUTO_INCREMENT,
-    `kb_product_data_version_id` BIGINT       NOT NULL,
-    `product_id`                 BIGINT       NOT NULL,
-    `product_name`               VARCHAR(200) NOT NULL,
-    `description`                TEXT NULL,
-    `product_url`                VARCHAR(500) NULL,
-    `sales_status`               ENUM('ON_SALE', 'DISCONTINUED') NOT NULL,
-    `created_at`                 DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `kb_product_version_id`      BIGINT                           NOT NULL AUTO_INCREMENT,
+    `kb_product_data_version_id` BIGINT                           NOT NULL,
+    `product_id`                 BIGINT                           NOT NULL,
+    `product_name`               VARCHAR(200)                     NOT NULL,
+    `description`                TEXT                             NULL,
+    `product_url`                VARCHAR(500)                     NULL,
+    `sales_status`               ENUM ('ON_SALE', 'DISCONTINUED') NOT NULL,
+    `created_at`                 DATETIME                         NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT `pk_kb_product_version`
         PRIMARY KEY (`kb_product_version_id`),
@@ -205,10 +205,10 @@ CREATE TABLE `kb_product_version`
     CONSTRAINT `uk_kb_product_version_data_version_product`
         UNIQUE (`kb_product_data_version_id`, `product_id`),
 
-    INDEX                        `idx_kb_product_version_data_version_sales_status` (`kb_product_data_version_id`, `sales_status`)
-) ENGINE=InnoDB
-  DEFAULT CHARSET=utf8mb4
-  COLLATE=utf8mb4_unicode_ci;
+    INDEX `idx_kb_product_version_data_version_sales_status` (`kb_product_data_version_id`, `sales_status`)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_unicode_ci;
 
 
 -- ETF 상세 정보 --
@@ -216,21 +216,21 @@ CREATE TABLE `etf`
 (
     `kb_product_version_id` BIGINT        NOT NULL COMMENT 'KB상품 버전 ID',
     `stock_code`            VARCHAR(20)   NOT NULL COMMENT 'ETF 종목코드',
-    `etf_category`          ENUM(
+    `etf_category`          ENUM (
         'DOMESTIC_INDEX',
         'FOREIGN_INDEX',
         'BOND_MIXED'
-        ) NOT NULL COMMENT 'ETF 분류',
+        )                                 NOT NULL COMMENT 'ETF 분류',
     `tracking_index`        VARCHAR(200)  NOT NULL COMMENT '추종 지수',
     `annual_return_10y`     DECIMAL(8, 4) NOT NULL COMMENT '10년 연환산 수익률(%), 음수 허용',
     `bond_ratio`            DECIMAL(7, 4) NOT NULL COMMENT '채권 비중(%)',
-    `risk_level`            ENUM(
+    `risk_level`            ENUM (
         'EX_LOW',
         'LOW',
         'MEDIUM',
         'HIGH',
         'EX_HIGH'
-        ) NOT NULL COMMENT '위험등급',
+        )                                 NOT NULL COMMENT '위험등급',
     `created_at`            DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     PRIMARY KEY (`kb_product_version_id`),
@@ -245,9 +245,9 @@ CREATE TABLE `etf`
         CHECK (
             `bond_ratio` BETWEEN 0 AND 100
             )
-) ENGINE=InnoDB
-  DEFAULT CHARSET=utf8mb4
-  COLLATE=utf8mb4_unicode_ci;
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_unicode_ci;
 
 
 -- ETF 종가 이력 --
@@ -269,9 +269,9 @@ CREATE TABLE `etf_history_price`
 
     CONSTRAINT `chk_etf_history_price_close_price`
         CHECK (`close_price` > 0)
-) ENGINE=InnoDB
-  DEFAULT CHARSET=utf8mb4
-  COLLATE=utf8mb4_unicode_ci;
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_unicode_ci;
 
 
 -- ETF 구성 종목 --
@@ -281,15 +281,15 @@ CREATE TABLE `etf_holding`
     `kb_product_version_id` BIGINT        NOT NULL,
     `holding_rank`          SMALLINT      NOT NULL,
     `holding_name`          VARCHAR(200)  NOT NULL,
-    `holding_code`          VARCHAR(50) NULL,
-    `asset_type`            ENUM(
+    `holding_code`          VARCHAR(50)   NULL,
+    `asset_type`            ENUM (
         'STOCK',
         'BOND',
         'ETF',
         'FUTURES',
         'CASH'
-        ) NOT NULL,
-    `country_code`          CHAR(2) NULL,
+        )                                 NOT NULL,
+    `country_code`          CHAR(2)       NULL,
     `weight_percent`        DECIMAL(7, 4) NOT NULL,
     `base_date`             DATE          NOT NULL,
     `created_at`            DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -311,19 +311,19 @@ CREATE TABLE `etf_holding`
     CONSTRAINT `chk_etf_holding_weight`
         CHECK (`weight_percent` > 0 AND `weight_percent` <= 100),
 
-    INDEX                   `idx_etf_holding_version_rank` (`kb_product_version_id`, `holding_rank`),
+    INDEX `idx_etf_holding_version_rank` (`kb_product_version_id`, `holding_rank`),
 
-    INDEX                   `idx_etf_holding_name` (`holding_name`)
-) ENGINE=InnoDB
-  DEFAULT CHARSET=utf8mb4
-  COLLATE=utf8mb4_unicode_ci;
+    INDEX `idx_etf_holding_name` (`holding_name`)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_unicode_ci;
 
 
 CREATE TABLE `deposit`
 (
     `kb_product_version_id` BIGINT   NOT NULL,
     `min_amount`            BIGINT   NOT NULL,
-    `max_amount`            BIGINT NULL,
+    `max_amount`            BIGINT   NULL,
     `min_month`             SMALLINT NOT NULL,
     `max_month`             SMALLINT NOT NULL,
     `created_at`            DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -348,18 +348,18 @@ CREATE TABLE `deposit`
 
     CONSTRAINT `chk_deposit_max_month`
         CHECK (`max_month` >= `min_month`)
-) ENGINE=InnoDB
-  DEFAULT CHARSET=utf8mb4
-  COLLATE=utf8mb4_unicode_ci;
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_unicode_ci;
 
 
 CREATE TABLE `savings`
 (
     `kb_product_version_id` BIGINT   NOT NULL,
-    `savings_category`      ENUM(
+    `savings_category`      ENUM (
         'FIXED_INSTALLMENT',
         'FREE_INSTALLMENT'
-        ) NOT NULL,
+        )                            NOT NULL,
     `min_month`             SMALLINT NOT NULL,
     `max_month`             SMALLINT NOT NULL,
     `monthly_min_amount`    BIGINT   NOT NULL,
@@ -388,9 +388,9 @@ CREATE TABLE `savings`
         CHECK (
             `monthly_max_amount` >= `monthly_min_amount`
             )
-) ENGINE=InnoDB
-  DEFAULT CHARSET=utf8mb4
-  COLLATE=utf8mb4_unicode_ci;
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_unicode_ci;
 
 
 CREATE TABLE `base_interest_rate`
@@ -398,7 +398,7 @@ CREATE TABLE `base_interest_rate`
     `base_interest_rate_id` BIGINT        NOT NULL AUTO_INCREMENT,
     `kb_product_version_id` BIGINT        NOT NULL,
     `min_month`             SMALLINT      NOT NULL,
-    `max_month`             SMALLINT NULL,
+    `max_month`             SMALLINT      NULL,
     `max_month_key`         SMALLINT
                             GENERATED ALWAYS AS (COALESCE(`max_month`, 32767)) STORED,
     `base_rate_percent`     DECIMAL(7, 4) NOT NULL,
@@ -434,10 +434,10 @@ CREATE TABLE `base_interest_rate`
                 `max_month_key`
             ),
 
-    INDEX                   `idx_base_interest_rate_version_month` (`kb_product_version_id`, `min_month`, `max_month`)
-) ENGINE=InnoDB
-  DEFAULT CHARSET=utf8mb4
-  COLLATE=utf8mb4_unicode_ci;
+    INDEX `idx_base_interest_rate_version_month` (`kb_product_version_id`, `min_month`, `max_month`)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_unicode_ci;
 
 
 CREATE TABLE `preferential_interest_rate`
@@ -465,35 +465,35 @@ CREATE TABLE `preferential_interest_rate`
     CONSTRAINT `uk_preferential_interest_rate_condition`
         UNIQUE (`kb_product_version_id`, `condition_code`),
 
-    INDEX                           `idx_preferential_interest_rate_version` (`kb_product_version_id`)
-) ENGINE=InnoDB
-  DEFAULT CHARSET=utf8mb4
-  COLLATE=utf8mb4_unicode_ci;
+    INDEX `idx_preferential_interest_rate_version` (`kb_product_version_id`)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_unicode_ci;
 
 
 CREATE TABLE `simulation`
 (
-    `simul_id`                   BIGINT      NOT NULL AUTO_INCREMENT,
-    `kb_product_data_version_id` BIGINT      NOT NULL,
-    `family_id`                  BIGINT      NOT NULL,
-    `requested_amount`           BIGINT      NOT NULL,
-    `status`                     ENUM('DRAFT', 'SAVED') NOT NULL,
-    `tax_payment_method`         ENUM('RECIPIENT_PAYS', 'DONOR_PAYS') NOT NULL,
-    `investment_period_months`   INT         NOT NULL,
-    `as_of_date`                 DATE        NOT NULL,
-    `gift_date`                  DATE        NOT NULL,
-    `investment_end_date`        DATE        NOT NULL,
-    `calculation_version`        VARCHAR(30) NOT NULL,
-    `formula_version`            VARCHAR(30) NOT NULL,
-    `version`                    BIGINT      NOT NULL DEFAULT 1,
-    `selected_portfolio_id`      BIGINT NULL,
-    `previous_gift_amount`       BIGINT      NOT NULL,
-    `deduction_limit`            BIGINT      NOT NULL,
-    `deduction_renewal_date`     DATE NULL,
-    `created_at`                 DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    `updated_at`                 DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    `saved_at`                   DATETIME NULL,
-    `expired_at`                 DATETIME NULL,
+    `simul_id`                   BIGINT                                NOT NULL AUTO_INCREMENT,
+    `kb_product_data_version_id` BIGINT                                NOT NULL,
+    `family_id`                  BIGINT                                NOT NULL,
+    `requested_amount`           BIGINT                                NOT NULL,
+    `status`                     ENUM ('DRAFT', 'SAVED')               NOT NULL,
+    `tax_payment_method`         ENUM ('RECIPIENT_PAYS', 'DONOR_PAYS') NOT NULL,
+    `investment_period_months`   INT                                   NOT NULL,
+    `as_of_date`                 DATE                                  NOT NULL,
+    `gift_date`                  DATE                                  NOT NULL,
+    `investment_end_date`        DATE                                  NOT NULL,
+    `calculation_version`        VARCHAR(30)                           NOT NULL,
+    `formula_version`            VARCHAR(30)                           NOT NULL,
+    `version`                    BIGINT                                NOT NULL DEFAULT 1,
+    `selected_portfolio_id`      BIGINT                                NULL,
+    `previous_gift_amount`       BIGINT                                NOT NULL,
+    `deduction_limit`            BIGINT                                NOT NULL,
+    `deduction_renewal_date`     DATE                                  NULL,
+    `created_at`                 DATETIME                              NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at`                 DATETIME                              NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    `saved_at`                   DATETIME                              NULL,
+    `expired_at`                 DATETIME                              NULL,
 
     CONSTRAINT `pk_simulation`
         PRIMARY KEY (`simul_id`),
@@ -522,7 +522,7 @@ CREATE TABLE `simulation`
                 = DATE_ADD(
                     `gift_date`,
                     INTERVAL `investment_period_months` MONTH
-                                            )
+                  )
             ),
 
     CONSTRAINT `chk_simulation_version`
@@ -549,28 +549,28 @@ CREATE TABLE `simulation`
                 )
             ),
 
-    INDEX                        `idx_simulation_family_history` (`family_id`, `updated_at` DESC, `simul_id` DESC),
+    INDEX `idx_simulation_family_history` (`family_id`, `updated_at` DESC, `simul_id` DESC),
 
-    INDEX                        `idx_simulation_family_status` (`family_id`, `status`),
+    INDEX `idx_simulation_family_status` (`family_id`, `status`),
 
-    INDEX                        `idx_simulation_status_expiry` (`status`, `expired_at`)
-) ENGINE=InnoDB
-  DEFAULT CHARSET=utf8mb4
-  COLLATE=utf8mb4_unicode_ci;
+    INDEX `idx_simulation_status_expiry` (`status`, `expired_at`)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_unicode_ci;
 
 
 CREATE TABLE `simulation_result`
 (
-    `simul_result_id`       BIGINT   NOT NULL AUTO_INCREMENT,
-    `simul_id`              BIGINT   NOT NULL,
-    `scenario_type`         ENUM('IMMEDIATE', 'TAX_OPTIMIZED') NOT NULL,
-    `deduction_amount`      BIGINT   NOT NULL,
-    `taxable_amount`        BIGINT   NOT NULL,
-    `gift_tax`              BIGINT   NOT NULL,
-    `donor_required_amount` BIGINT   NOT NULL,
-    `post_tax_amount`       BIGINT   NOT NULL,
-    `investment_principal`  BIGINT   NOT NULL,
-    `created_at`            DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `simul_result_id`       BIGINT                              NOT NULL AUTO_INCREMENT,
+    `simul_id`              BIGINT                              NOT NULL,
+    `scenario_type`         ENUM ('IMMEDIATE', 'TAX_OPTIMIZED') NOT NULL,
+    `deduction_amount`      BIGINT                              NOT NULL,
+    `taxable_amount`        BIGINT                              NOT NULL,
+    `gift_tax`              BIGINT                              NOT NULL,
+    `donor_required_amount` BIGINT                              NOT NULL,
+    `post_tax_amount`       BIGINT                              NOT NULL,
+    `investment_principal`  BIGINT                              NOT NULL,
+    `created_at`            DATETIME                            NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT `pk_simulation_result`
         PRIMARY KEY (`simul_result_id`),
@@ -593,9 +593,9 @@ CREATE TABLE `simulation_result`
                 AND `post_tax_amount` >= 0
                 AND `investment_principal` >= 0
             )
-) ENGINE=InnoDB
-  DEFAULT CHARSET=utf8mb4
-  COLLATE=utf8mb4_unicode_ci;
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_unicode_ci;
 
 
 CREATE TABLE `simulation_tranche`
@@ -632,27 +632,27 @@ CREATE TABLE `simulation_tranche`
                 AND `donor_required_amount` >= 0
                 AND `investment_amount` >= 0
             )
-) ENGINE=InnoDB
-  DEFAULT CHARSET=utf8mb4
-  COLLATE=utf8mb4_unicode_ci;
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_unicode_ci;
 
 
 CREATE TABLE `simulation_portfolio`
 (
-    `simul_portfolio_id`    BIGINT   NOT NULL AUTO_INCREMENT,
-    `simul_result_id`       BIGINT   NOT NULL,
-    `portfolio_type`        ENUM(
+    `simul_portfolio_id`    BIGINT     NOT NULL AUTO_INCREMENT,
+    `simul_result_id`       BIGINT     NOT NULL,
+    `portfolio_type`        ENUM (
         'CONSERVATIVE',
         'BALANCED',
         'AGGRESSIVE'
-        ) NOT NULL,
-    `deposit_amount`        BIGINT   NOT NULL,
-    `savings_amount`        BIGINT   NOT NULL,
-    `etf_amount`            BIGINT   NOT NULL,
-    `expected_future_value` BIGINT   NOT NULL,
+        )                              NOT NULL,
+    `deposit_amount`        BIGINT     NOT NULL,
+    `savings_amount`        BIGINT     NOT NULL,
+    `etf_amount`            BIGINT     NOT NULL,
+    `expected_future_value` BIGINT     NOT NULL,
     `is_recommended`        TINYINT(1) NOT NULL,
-    `created_at`            DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    `updated_at`            DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    `created_at`            DATETIME   NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at`            DATETIME   NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
     CONSTRAINT `pk_simulation_portfolio`
         PRIMARY KEY (`simul_portfolio_id`),
@@ -676,9 +676,9 @@ CREATE TABLE `simulation_portfolio`
                 AND `etf_amount` >= 0
                 AND `expected_future_value` >= 0
             )
-) ENGINE=InnoDB
-  DEFAULT CHARSET=utf8mb4
-  COLLATE=utf8mb4_unicode_ci;
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_unicode_ci;
 
 
 CREATE TABLE `simulation_product`
@@ -686,7 +686,7 @@ CREATE TABLE `simulation_product`
     `simulation_product_id` BIGINT        NOT NULL AUTO_INCREMENT,
     `simul_portfolio_id`    BIGINT        NOT NULL,
     `kb_product_version_id` BIGINT        NOT NULL,
-    `is_selected`           TINYINT(1) NOT NULL,
+    `is_selected`           TINYINT(1)    NOT NULL,
     `allocated_amount`      BIGINT        NOT NULL,
     `applied_annual_rate`   DECIMAL(8, 4) NOT NULL,
     `expected_future_value` BIGINT        NOT NULL,
@@ -719,10 +719,10 @@ CREATE TABLE `simulation_product`
                 AND `expected_future_value` >= 0
             ),
 
-    INDEX                   `idx_simulation_product_portfolio_selected` (`simul_portfolio_id`, `is_selected`)
-) ENGINE=InnoDB
-  DEFAULT CHARSET=utf8mb4
-  COLLATE=utf8mb4_unicode_ci;
+    INDEX `idx_simulation_product_portfolio_selected` (`simul_portfolio_id`, `is_selected`)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_unicode_ci;
 
 
 CREATE TABLE `simulation_product_preferential_condition`
@@ -748,9 +748,9 @@ CREATE TABLE `simulation_product_preferential_condition`
                 (`preferential_interest_rate_id`)
             ON DELETE RESTRICT
             ON UPDATE CASCADE
-) ENGINE=InnoDB
-  DEFAULT CHARSET=utf8mb4
-  COLLATE=utf8mb4_unicode_ci;
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_unicode_ci;
 
 
 CREATE TABLE `gift`
@@ -763,12 +763,12 @@ CREATE TABLE `gift`
     `sequence_no`     INT      NULL,
     `amount`          BIGINT   NOT NULL,
     `gift_date`       DATE     NOT NULL,
-    `status`          ENUM(
+    `status`          ENUM (
         'PLANNED',
         'COMPLETED',
         'CANCELLED'
-        ) NOT NULL DEFAULT 'PLANNED',
-    `memo`            TEXT NULL,
+        )                      NOT NULL DEFAULT 'PLANNED',
+    `memo`            TEXT     NULL,
     `created_at`      DATETIME NOT NULL
         DEFAULT CURRENT_TIMESTAMP,
     `updated_at`      DATETIME NOT NULL
@@ -794,9 +794,9 @@ CREATE TABLE `gift`
             REFERENCES `simulation_result` (`simul_result_id`)
             ON DELETE SET NULL
             ON UPDATE CASCADE
-) ENGINE=InnoDB
-  DEFAULT CHARSET=utf8mb4
-  COLLATE=utf8mb4_unicode_ci;
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_unicode_ci;
 
 
 CREATE TABLE `reminder`
@@ -839,38 +839,38 @@ CREATE TABLE `reminder`
 
 CREATE TABLE `law_article`
 (
-    `law_id`                 BIGINT       NOT NULL AUTO_INCREMENT,
-    `law_code`               VARCHAR(20)  NOT NULL COMMENT '국가법령정보 법령ID (예: 001561). 개정돼도 불변',
-    `law_key`                VARCHAR(30)  NOT NULL COMMENT '법령키 = 법령ID+시행일자+공포번호. 법령 버전을 유일 식별.값이 같으면 같은 버전',
-    `law_name`               VARCHAR(200) NOT NULL,
-    `law_type`               VARCHAR(60)  NOT NULL COMMENT '법종구분: 법률 / 대통령령 / 재정경제부령',
-    `ministry`               VARCHAR(60) NULL COMMENT '소관부처',
-    `promulgation_no`        VARCHAR(20) NULL COMMENT '공포번호',
-    `promulgation_date`      DATE NULL,
-    `effective_date`         DATE NULL COMMENT '법령 시행일자',
+    `law_id`                 BIGINT                       NOT NULL AUTO_INCREMENT,
+    `law_code`               VARCHAR(20)                  NOT NULL COMMENT '국가법령정보 법령ID (예: 001561). 개정돼도 불변',
+    `law_key`                VARCHAR(30)                  NOT NULL COMMENT '법령키 = 법령ID+시행일자+공포번호. 법령 버전을 유일 식별.값이 같으면 같은 버전',
+    `law_name`               VARCHAR(200)                 NOT NULL,
+    `law_type`               VARCHAR(60)                  NOT NULL COMMENT '법종구분: 법률 / 대통령령 / 재정경제부령',
+    `ministry`               VARCHAR(60)                  NULL COMMENT '소관부처',
+    `promulgation_no`        VARCHAR(20)                  NULL COMMENT '공포번호',
+    `promulgation_date`      DATE                         NULL,
+    `effective_date`         DATE                         NULL COMMENT '법령 시행일자',
 
     -- 조문 / 별표 단위
     `unit_type`              ENUM ('ARTICLE', 'APPENDIX') NOT NULL DEFAULT 'ARTICLE' COMMENT 'ARTICLE=조문, APPENDIX=별표',
-    `article_no`             VARCHAR(50)  NOT NULL COMMENT '제3조 / 제3조의2 / [별표1]',
-    `article_key`            VARCHAR(20)  NOT NULL COMMENT '조문키 또는 별표키. 법령 내 유일',
-    `title`                  VARCHAR(200) NULL COMMENT '조문제목. 제목 없는 조문이 있어 NULL 허용',
-    `article_effective_date` DATE NULL COMMENT '조문시행일자. 법령 시행일과 다를 수 있음',
-    `content`                MEDIUMTEXT   NOT NULL COMMENT '조문내용 + 항 + 호 + 목 조립 결과',
+    `article_no`             VARCHAR(50)                  NOT NULL COMMENT '제3조 / 제3조의2 / [별표1]',
+    `article_key`            VARCHAR(20)                  NOT NULL COMMENT '조문키 또는 별표키. 법령 내 유일',
+    `title`                  VARCHAR(200)                 NULL COMMENT '조문제목. 제목 없는 조문이 있어 NULL 허용',
+    `article_effective_date` DATE                         NULL COMMENT '조문시행일자. 법령 시행일과 다를 수 있음',
+    `content`                MEDIUMTEXT                   NOT NULL COMMENT '조문내용 + 항 + 호 + 목 조립 결과',
 
     -- 개정 이력 (<개정 …> / <신설 …> 태그에서 분리 보존)
-    `revision_history`       TEXT NULL COMMENT '"개정 2016-12-20; 신설 2018-12-31" 형태',
-    `latest_revision_date`   DATE NULL COMMENT '개정 이력 중 최신 일자. 시점 필터용',
+    `revision_history`       TEXT                         NULL COMMENT '"개정 2016-12-20; 신설 2018-12-31" 형태',
+    `latest_revision_date`   DATE                         NULL COMMENT '개정 이력 중 최신 일자. 시점 필터용',
 
     -- 벡터 스토어 반영 시각. 배치는 건드리지 않고 RAG 쪽이 찍는다.
     -- 재임베딩 대상: WHERE embedded_at IS NULL OR embedded_at < updated_at
-    `embedded_at`            DATETIME NULL COMMENT '벡터 스토어 반영 시각. NULL 이면 미반영',
-    `created_at`             DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    `updated_at`             DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    `embedded_at`            DATETIME                     NULL COMMENT '벡터 스토어 반영 시각. NULL 이면 미반영',
+    `created_at`             DATETIME                     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at`             DATETIME                     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     CONSTRAINT `pk_law_article` PRIMARY KEY (`law_id`),
     CONSTRAINT `uk_law_article_unit` UNIQUE (`law_code`, `unit_type`, `article_key`),
-    INDEX                    `idx_law_article_code` (`law_code`, `effective_date`),
-    INDEX                    `idx_law_article_name_no` (`law_name`, `article_no`),
-    INDEX                    `idx_law_article_revision` (`latest_revision_date`)
+    INDEX `idx_law_article_code` (`law_code`, `effective_date`),
+    INDEX `idx_law_article_name_no` (`law_name`, `article_no`),
+    INDEX `idx_law_article_revision` (`latest_revision_date`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_unicode_ci;
@@ -886,9 +886,9 @@ CREATE TABLE `faq_category`
 
     CONSTRAINT `pk_faq_category`
         PRIMARY KEY (`faq_category_id`)
-) ENGINE=InnoDB
-  DEFAULT CHARSET=utf8mb4
-  COLLATE=utf8mb4_unicode_ci;
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_unicode_ci;
 
 
 CREATE TABLE `faq`
@@ -911,23 +911,23 @@ CREATE TABLE `faq`
             REFERENCES `faq_category` (`faq_category_id`)
             ON DELETE CASCADE
             ON UPDATE CASCADE
-) ENGINE=InnoDB
-  DEFAULT CHARSET=utf8mb4
-  COLLATE=utf8mb4_unicode_ci;
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_unicode_ci;
 
 
 CREATE TABLE `gift_deduction_limit`
 (
-    `deduction_limit_id` BIGINT   NOT NULL AUTO_INCREMENT,
-    `effective_from`     DATE     NOT NULL COMMENT '이 공제 한도가 적용되기 시작하는 증여일(법 시행일)',
-    `effective_to`       DATE NULL
+    `deduction_limit_id` BIGINT                              NOT NULL AUTO_INCREMENT,
+    `effective_from`     DATE                                NOT NULL COMMENT '이 공제 한도가 적용되기 시작하는 증여일(법 시행일)',
+    `effective_to`       DATE                                NULL
         COMMENT '다음 개정 시행일. 현행 버전이면 NULL',
-    `relation`           ENUM('LINEAL_DESCENDANT', 'OTHER') NOT NULL
+    `relation`           ENUM ('LINEAL_DESCENDANT', 'OTHER') NOT NULL
         COMMENT 'family.relation 과 동일',
-    `is_minor`           TINYINT(1) NOT NULL DEFAULT 0
+    `is_minor`           TINYINT(1)                          NOT NULL DEFAULT 0
         COMMENT '수증자 미성년 여부',
-    `deduction_limit`    BIGINT   NOT NULL COMMENT '10년 합산 공제 한도(원)',
-    `created_at`         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `deduction_limit`    BIGINT                              NOT NULL COMMENT '10년 합산 공제 한도(원)',
+    `created_at`         DATETIME                            NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     PRIMARY KEY (`deduction_limit_id`),
 
@@ -949,9 +949,9 @@ CREATE TABLE `gift_tax_bracket`
 (
     `bracket_id`            BIGINT        NOT NULL AUTO_INCREMENT,
     `effective_from`        DATE          NOT NULL,
-    `effective_to`          DATE NULL,
+    `effective_to`          DATE          NULL,
     `lower_bound`           BIGINT        NOT NULL,
-    `upper_bound`           BIGINT NULL,
+    `upper_bound`           BIGINT        NULL,
     `tax_rate`              DECIMAL(5, 4) NOT NULL,
     `progressive_deduction` BIGINT        NOT NULL DEFAULT 0,
     `created_at`            DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -987,10 +987,7 @@ ALTER TABLE `simulation`
             ON UPDATE CASCADE;
 
 
-CREATE
-OR REPLACE
-    SQL SECURITY INVOKER
-VIEW `vw_family_previous_gift` AS
+CREATE OR REPLACE SQL SECURITY INVOKER VIEW `vw_family_previous_gift` AS
 
 WITH ranked_deduction_rules AS (
     /*
@@ -998,115 +995,103 @@ WITH ranked_deduction_rules AS (
      * 같은 관계·미성년 여부에 여러 규칙이 존재하면
      * 가장 최근에 시행된 규칙을 선택합니다.
      */
-    SELECT
-        relation,
-        is_minor,
-        deduction_limit,
-        ROW_NUMBER() OVER (
-            PARTITION BY relation, is_minor
-            ORDER BY effective_from DESC,
-                     deduction_limit_id DESC
-        ) AS rule_rank
+    SELECT relation,
+           is_minor,
+           deduction_limit,
+           ROW_NUMBER() OVER (
+               PARTITION BY relation, is_minor
+               ORDER BY effective_from DESC,
+                   deduction_limit_id DESC
+               ) AS rule_rank
     FROM gift_deduction_limit
     WHERE effective_from <= CURRENT_DATE
       AND (
-          effective_to IS NULL
-          OR effective_to > CURRENT_DATE
-      )
-),
+        effective_to IS NULL
+            OR effective_to > CURRENT_DATE
+        )),
 
-active_deduction_rules AS (
-    SELECT
-        relation,
-        is_minor,
-        deduction_limit
-    FROM ranked_deduction_rules
-    WHERE rule_rank = 1
-),
+     active_deduction_rules AS (SELECT relation,
+                                       is_minor,
+                                       deduction_limit
+                                FROM ranked_deduction_rules
+                                WHERE rule_rank = 1),
 
-window_gifts AS (
-    /*
-     * 최근 10년 안의 확정 증여를 오래된 순서로 정렬합니다.
-     *
-     * remaining_after:
-     * 현재 증여를 제외한 뒤에도 10년 창 안에 남아 있는
-     * 이후 증여 금액 합계입니다.
-     */
-    SELECT
-        g.family_id,
-        g.gift_id,
-        g.amount,
-        g.gift_date,
+     window_gifts AS (
+         /*
+          * 최근 10년 안의 확정 증여를 오래된 순서로 정렬합니다.
+          *
+          * remaining_after:
+          * 현재 증여를 제외한 뒤에도 10년 창 안에 남아 있는
+          * 이후 증여 금액 합계입니다.
+          */
+         SELECT g.family_id,
+                g.gift_id,
+                g.amount,
+                g.gift_date,
 
-        COALESCE(
-            SUM(g.amount) OVER (
-                PARTITION BY g.family_id
-                ORDER BY
-                    g.gift_date ASC,
-                    g.gift_id ASC
-                ROWS BETWEEN
-                    1 FOLLOWING
-                    AND UNBOUNDED FOLLOWING
-            ),
-            0
-        ) AS remaining_after
-    FROM gift g
-    WHERE g.status = 'COMPLETED'
-      AND g.gift_date >= DATE_SUB(
-          CURRENT_DATE,
-          INTERVAL 10 YEAR
-      )
-      AND g.gift_date <= CURRENT_DATE
-),
+                COALESCE(
+                        SUM(g.amount) OVER (
+                            PARTITION BY g.family_id
+                            ORDER BY
+                                g.gift_date ASC,
+                                g.gift_id ASC
+                            ROWS BETWEEN
+                                1 FOLLOWING
+                                AND UNBOUNDED FOLLOWING
+                            ),
+                        0
+                ) AS remaining_after
+         FROM gift g
+         WHERE g.status = 'COMPLETED'
+           AND g.gift_date >= DATE_SUB(
+                         CURRENT_DATE,
+                         INTERVAL 10 YEAR
+                              )
+           AND g.gift_date <= CURRENT_DATE),
 
-gift_summary AS (
-    SELECT
-        family_id,
-        COUNT(*) AS completed_count,
-        SUM(amount) AS previous_gift_amount,
-        MAX(gift_date) AS previous_gift_date
-    FROM window_gifts
-    GROUP BY family_id
-),
+     gift_summary AS (SELECT family_id,
+                             COUNT(*)       AS completed_count,
+                             SUM(amount)    AS previous_gift_amount,
+                             MAX(gift_date) AS previous_gift_date
+                      FROM window_gifts
+                      GROUP BY family_id),
 
-renewal_candidates AS (
-    /*
-     * GiftService.renewalGift()의 다음 조건과 같습니다.
-     *
-     * remaining -= gift.amount;
-     * if (remaining < deductionLimit) {
-     *     return gift;
-     * }
-     */
-    SELECT
-        wg.family_id,
-        wg.gift_id,
-        wg.gift_date,
+     renewal_candidates AS (
+         /*
+          * GiftService.renewalGift()의 다음 조건과 같습니다.
+          *
+          * remaining -= gift.amount;
+          * if (remaining < deductionLimit) {
+          *     return gift;
+          * }
+          */
+         SELECT wg.family_id,
+                wg.gift_id,
+                wg.gift_date,
 
-        ROW_NUMBER() OVER (
-            PARTITION BY wg.family_id
-            ORDER BY
-                wg.gift_date ASC,
-                wg.gift_id ASC
-        ) AS renewal_rank
-    FROM window_gifts wg
-    JOIN family f
-      ON f.family_id = wg.family_id
-    JOIN active_deduction_rules dr
-      ON dr.relation = f.relation
-     AND dr.is_minor =
-         CASE
-             WHEN f.relation = 'LINEAL_DESCENDANT'
-              AND TIMESTAMPDIFF(
-                      YEAR,
-                      f.birth_date,
-                      CURRENT_DATE
-                  ) < 19
-             THEN 1
-             ELSE 0
-         END
-    WHERE wg.remaining_after < dr.deduction_limit
-)
+                ROW_NUMBER() OVER (
+                    PARTITION BY wg.family_id
+                    ORDER BY
+                        wg.gift_date ASC,
+                        wg.gift_id ASC
+                    ) AS renewal_rank
+         FROM window_gifts wg
+                  JOIN family f
+                       ON f.family_id = wg.family_id
+                  JOIN active_deduction_rules dr
+                       ON dr.relation = f.relation
+                           AND dr.is_minor =
+                               CASE
+                                   WHEN f.relation = 'LINEAL_DESCENDANT'
+                                       AND TIMESTAMPDIFF(
+                                                   YEAR,
+                                                   f.birth_date,
+                                                   CURRENT_DATE
+                                           ) < 19
+                                       THEN 1
+                                   ELSE 0
+                                   END
+         WHERE wg.remaining_after < dr.deduction_limit)
 
 SELECT f.user_id,
        f.family_id,
@@ -1132,7 +1117,7 @@ SELECT f.user_id,
            ELSE DATE_ADD(
                    rc.gift_date,
                    INTERVAL 10 YEAR
-        )
+                )
            END       AS deduction_renewal_date
 
 FROM family f
@@ -1145,129 +1130,131 @@ FROM family f
                        AND rc.renewal_rank = 1;
 
 
-CREATE TABLE ai_conversation (
-                                 ai_conversation_id BIGINT NOT NULL AUTO_INCREMENT
-                                     COMMENT '내부 대화 세션 ID',
+CREATE TABLE ai_conversation
+(
+    ai_conversation_id    BIGINT      NOT NULL AUTO_INCREMENT
+        COMMENT '내부 대화 세션 ID',
 
-                                 conversation_id CHAR(36) NULL
-                                     COMMENT 'FastAPI 대화 ID',
+    conversation_id       CHAR(36)    NULL
+        COMMENT 'FastAPI 대화 ID',
 
-                                 user_id BIGINT NOT NULL
-                                     COMMENT '사용자 ID',
+    user_id               BIGINT      NOT NULL
+        COMMENT '사용자 ID',
 
-                                 status VARCHAR(20) NOT NULL
-                                     DEFAULT 'ACTIVE'
-                                     COMMENT 'ACTIVE, CLOSED, ARCHIVED',
+    status                VARCHAR(20) NOT NULL
+        DEFAULT 'ACTIVE'
+        COMMENT 'ACTIVE, CLOSED, ARCHIVED',
 
-                                 processing_status VARCHAR(20) NOT NULL
-                                     DEFAULT 'IDLE'
-                                     COMMENT 'IDLE, PROCESSING',
+    processing_status     VARCHAR(20) NOT NULL
+        DEFAULT 'IDLE'
+        COMMENT 'IDLE, PROCESSING',
 
-                                 processing_started_at DATETIME(6) NULL
-                                     COMMENT '현재 질문 처리 시작 시각',
+    processing_started_at DATETIME(6) NULL
+        COMMENT '현재 질문 처리 시작 시각',
 
-                                 transcript_json JSON NOT NULL
-                                     COMMENT '보호 처리된 전체 대화 JSON',
+    transcript_json       JSON        NOT NULL
+        COMMENT '보호 처리된 전체 대화 JSON',
 
-                                 turn_count INT NOT NULL
-                                     DEFAULT 0
-                                     COMMENT '발급된 질문 순번',
+    turn_count            INT         NOT NULL
+        DEFAULT 0
+        COMMENT '발급된 질문 순번',
 
-                                 last_message_at DATETIME(6) NULL,
+    last_message_at       DATETIME(6) NULL,
 
-                                 closed_at DATETIME(6) NULL,
+    closed_at             DATETIME(6) NULL,
 
-                                 created_at DATETIME(6) NOT NULL
-                                     DEFAULT CURRENT_TIMESTAMP(6),
+    created_at            DATETIME(6) NOT NULL
+        DEFAULT CURRENT_TIMESTAMP(6),
 
-                                 updated_at DATETIME(6) NOT NULL
-                                     DEFAULT CURRENT_TIMESTAMP(6)
-                                     ON UPDATE CURRENT_TIMESTAMP(6),
+    updated_at            DATETIME(6) NOT NULL
+        DEFAULT CURRENT_TIMESTAMP(6)
+        ON UPDATE CURRENT_TIMESTAMP(6),
 
-                                 active_user_id BIGINT
-                                                    GENERATED ALWAYS AS (
-                                                        CASE
-                                                            WHEN status = 'ACTIVE' THEN user_id
-                                                            ELSE NULL
-                                                            END
-                                                        ) STORED,
+    active_user_id        BIGINT
+                          GENERATED ALWAYS AS (
+                              CASE
+                                  WHEN status = 'ACTIVE' THEN user_id
+                                  ELSE NULL
+                                  END
+                              ) STORED,
 
-                                 PRIMARY KEY (ai_conversation_id),
+    PRIMARY KEY (ai_conversation_id),
 
-                                 UNIQUE KEY uk_ai_conversation_external (
-                                     conversation_id
-                                     ),
+    UNIQUE KEY uk_ai_conversation_external (
+        conversation_id
+        ),
 
-                                 UNIQUE KEY uk_ai_conversation_active_user (
-                                     active_user_id
-                                     ),
+    UNIQUE KEY uk_ai_conversation_active_user (
+        active_user_id
+        ),
 
-                                 KEY idx_ai_conversation_user_created (
-                                     user_id,
-                                     created_at
-                                     ),
+    KEY idx_ai_conversation_user_created (
+        user_id,
+        created_at
+        ),
 
-                                 KEY idx_ai_conversation_processing (
-                                     processing_status,
-                                     processing_started_at
-                                     ),
+    KEY idx_ai_conversation_processing (
+        processing_status,
+        processing_started_at
+        ),
 
-                                 CONSTRAINT fk_ai_conversation_user
-                                     FOREIGN KEY (user_id)
-                                         REFERENCES `user` (user_id)
-) ENGINE=InnoDB
-  DEFAULT CHARSET=utf8mb4
-  COLLATE=utf8mb4_unicode_ci
-  COMMENT='AI 상담 대화 세션';
+    CONSTRAINT fk_ai_conversation_user
+        FOREIGN KEY (user_id)
+            REFERENCES `user` (user_id)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_unicode_ci
+    COMMENT ='AI 상담 대화 세션';
 
 
-CREATE TABLE ai_consultation_event (
-                                       ai_consultation_event_id BIGINT NOT NULL AUTO_INCREMENT
-                                           COMMENT 'AI 상담 분류 이벤트 ID',
+CREATE TABLE ai_consultation_event
+(
+    ai_consultation_event_id BIGINT        NOT NULL AUTO_INCREMENT
+        COMMENT 'AI 상담 분류 이벤트 ID',
 
     /*
      * Spring에서 관리하는 내부 대화 세션 PK입니다.
      * ai_conversation 테이블과 연결됩니다.
      */
-                                       ai_conversation_id BIGINT NOT NULL
-                                           COMMENT '내부 AI 대화 세션 ID',
+    ai_conversation_id       BIGINT        NOT NULL
+        COMMENT '내부 AI 대화 세션 ID',
 
     /*
      * FastAPI가 발급한 대화 ID입니다.
      * 하나의 conversation_id에 여러 질문 이벤트가 저장될 수 있으므로
      * UNIQUE 인덱스를 설정하면 안 됩니다.
      */
-                                       conversation_id CHAR(36) NOT NULL
-                                           COMMENT 'FastAPI 대화 ID',
+    conversation_id          CHAR(36)      NOT NULL
+        COMMENT 'FastAPI 대화 ID',
 
     /*
      * 질문 요청 한 건을 식별하는 UUID입니다.
      * 동일 요청이 중복 저장되는 것을 방지합니다.
      */
-                                       request_id CHAR(36) NOT NULL
-                                           COMMENT '개별 질문 요청 ID',
+    request_id               CHAR(36)      NOT NULL
+        COMMENT '개별 질문 요청 ID',
 
     /*
      * 같은 대화 세션 안에서 질문 순서를 나타냅니다.
      * 예: 1, 2, 3
      */
-                                       turn_no INT NOT NULL
-                                           COMMENT '대화 세션 내 질문 순서',
+    turn_no                  INT           NOT NULL
+        COMMENT '대화 세션 내 질문 순서',
 
     /*
      * 상담 요청 사용자입니다.
      * 관리자 조회 성능과 이벤트 발생 당시 사용자 추적을 위해
      * 대화 테이블과 별도로 저장합니다.
      */
-                                       user_id BIGINT NOT NULL
-                                           COMMENT '상담 요청 사용자 ID',
+    user_id                  BIGINT        NOT NULL
+        COMMENT '상담 요청 사용자 ID',
 
     /*
      * FastAPI가 분류한 질문 유형입니다.
      * 예: assessment, family, product, jailbreak, other
      */
-                                       intent VARCHAR(30) NOT NULL
-                                           COMMENT 'FastAPI 질문 분류 결과',
+    intent                   VARCHAR(30)   NOT NULL
+        COMMENT 'FastAPI 질문 분류 결과',
 
     /*
      * 개별 질문에 대한 FastAPI 응답 상태입니다.
@@ -1275,142 +1262,142 @@ CREATE TABLE ai_consultation_event (
      *
      * 예: COMPLETED, CLARIFICATION_REQUIRED, REJECTED
      */
-                                       response_status VARCHAR(30) NOT NULL
-                                           COMMENT 'FastAPI 개별 질문 응답 상태',
+    response_status          VARCHAR(30)   NOT NULL
+        COMMENT 'FastAPI 개별 질문 응답 상태',
 
     /*
      * 관리자 신고 화면 등에 표시할 질문 일부입니다.
      * 질문 원문이 아니라 개인정보를 제거한 내용만 저장해야 합니다.
      */
-                                       question_excerpt VARCHAR(1000) NULL
-                                           COMMENT '개인정보가 마스킹된 질문 일부',
+    question_excerpt         VARCHAR(1000) NULL
+        COMMENT '개인정보가 마스킹된 질문 일부',
 
     /*
      * FastAPI 분류 및 응답 처리가 완료된 시각입니다.
      */
-                                       occurred_at DATETIME(6) NOT NULL
-                                           DEFAULT CURRENT_TIMESTAMP(6)
-                                           COMMENT '상담 분류 이벤트 발생 시각',
+    occurred_at              DATETIME(6)   NOT NULL
+        DEFAULT CURRENT_TIMESTAMP(6)
+        COMMENT '상담 분류 이벤트 발생 시각',
 
-                                       created_at DATETIME(6) NOT NULL
-                                           DEFAULT CURRENT_TIMESTAMP(6)
-                                           COMMENT '이벤트 레코드 생성 시각',
+    created_at               DATETIME(6)   NOT NULL
+        DEFAULT CURRENT_TIMESTAMP(6)
+        COMMENT '이벤트 레코드 생성 시각',
 
-                                       PRIMARY KEY (
-                                                    ai_consultation_event_id
-                                           ),
+    PRIMARY KEY (
+                 ai_consultation_event_id
+        ),
 
     /*
      * 동일한 요청이 재처리되더라도 이벤트가 중복 저장되지 않게 합니다.
      */
-                                       UNIQUE KEY uk_ai_consultation_event_request (
-                                           request_id
-                                           ),
+    UNIQUE KEY uk_ai_consultation_event_request (
+        request_id
+        ),
 
     /*
      * 하나의 대화 세션에서 같은 turn_no가 중복되지 않게 합니다.
      */
-                                       UNIQUE KEY uk_ai_consultation_event_turn (
-                                           ai_conversation_id,
-                                           turn_no
-                                           ),
+    UNIQUE KEY uk_ai_consultation_event_turn (
+        ai_conversation_id,
+        turn_no
+        ),
 
     /*
      * 사용자별 intent 발생 횟수 및 기간 조회용 인덱스입니다.
      */
-                                       KEY idx_ai_consultation_event_user_intent_time (
-                                           user_id,
-                                           intent,
-                                           occurred_at
-                                           ),
+    KEY idx_ai_consultation_event_user_intent_time (
+        user_id,
+        intent,
+        occurred_at
+        ),
 
     /*
      * FastAPI conversation_id를 이용한 장애 추적용 인덱스입니다.
      * UNIQUE가 아닌 일반 인덱스여야 합니다.
      */
-                                       KEY idx_ai_consultation_event_conversation (
-                                           conversation_id
-                                           ),
+    KEY idx_ai_consultation_event_conversation (
+        conversation_id
+        ),
 
     /*
      * 특정 내부 대화의 이벤트 목록 조회용 인덱스입니다.
      */
-                                       KEY idx_ai_consultation_event_internal_conversation (
-                                           ai_conversation_id,
-                                           occurred_at
-                                           ),
+    KEY idx_ai_consultation_event_internal_conversation (
+        ai_conversation_id,
+        occurred_at
+        ),
 
     /*
      * 대화 세션이 존재하는 경우에만 이벤트를 저장할 수 있습니다.
      */
-                                       CONSTRAINT fk_ai_consultation_event_conversation
-                                           FOREIGN KEY (
-                                                        ai_conversation_id
-                                               )
-                                               REFERENCES ai_conversation (
-                                                                           ai_conversation_id
-                                                   ),
+    CONSTRAINT fk_ai_consultation_event_conversation
+        FOREIGN KEY (
+                     ai_conversation_id
+            )
+            REFERENCES ai_conversation (
+                                        ai_conversation_id
+                ),
 
     /*
      * 존재하는 사용자에 대해서만 이벤트를 저장합니다.
      */
-                                       CONSTRAINT fk_ai_consultation_event_user
-                                           FOREIGN KEY (
-                                                        user_id
-                                               )
-                                               REFERENCES `user` (
-                                                                  user_id
-                                                   ),
+    CONSTRAINT fk_ai_consultation_event_user
+        FOREIGN KEY (
+                     user_id
+            )
+            REFERENCES `user` (
+                               user_id
+                ),
 
-                                       CONSTRAINT ck_ai_consultation_event_turn_no
-                                           CHECK (
-                                               turn_no > 0
-                                               )
-) ENGINE=InnoDB
-  DEFAULT CHARSET=utf8mb4
-  COLLATE=utf8mb4_unicode_ci
-  COMMENT='질문별 AI 상담 분류 결과 이벤트';
+    CONSTRAINT ck_ai_consultation_event_turn_no
+        CHECK (
+            turn_no > 0
+            )
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_unicode_ci
+    COMMENT ='질문별 AI 상담 분류 결과 이벤트';
 
 
 CREATE TABLE ai_safety_report
 (
-    ai_safety_report_id     BIGINT       NOT NULL AUTO_INCREMENT
+    ai_safety_report_id     BIGINT        NOT NULL AUTO_INCREMENT
         COMMENT 'AI 안전 신고 ID',
 
-    report_key              VARCHAR(100) NOT NULL COMMENT '중복 신고 방지 키',
+    report_key              VARCHAR(100)  NOT NULL COMMENT '중복 신고 방지 키',
 
-    report_type             VARCHAR(30)  NOT NULL COMMENT 'JAILBREAK 또는 OTHER_THRESHOLD',
+    report_type             VARCHAR(30)   NOT NULL COMMENT 'JAILBREAK 또는 OTHER_THRESHOLD',
 
-    status                  VARCHAR(20)  NOT NULL
-        DEFAULT 'OPEN' COMMENT 'OPEN, IN_REVIEW, RESOLVED, DISMISSED',
+    status                  VARCHAR(20)   NOT NULL
+                                                   DEFAULT 'OPEN' COMMENT 'OPEN, IN_REVIEW, RESOLVED, DISMISSED',
 
-    user_id                 BIGINT NULL
+    user_id                 BIGINT        NULL
         COMMENT '신고 대상 사용자 ID',
 
-    trigger_event_id        BIGINT       NOT NULL COMMENT '신고를 발생시킨 상담 이벤트 ID',
+    trigger_event_id        BIGINT        NOT NULL COMMENT '신고를 발생시킨 상담 이벤트 ID',
 
-    occurrence_count        INT          NOT NULL DEFAULT 1
+    occurrence_count        INT           NOT NULL DEFAULT 1
         COMMENT '신고 발생 당시 누적 횟수',
 
-    count_window_started_at DATETIME(6) NULL
+    count_window_started_at DATETIME(6)   NULL
         COMMENT '집계 시작 시각',
 
-    count_window_ended_at   DATETIME(6) NULL
+    count_window_ended_at   DATETIME(6)   NULL
         COMMENT '집계 종료 시각',
 
-    assigned_admin_id       BIGINT NULL
+    assigned_admin_id       BIGINT        NULL
         COMMENT '담당 관리자 ID',
 
     resolution_note         VARCHAR(2000) NULL
         COMMENT '관리자 처리 내용',
 
-    reviewed_at             DATETIME(6) NULL
+    reviewed_at             DATETIME(6)   NULL
         COMMENT '검토 완료 시각',
 
-    created_at              DATETIME(6) NOT NULL
+    created_at              DATETIME(6)   NOT NULL
         DEFAULT CURRENT_TIMESTAMP(6),
 
-    updated_at              DATETIME(6) NOT NULL
+    updated_at              DATETIME(6)   NOT NULL
         DEFAULT CURRENT_TIMESTAMP(6)
         ON UPDATE CURRENT_TIMESTAMP(6),
 
@@ -1420,17 +1407,17 @@ CREATE TABLE ai_safety_report
         report_key
         ),
 
-    KEY                     idx_ai_safety_report_status_created (
+    KEY idx_ai_safety_report_status_created (
         status,
         created_at
         ),
 
-    KEY                     idx_ai_safety_report_user_created (
+    KEY idx_ai_safety_report_user_created (
         user_id,
         created_at
         ),
 
-    KEY                     idx_ai_safety_report_type_created (
+    KEY idx_ai_safety_report_type_created (
         report_type,
         created_at
         ),
@@ -1440,69 +1427,313 @@ CREATE TABLE ai_safety_report
             REFERENCES ai_consultation_event (
                                               ai_consultation_event_id
                 )
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_unicode_ci
+    COMMENT ='관리자 검토용 AI 안전 신고';
+
+CREATE TABLE `kb_branch`
+(
+    `branch_id`          BIGINT         NOT NULL AUTO_INCREMENT,
+    `branch_name`        VARCHAR(200)   NOT NULL,
+    `region`             VARCHAR(20)    NULL COMMENT '서울/수도권/지방 (참고용 분류)',
+    `address`            VARCHAR(300)   NULL,
+    `latitude`           DECIMAL(10, 7) NULL,
+    `longitude`          DECIMAL(10, 7) NULL,
+    `kakao_place_id`     VARCHAR(50)    NULL COMMENT '카카오 검색 결과 place_id, 매칭 검증용',
+    `kakao_search_query` VARCHAR(200)   NULL COMMENT '좌표 조회에 사용한 검색어',
+    `geocoded_at`        DATETIME       NULL COMMENT '카카오 API로 좌표를 채운 시각, NULL이면 미확정',
+    `is_active`          TINYINT(1)     NOT NULL DEFAULT 1,
+    `created_at`         DATETIME       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT `pk_kb_branch` PRIMARY KEY (`branch_id`),
+    CONSTRAINT `uk_kb_branch_name` UNIQUE (`branch_name`)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_unicode_ci;
+CREATE TABLE `kb_desk_type`
+(
+    `desk_type_code` VARCHAR(20)  NOT NULL COMMENT 'PERSONAL, DEPOSIT_WITHDRAW, CORPORATE 등',
+    `desk_type_name` VARCHAR(100) NOT NULL,
+    `prefix`         CHAR(1)      NOT NULL COMMENT 'A, B, D',
+    `is_operating`   TINYINT(1)   NOT NULL DEFAULT 0 COMMENT '실제 운영 여부 (지금은 PERSONAL만 1)',
+    `created_at`     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT `pk_kb_desk_type` PRIMARY KEY (`desk_type_code`)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_unicode_ci;
+
+CREATE TABLE `kb_ticket_counter`
+(
+    `counter_id`     BIGINT      NOT NULL AUTO_INCREMENT,
+    `branch_id`      BIGINT      NOT NULL,
+    `desk_type_code` VARCHAR(20) NOT NULL,
+    `current_number` INT         NOT NULL DEFAULT 0,
+    `business_date`  DATE        NOT NULL COMMENT '영업일 기준, 매일 초기화',
+    `updated_at`     DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    `created_at`     DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT `pk_kb_ticket_counter` PRIMARY KEY (`counter_id`),
+    CONSTRAINT `uk_kb_ticket_counter` UNIQUE (`branch_id`, `desk_type_code`, `business_date`),
+    CONSTRAINT `fk_kb_ticket_counter_branch` FOREIGN KEY (`branch_id`) REFERENCES `kb_branch` (`branch_id`),
+    CONSTRAINT `fk_kb_ticket_counter_desk_type` FOREIGN KEY (`desk_type_code`) REFERENCES `kb_desk_type` (`desk_type_code`)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_unicode_ci;
+
+CREATE TABLE `kb_ticket`
+(
+    `ticket_id`      BIGINT                                                     NOT NULL AUTO_INCREMENT,
+    `branch_id`      BIGINT                                                     NOT NULL,
+    `desk_type_code` VARCHAR(20)                                                NOT NULL,
+    `service_type`   VARCHAR(30)                                                NOT NULL COMMENT 'DEPOSIT_SAVINGS_FUND_TRUST, PERSONAL_LOAN 등, 사용자가 누른 버튼',
+    `ticket_number`  INT                                                        NOT NULL COMMENT '카운터에서 채번된 값',
+    `user_id`        BIGINT                                                     NOT NULL,
+    `status`         ENUM ('WAITING', 'CALLED', 'DONE', 'EXPIRED', 'CANCELLED') NOT NULL DEFAULT 'WAITING',
+    `business_date`  DATE                                                       NOT NULL,
+    `issued_at`      DATETIME                                                   NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `called_at`      DATETIME                                                   NULL,
+    `expired_at`     DATETIME                                                   NULL,
+    `created_at`     DATETIME                                                   NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT `pk_kb_ticket` PRIMARY KEY (`ticket_id`),
+    CONSTRAINT `uk_kb_ticket_number` UNIQUE (`branch_id`, `desk_type_code`, `business_date`, `ticket_number`),
+    CONSTRAINT `fk_kb_ticket_branch` FOREIGN KEY (`branch_id`) REFERENCES `kb_branch` (`branch_id`),
+    CONSTRAINT `fk_kb_ticket_desk_type` FOREIGN KEY (`desk_type_code`) REFERENCES `kb_desk_type` (`desk_type_code`),
+    CONSTRAINT `fk_kb_ticket_user` FOREIGN KEY (`user_id`) REFERENCES `user` (`user_id`)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_unicode_ci;
+
+-- 관리자 알림. 배치 실패·서버 에러 등 관리자가 알아야 할 사건을 한 행으로 담는다.
+-- 수신자별로 행을 만들지 않는다. 관리자가 늘어날 때마다 같은 사건이 복제되기 때문이다.
+-- 읽음 여부만 admin_notification_read 로 분리한다.
+CREATE TABLE `admin_notification`
+(
+    `admin_notification_id` BIGINT        NOT NULL AUTO_INCREMENT,
+
+    `notification_type`     ENUM ('BATCH_FAILURE', 'SERVER_ERROR', 'CLIENT_ERROR')
+        NOT NULL,
+    `severity`              ENUM ('INFO', 'WARNING', 'CRITICAL')
+        NOT NULL DEFAULT 'WARNING',
+
+    `title`                 VARCHAR(200)  NOT NULL,
+    `message`               VARCHAR(2000) NULL
+        COMMENT '실패 사유. 스택트레이스는 앞부분만 자른다',
+
+    -- 원인 참조를 (종류, ID) 쌍으로 둔다. 배치 실패는 ('BATCH_JOB_EXECUTION', execution_id) 라
+    -- 상세 화면에서 BATCH_JOB_EXECUTION 조인으로 처리 건수·종료코드를 그대로 보여줄 수 있다.
+    -- 서버 에러는 참조 대상이 달라 FK 를 걸지 않는다.
+    `reference_type`        VARCHAR(40)   NULL
+        COMMENT 'BATCH_JOB_EXECUTION 등',
+    `reference_id`          BIGINT        NULL,
+
+    -- 같은 사건이 반복될 때 행을 늘리지 않고 횟수만 올린다(ON DUPLICATE KEY UPDATE).
+    -- 배치는 'BATCH_FAILURE:lawArticleJob:2026-08-11' 처럼 잡명+날짜로 만든다.
+    `dedupe_key`            VARCHAR(200)  NOT NULL,
+    `occurrence_count`      INT           NOT NULL DEFAULT 1,
+    `last_occurred_at`      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    -- 읽음(개인별)과 별개 축이다. 여러 관리자가 같은 알림을 봐도 조치는 한 번이면 끝난다.
+    `status`                ENUM ('OPEN', 'RESOLVED')
+        NOT NULL DEFAULT 'OPEN',
+    `resolved_by`           BIGINT        NULL,
+    `resolved_at`           DATETIME      NULL,
+
+    `created_at`            DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT `pk_admin_notification`
+        PRIMARY KEY (`admin_notification_id`),
+
+    CONSTRAINT `uk_admin_notification_dedupe`
+        UNIQUE (`dedupe_key`),
+
+    CONSTRAINT `fk_admin_notification_resolved_by`
+        FOREIGN KEY (`resolved_by`)
+            REFERENCES `user` (`user_id`)
+            ON DELETE SET NULL
+            ON UPDATE CASCADE,
+
+    INDEX `idx_admin_notification_list` (`status`, `created_at`)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_unicode_ci;
+
+
+-- 관리자별 읽음 표시. 행이 있으면 읽은 것이고, 없으면 안 읽은 것이다.
+-- read_at 을 NULL 로 두는 컬럼 방식이 아니라 행 존재로 표현해야 관리자가 새로 추가돼도
+-- 과거 알림에 빈 행을 만들 필요가 없다.
+CREATE TABLE `admin_notification_read`
+(
+    `admin_notification_id` BIGINT   NOT NULL,
+    `admin_id`              BIGINT   NOT NULL,
+    `read_at`               DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT `pk_admin_notification_read`
+        PRIMARY KEY (`admin_notification_id`, `admin_id`),
+
+    CONSTRAINT `fk_admin_notification_read_notification`
+        FOREIGN KEY (`admin_notification_id`)
+            REFERENCES `admin_notification` (`admin_notification_id`)
+            ON DELETE CASCADE
+            ON UPDATE CASCADE,
+
+    CONSTRAINT `fk_admin_notification_read_admin`
+        FOREIGN KEY (`admin_id`)
+            REFERENCES `user` (`user_id`)
+            ON DELETE CASCADE
+            ON UPDATE CASCADE
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_unicode_ci;
+
+CREATE TABLE `admin_audit_log` (
+                                   `admin_audit_log_id` BIGINT NOT NULL AUTO_INCREMENT
+                                       COMMENT '관리자 감사 로그 ID',
+
+    /*
+     * 관리자 계정이 나중에 일반 사용자로 변경되거나 삭제되더라도
+     * 당시 행위자 ID를 보존해야 하므로 스냅샷 형태로 저장합니다.
+     */
+                                   `actor_user_id` BIGINT NOT NULL
+                                       COMMENT '작업을 수행한 관리자 사용자 ID',
+
+                                   `actor_role` VARCHAR(20) NOT NULL
+                                       COMMENT '작업 당시 관리자 역할 ROOT, MIDDLE, DEFAULT',
+
+    /*
+     * 프론트 표시 문장이 아니라 프로그램이 사용하는 고정 코드입니다.
+     *
+     * 예:
+     * PRODUCT_UPDATE
+     * REPORT_PROCESS
+     * USER_BLOCK
+     * ADMIN_ROLE_CHANGE
+     */
+                                   `action_type` VARCHAR(50) NOT NULL
+                                       COMMENT '관리자 작업 유형',
+
+    /*
+     * 작업 대상 종류입니다.
+     *
+     * 예:
+     * PRODUCT
+     * PRODUCT_DATA_VERSION
+     * SAFETY_REPORT
+     * USER
+     * ADMIN
+     * FAQ
+     * FAQ_CATEGORY
+     */
+                                   `target_type` VARCHAR(50) NOT NULL
+                                       COMMENT '작업 대상 종류',
+
+    /*
+     * 대상 ID가 숫자가 아닐 가능성과 복합 식별자를 고려하여
+     * VARCHAR로 저장합니다.
+     */
+                                   `target_id` VARCHAR(100) NULL
+                                       COMMENT '작업 대상 식별자',
+
+                                   `action_summary` VARCHAR(500) NOT NULL
+                                       COMMENT '관리자 화면에 표시할 작업 요약',
+
+    /*
+     * 변경된 필드만 선별해서 저장합니다.
+     * 요청 DTO 전체를 그대로 저장하면 안 됩니다.
+     */
+                                   `change_data` JSON NULL
+                                       COMMENT '마스킹된 변경 전후 정보',
+
+                                   `result` VARCHAR(20) NOT NULL
+                                       DEFAULT 'SUCCESS'
+                                       COMMENT 'SUCCESS, FAILED, DENIED',
+
+    /*
+     * 같은 HTTP 요청의 애플리케이션 로그와 연결하기 위한 ID입니다.
+     */
+                                   `request_id` CHAR(36) NULL
+                                       COMMENT '요청 추적 ID',
+
+                                   `http_method` VARCHAR(10) NULL
+                                       COMMENT 'HTTP 메서드',
+
+                                   `request_path` VARCHAR(500) NULL
+                                       COMMENT '쿼리 문자열을 제외한 요청 경로',
+
+                                   `ip_address` VARCHAR(45) NULL
+                                       COMMENT '요청 IP 주소 IPv4 또는 IPv6',
+
+                                   `user_agent` VARCHAR(500) NULL
+                                       COMMENT '사용자 에이전트 일부',
+
+                                   `occurred_at` DATETIME(6) NOT NULL
+                                       COMMENT '실제 작업 발생 시각',
+
+                                   `created_at` DATETIME(6) NOT NULL
+                                       DEFAULT CURRENT_TIMESTAMP(6)
+                                       COMMENT '감사 로그 저장 시각',
+
+                                   PRIMARY KEY (`admin_audit_log_id`),
+
+                                   KEY `idx_admin_audit_actor_time` (
+                                       `actor_user_id`,
+                                       `occurred_at`
+                                       ),
+
+                                   KEY `idx_admin_audit_action_time` (
+                                       `action_type`,
+                                       `occurred_at`
+                                       ),
+
+                                   KEY `idx_admin_audit_target_time` (
+                                       `target_type`,
+                                       `target_id`,
+                                       `occurred_at`
+                                       ),
+
+                                   KEY `idx_admin_audit_result_time` (
+                                       `result`,
+                                       `occurred_at`
+                                       ),
+
+                                   KEY `idx_admin_audit_occurred_at` (
+                                       `occurred_at`
+                                       ),
+
+                                   CONSTRAINT `chk_admin_audit_result`
+                                       CHECK (`result` IN ('SUCCESS', 'FAILED', 'DENIED'))
 ) ENGINE=InnoDB
   DEFAULT CHARSET=utf8mb4
   COLLATE=utf8mb4_unicode_ci
-  COMMENT='관리자 검토용 AI 안전 신고';
+  COMMENT='관리자 업무 변경 및 보안 감사 로그';
 
-CREATE TABLE `kb_branch` (
-                             `branch_id` BIGINT NOT NULL AUTO_INCREMENT,
-                             `branch_name` VARCHAR(200) NOT NULL,
-                             `region` VARCHAR(20) NULL COMMENT '서울/수도권/지방 (참고용 분류)',
-                             `address` VARCHAR(300) NULL,
-                             `latitude` DECIMAL(10,7) NULL,
-                             `longitude` DECIMAL(10,7) NULL,
-                             `kakao_place_id` VARCHAR(50) NULL COMMENT '카카오 검색 결과 place_id, 매칭 검증용',
-                             `kakao_search_query` VARCHAR(200) NULL COMMENT '좌표 조회에 사용한 검색어',
-                             `geocoded_at` DATETIME NULL COMMENT '카카오 API로 좌표를 채운 시각, NULL이면 미확정',
-                             `is_active` TINYINT(1) NOT NULL DEFAULT 1,
-                             `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+CREATE TABLE admin_access_log (
+                                  admin_access_log_id BIGINT NOT NULL AUTO_INCREMENT,
+                                  actor_user_id BIGINT NULL,
+                                  actor_role VARCHAR(20) NULL,
 
-                             CONSTRAINT `pk_kb_branch` PRIMARY KEY (`branch_id`),
-                             CONSTRAINT `uk_kb_branch_name` UNIQUE (`branch_name`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-CREATE TABLE `kb_desk_type` (
-                                `desk_type_code` VARCHAR(20) NOT NULL COMMENT 'PERSONAL, DEPOSIT_WITHDRAW, CORPORATE 등',
-                                `desk_type_name` VARCHAR(100) NOT NULL,
-                                `prefix` CHAR(1) NOT NULL COMMENT 'A, B, D',
-                                `is_operating` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '실제 운영 여부 (지금은 PERSONAL만 1)',
-                                `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                                  http_method VARCHAR(10) NOT NULL,
+                                  request_uri VARCHAR(500) NOT NULL,
+                                  controller_name VARCHAR(200) NULL,
+                                  controller_method VARCHAR(200) NULL,
 
-                                CONSTRAINT `pk_kb_desk_type` PRIMARY KEY (`desk_type_code`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+                                  response_status INT NULL,
+                                  result VARCHAR(20) NOT NULL,
+                                  elapsed_ms BIGINT NULL,
 
-CREATE TABLE `kb_ticket_counter` (
-                                     `counter_id` BIGINT NOT NULL AUTO_INCREMENT,
-                                     `branch_id` BIGINT NOT NULL,
-                                     `desk_type_code` VARCHAR(20) NOT NULL,
-                                     `current_number` INT NOT NULL DEFAULT 0,
-                                     `business_date` DATE NOT NULL COMMENT '영업일 기준, 매일 초기화',
-                                     `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                                     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                                  ip_address VARCHAR(45) NULL,
+                                  occurred_at DATETIME(6) NOT NULL,
 
-                                     CONSTRAINT `pk_kb_ticket_counter` PRIMARY KEY (`counter_id`),
-                                     CONSTRAINT `uk_kb_ticket_counter` UNIQUE (`branch_id`, `desk_type_code`, `business_date`),
-                                     CONSTRAINT `fk_kb_ticket_counter_branch` FOREIGN KEY (`branch_id`) REFERENCES `kb_branch` (`branch_id`),
-                                     CONSTRAINT `fk_kb_ticket_counter_desk_type` FOREIGN KEY (`desk_type_code`) REFERENCES `kb_desk_type` (`desk_type_code`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+                                  PRIMARY KEY (admin_access_log_id),
 
-CREATE TABLE `kb_ticket` (
-                             `ticket_id` BIGINT NOT NULL AUTO_INCREMENT,
-                             `branch_id` BIGINT NOT NULL,
-                             `desk_type_code` VARCHAR(20) NOT NULL,
-                             `service_type` VARCHAR(30) NOT NULL COMMENT 'DEPOSIT_SAVINGS_FUND_TRUST, PERSONAL_LOAN 등, 사용자가 누른 버튼',
-                             `ticket_number` INT NOT NULL COMMENT '카운터에서 채번된 값',
-                             `user_id` BIGINT NOT NULL,
-                             `status` ENUM('WAITING', 'CALLED', 'DONE', 'EXPIRED', 'CANCELLED') NOT NULL DEFAULT 'WAITING',
-                             `business_date` DATE NOT NULL,
-                             `issued_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                             `called_at` DATETIME NULL,
-                             `expired_at` DATETIME NULL,
-                             `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                                  KEY idx_admin_access_occurred (
+                                      occurred_at
+                                      ),
 
-                             CONSTRAINT `pk_kb_ticket` PRIMARY KEY (`ticket_id`),
-                             CONSTRAINT `uk_kb_ticket_number` UNIQUE (`branch_id`, `desk_type_code`, `business_date`, `ticket_number`),
-                             CONSTRAINT `fk_kb_ticket_branch` FOREIGN KEY (`branch_id`) REFERENCES `kb_branch` (`branch_id`),
-                             CONSTRAINT `fk_kb_ticket_desk_type` FOREIGN KEY (`desk_type_code`) REFERENCES `kb_desk_type` (`desk_type_code`),
-                             CONSTRAINT `fk_kb_ticket_user` FOREIGN KEY (`user_id`) REFERENCES `user` (`user_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+                                  KEY idx_admin_access_actor_occurred (
+                                      actor_user_id,
+                                      occurred_at
+                                      )
+);

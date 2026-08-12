@@ -1,5 +1,8 @@
 package com.example.project.admin.faq.controller;
 
+import com.example.project.admin.audit.service.AdminAuditWriter;
+import com.example.project.admin.audit.support.InMemoryAdminAuditLogMapper;
+import com.example.project.admin.auth.domain.AdminPrincipal;
 import com.example.project.admin.faq.dto.response.AdminFaqItemResponse;
 import com.example.project.admin.faq.mapper.AdminFaqMapper;
 import com.example.project.admin.faq.service.AdminFaqService;
@@ -16,6 +19,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.security.web.method.annotation.AuthenticationPrincipalArgumentResolver;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
@@ -56,7 +61,15 @@ class AdminFaqControllerTest {
 
         AdminFaqService service = new AdminFaqService(
                 adminFaqMapper,
-                adminFaqMapper
+                adminFaqMapper,
+                new AdminAuditWriter(new InMemoryAdminAuditLogMapper())
+        );
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(
+                        new AdminPrincipal(1L, "ROOT"),
+                        null,
+                        List.of()
+                )
         );
         AdminFaqController controller = new AdminFaqController(service);
         LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();

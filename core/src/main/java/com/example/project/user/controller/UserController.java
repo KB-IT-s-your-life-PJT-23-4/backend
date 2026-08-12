@@ -3,6 +3,7 @@ package com.example.project.user.controller;
 import com.example.project.common.api.ApiResponse;
 import com.example.project.common.api.ResponseCode;
 import com.example.project.common.exception.ServiceException;
+import com.example.project.common.logging.ApiLog;
 import com.example.project.common.web.CurrentUser;
 import com.example.project.user.dto.UserDTO;
 import com.example.project.user.dto.request.UserProfileUpdateRequest;
@@ -38,6 +39,7 @@ import javax.validation.constraints.Email;
 import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.Size;
 
+@ApiLog
 @Api(tags = "회원 API", description = "회원가입, 이메일 중복 확인, 내 정보 조회·수정 및 회원탈퇴")
 @RestController
 @RequestMapping("/api")
