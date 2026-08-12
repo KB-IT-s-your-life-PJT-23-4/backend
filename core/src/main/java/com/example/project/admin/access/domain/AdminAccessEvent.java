@@ -1,6 +1,5 @@
 package com.example.project.admin.access.domain;
 
-import io.swagger.annotations.Api;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;

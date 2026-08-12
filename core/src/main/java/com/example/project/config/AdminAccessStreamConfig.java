@@ -1,16 +1,21 @@
 package com.example.project.config;
 
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.core.task.AsyncTaskExecutor;
+import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.web.servlet.config.annotation.AsyncSupportConfigurer;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 import java.util.concurrent.Executor;
 
-public class AdminAccessStreamConfig implements WebMvcConfigurer {
+@Configuration
+@EnableScheduling
+public class AdminAccessStreamConfig {
 
     @Bean(name = "adminAccessSseExecutor")
-    public Executor adminAccessSseExecutor() {
+    public AsyncTaskExecutor adminAccessSseExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
 
         executor.setCorePoolSize(2);
@@ -28,11 +33,5 @@ public class AdminAccessStreamConfig implements WebMvcConfigurer {
         executor.initialize();
 
         return executor;
-    }
-
-
-    @Override
-    public void configureAsyncSupport(AsyncSupportConfigurer configurer) {
-        configurer.setDefaultTimeout(60L * 60L * 1000L);
     }
 }

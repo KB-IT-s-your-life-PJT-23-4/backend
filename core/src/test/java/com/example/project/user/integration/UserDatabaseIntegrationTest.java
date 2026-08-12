@@ -1,6 +1,7 @@
 package com.example.project.user.integration;
 
 import com.example.project.config.IntegrationTestWebClientConfig;
+import com.example.project.config.AdminAccessStreamConfig;
 import com.example.project.config.RootConfig;
 import com.example.project.config.ocr.OCRWebClientConfig;
 import com.example.project.consultation.config.WebClientConfig;
@@ -36,7 +37,8 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
         SecurityConfig.class,
         WebClientConfig.class,
         OCRWebClientConfig.class,
-        IntegrationTestWebClientConfig.class
+        IntegrationTestWebClientConfig.class,
+        AdminAccessStreamConfig.class
 })
 @TestPropertySource(properties = {
         "jwt.secret=test-secret-key-for-integration-at-least-32-bytes",

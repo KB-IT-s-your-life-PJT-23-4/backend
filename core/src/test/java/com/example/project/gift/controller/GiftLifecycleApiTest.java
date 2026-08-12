@@ -1,6 +1,7 @@
 package com.example.project.gift.controller;
 
 import com.example.project.config.IntegrationTestWebClientConfig;
+import com.example.project.config.AdminAccessStreamConfig;
 import com.example.project.config.RootConfig;
 import com.example.project.config.ServletConfig;
 import com.example.project.config.ocr.OCRWebClientConfig;
@@ -48,7 +49,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
                 SecurityConfig.class,
                 WebClientConfig.class,
                 OCRWebClientConfig.class,
-                IntegrationTestWebClientConfig.class
+                IntegrationTestWebClientConfig.class,
+                AdminAccessStreamConfig.class
         }),
         @ContextConfiguration(classes = ServletConfig.class)
 })
