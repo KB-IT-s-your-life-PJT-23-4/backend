@@ -1,7 +1,6 @@
 package com.example.project.admin.audit.controller;
 
 import com.example.project.admin.audit.dto.response.AdminAuditLogPageResponse;
-import com.example.project.admin.audit.dto.response.AdminAuditLogResponse;
 import com.example.project.admin.audit.service.AdminAuditService;
 import com.example.project.common.api.ApiResponse;
 import com.example.project.common.api.Pagination;
@@ -25,7 +24,7 @@ import java.time.LocalDateTime;
 
 
 @ApiLog
-@Api(tags = "관리자 검사 로그 API")
+@Api(tags = "관리자 감사 로그 API")
 @Validated
 @RestController
 @RequestMapping("/api/admin/audit-logs")

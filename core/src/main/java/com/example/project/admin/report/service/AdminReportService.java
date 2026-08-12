@@ -1,5 +1,7 @@
 package com.example.project.admin.report.service;
 
+import com.example.project.admin.audit.service.AdminAuditWriter;
+import com.example.project.admin.auth.domain.AdminPrincipal;
 import com.example.project.admin.report.dto.request.ReportProcessRequest;
 import com.example.project.admin.report.dto.response.AdminReportPageResponse;
 import com.example.project.admin.report.mapper.ReportMapper;
@@ -12,6 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.Locale;
 
@@ -35,6 +38,7 @@ public class AdminReportService {
             );
 
     private final ReportMapper reportMapper;
+    private final AdminAuditWriter adminAuditWriter;
 
     @Transactional(readOnly = true)
     public AdminReportPageResponse getPageReportList(
@@ -100,8 +104,16 @@ public class AdminReportService {
     }
 
     @Transactional
-    public void processReport(long reportId, ReportProcessRequest request, long adminId) {
-        if (reportId <= 0 || adminId <= 0 || request == null) {
+    public void processReport(
+            long reportId,
+            ReportProcessRequest request,
+            AdminPrincipal actor
+    ) {
+        if (reportId <= 0
+                || actor == null
+                || actor.userId() == null
+                || actor.userId() <= 0
+                || request == null) {
             throw new ServiceException(ResponseCode.BAD_REQUEST);
         }
 
@@ -114,7 +126,7 @@ public class AdminReportService {
         int updatedRows = reportMapper.updateReport(
                 reportId,
                 status,
-                adminId,
+                actor.userId(),
                 resolutionNote
         );
 
@@ -124,6 +136,18 @@ public class AdminReportService {
         if (updatedRows != 1) {
             throw new ServiceException(ResponseCode.DATABASE_ERROR);
         }
+
+        adminAuditWriter.record(
+                actor,
+                "REPORT_PROCESS",
+                "SAFETY_REPORT",
+                reportId,
+                "AI 안전 신고를 처리했습니다.",
+                Map.of(
+                        "status", status,
+                        "resolutionNoteChanged", resolutionNote != null
+                )
+        );
     }
 
     private String normalizeResolutionNote(String resolutionNote) {

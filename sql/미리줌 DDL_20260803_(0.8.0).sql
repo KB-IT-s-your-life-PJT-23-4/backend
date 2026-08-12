@@ -24,6 +24,7 @@ DROP TABLE IF EXISTS `family`;
 DROP TABLE IF EXISTS `faq`;
 DROP TABLE IF EXISTS `faq_category`;
 DROP TABLE IF EXISTS `law_article`;
+DROP TABLE IF EXISTS `admin_audit_log`;
 DROP TABLE IF EXISTS `ai_safety_report`;
 DROP TABLE IF EXISTS `ai_consultation_event`;
 DROP TABLE IF EXISTS `ai_conversation`;
@@ -99,6 +100,37 @@ CREATE TABLE `user`
 ) ENGINE=InnoDB
   DEFAULT CHARSET=utf8mb4
   COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `admin_audit_log` (
+    `admin_audit_log_id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '관리자 감사 로그 ID',
+    `actor_user_id` BIGINT NOT NULL COMMENT '작업을 수행한 관리자 사용자 ID',
+    `actor_role` VARCHAR(20) NOT NULL COMMENT '작업 당시 관리자 역할',
+    `action_type` VARCHAR(50) NOT NULL COMMENT '관리자 작업 유형',
+    `target_type` VARCHAR(50) NOT NULL COMMENT '작업 대상 종류',
+    `target_id` VARCHAR(100) NULL COMMENT '작업 대상 식별자',
+    `action_summary` VARCHAR(500) NOT NULL COMMENT '관리자 작업 요약',
+    `change_data` JSON NULL COMMENT '민감정보를 제외한 변경 정보',
+    `result` VARCHAR(20) NOT NULL DEFAULT 'SUCCESS' COMMENT 'SUCCESS, FAILED, DENIED',
+    `request_id` CHAR(36) NULL COMMENT '감사 로그 요청 추적 ID',
+    `http_method` VARCHAR(10) NULL COMMENT 'HTTP 메서드',
+    `request_path` VARCHAR(500) NULL COMMENT '쿼리 문자열을 제외한 요청 경로',
+    `ip_address` VARCHAR(45) NULL COMMENT '요청 IP 주소',
+    `user_agent` VARCHAR(500) NULL COMMENT '사용자 에이전트',
+    `occurred_at` DATETIME(6) NOT NULL COMMENT '작업 발생 시각',
+    `created_at` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+
+    PRIMARY KEY (`admin_audit_log_id`),
+    KEY `idx_admin_audit_actor_time` (`actor_user_id`, `occurred_at`),
+    KEY `idx_admin_audit_action_time` (`action_type`, `occurred_at`),
+    KEY `idx_admin_audit_target_time` (`target_type`, `target_id`, `occurred_at`),
+    KEY `idx_admin_audit_occurred_at` (`occurred_at`),
+
+    CONSTRAINT `chk_admin_audit_result`
+        CHECK (`result` IN ('SUCCESS', 'FAILED', 'DENIED'))
+) ENGINE=InnoDB
+  DEFAULT CHARSET=utf8mb4
+  COLLATE=utf8mb4_unicode_ci
+  COMMENT='관리자 업무 변경 감사 로그';
 
 
 CREATE TABLE `family`

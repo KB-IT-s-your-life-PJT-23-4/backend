@@ -1,5 +1,7 @@
 package com.example.project.admin.product.service;
 
+import com.example.project.admin.audit.service.AdminAuditWriter;
+import com.example.project.admin.auth.domain.AdminPrincipal;
 import com.example.project.admin.product.domain.AdminBaseRateRow;
 import com.example.project.admin.product.domain.AdminEtfHoldingRow;
 import com.example.project.admin.product.domain.AdminPreferentialRateRow;
@@ -26,6 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
@@ -40,6 +43,7 @@ public class AdminProductService {
     private static final Set<String> PRODUCT_TYPES = Set.of("DEPOSIT", "SAVINGS", "ETF");
 
     private final AdminProductMapper adminProductMapper;
+    private final AdminAuditWriter adminAuditWriter;
 
     @Transactional(readOnly = true)
     public List<AdminProductVersionResponse> getProductDataVersions() {
@@ -71,7 +75,8 @@ public class AdminProductService {
     public AdminProductResponse updateProduct(
             Long productDataVersionId,
             Long productVersionId,
-            AdminProductUpdateRequest request
+            AdminProductUpdateRequest request,
+            AdminPrincipal actor
     ) {
         requireDataVersion(productDataVersionId);
 
@@ -114,13 +119,30 @@ public class AdminProductService {
         applyPreferentialConditions(productType, productVersionId, request.getPreferentialConditions());
         applyEtfHoldings(productType, productVersionId, request.getEtfHoldings());
 
-        return toProductResponse(fetchSingle(productType, productVersionId));
+        AdminProductResponse response = toProductResponse(fetchSingle(productType, productVersionId));
+
+        adminAuditWriter.record(
+                actor,
+                "PRODUCT_UPDATE",
+                "PRODUCT",
+                productVersionId,
+                "상품 정보를 수정했습니다.",
+                Map.of(
+                        "productDataVersionId", productDataVersionId,
+                        "productType", productType,
+                        "productName", response.getProductName(),
+                        "salesStatus", response.getSalesStatus()
+                )
+        );
+
+        return response;
     }
 
     @Transactional
     public AdminProductResponse createProduct(
             Long productDataVersionId,
-            AdminProductCreateRequest request
+            AdminProductCreateRequest request,
+            AdminPrincipal actor
     ) {
         AdminProductVersionRow version = requireDataVersion(productDataVersionId);
         if (!"LOADING".equals(version.getStatus())) {
@@ -167,11 +189,27 @@ public class AdminProductService {
             }
         }
 
-        return toProductResponse(fetchSingle(type, productVersionId));
+        AdminProductResponse response = toProductResponse(fetchSingle(type, productVersionId));
+
+        adminAuditWriter.record(
+                actor,
+                "PRODUCT_CREATE",
+                "PRODUCT",
+                productVersionId,
+                "상품을 생성했습니다.",
+                Map.of(
+                        "productDataVersionId", productDataVersionId,
+                        "productType", type,
+                        "productName", response.getProductName(),
+                        "salesStatus", response.getSalesStatus()
+                )
+        );
+
+        return response;
     }
 
     @Transactional
-    public AdminProductVersionResponse createDraftVersionFromLatest() {
+    public AdminProductVersionResponse createDraftVersionFromLatest(AdminPrincipal actor) {
         List<AdminProductVersionRow> allVersions = adminProductMapper.selectProductDataVersions();
         if (!allVersions.isEmpty() && "LOADING".equals(allVersions.get(0).getStatus())) {
             throw new ServiceException(ResponseCode.CONFLICT);
@@ -186,22 +224,54 @@ public class AdminProductService {
             cloneProducts(latestCompleted.getProductDataVersionId(), newDataVersionId);
         }
 
-        return toVersionResponse(adminProductMapper.selectProductDataVersion(newDataVersionId));
+        AdminProductVersionResponse response = toVersionResponse(
+                adminProductMapper.selectProductDataVersion(newDataVersionId)
+        );
+
+        adminAuditWriter.record(
+                actor,
+                "PRODUCT_VERSION_CREATE",
+                "PRODUCT_DATA_VERSION",
+                newDataVersionId,
+                "상품 데이터 초안 버전을 생성했습니다.",
+                Map.of("versionCode", response.getVersionCode())
+        );
+
+        return response;
     }
 
     @Transactional
-    public AdminProductVersionResponse completeProductDataVersion(Long productDataVersionId) {
+    public AdminProductVersionResponse completeProductDataVersion(
+            Long productDataVersionId,
+            AdminPrincipal actor
+    ) {
         AdminProductVersionRow version = requireDataVersion(productDataVersionId);
         if (!"LOADING".equals(version.getStatus())) {
             throw new ServiceException(ResponseCode.CONFLICT);
         }
         adminProductMapper.completeProductDataVersion(productDataVersionId);
-        return toVersionResponse(adminProductMapper.selectProductDataVersion(productDataVersionId));
+        AdminProductVersionResponse response = toVersionResponse(
+                adminProductMapper.selectProductDataVersion(productDataVersionId)
+        );
+
+        adminAuditWriter.record(
+                actor,
+                "PRODUCT_VERSION_COMPLETE",
+                "PRODUCT_DATA_VERSION",
+                productDataVersionId,
+                "상품 데이터 버전을 확정했습니다.",
+                Map.of("versionCode", response.getVersionCode())
+        );
+
+        return response;
     }
 
     @Transactional
-    public void deleteProductDataVersion(Long productDataVersionId) {
-        requireDataVersion(productDataVersionId);
+    public void deleteProductDataVersion(
+            Long productDataVersionId,
+            AdminPrincipal actor
+    ) {
+        AdminProductVersionRow version = requireDataVersion(productDataVersionId);
 
         adminProductMapper.deleteEtfHoldingsByDataVersion(productDataVersionId);
         adminProductMapper.deletePreferentialRatesByDataVersion(productDataVersionId);
@@ -211,6 +281,15 @@ public class AdminProductService {
         adminProductMapper.deleteSavingsByDataVersion(productDataVersionId);
         adminProductMapper.deleteProductVersionsByDataVersion(productDataVersionId);
         adminProductMapper.deleteProductDataVersion(productDataVersionId);
+
+        adminAuditWriter.record(
+                actor,
+                "PRODUCT_VERSION_DELETE",
+                "PRODUCT_DATA_VERSION",
+                productDataVersionId,
+                "상품 데이터 버전을 삭제했습니다.",
+                Map.of("versionCode", version.getVersionCode())
+        );
     }
 
     private void cloneProducts(Long sourceDataVersionId, Long targetDataVersionId) {

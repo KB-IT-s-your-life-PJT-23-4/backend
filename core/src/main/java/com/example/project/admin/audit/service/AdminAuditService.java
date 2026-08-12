@@ -48,7 +48,13 @@ public class AdminAuditService {
         String normalizedTargetId = normalizeTargetId(targetId);
 
         long totalElements = adminAuditLogMapper.countAuditLogs(
-                actorUserId, actionType, targetType, targetId, from, to);
+                actorUserId,
+                normalizedActionType,
+                normalizedTargetType,
+                normalizedTargetId,
+                from,
+                to
+        );
 
         List<AdminAuditLogResponse> items = adminAuditLogMapper.selectedAuditLogsPage(
                 actorUserId,

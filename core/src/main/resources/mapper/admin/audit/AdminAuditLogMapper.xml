@@ -53,7 +53,14 @@
             #{targetType},
             #{targetId},
             #{actionSummary},
-            CAST(#{changeData} AS JSON),
+            <choose>
+                <when test="changeData != null">
+                    CAST(#{changeData} AS JSON)
+                </when>
+                <otherwise>
+                    NULL
+                </otherwise>
+            </choose>,
             #{result},
             #{requestId},
             #{httpMethod},
