@@ -4,6 +4,7 @@ import lombok.Data;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 
 @Data
 public class ProductCandidate {
@@ -31,6 +32,7 @@ public class ProductCandidate {
     private BigDecimal bondRatioPercent;
     private String riskLevel;
     private LocalDate productDataDate;
+    private List<BaseRateRecord> baseRateTiers;
 
     public CalculationType calculationType() {
         return switch (productType) {

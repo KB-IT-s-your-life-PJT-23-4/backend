@@ -213,6 +213,84 @@ class SimulationHistoryServiceTest {
         );
     }
 
+    @Test
+    @DisplayName("SAVED 이력의 선택 포트폴리오가 누락되면 불완전한 이력으로 처리한다")
+    void rejectSavedHistoryWithoutSelectedPortfolio() {
+        HistoryMapperStub mapperStub = new HistoryMapperStub();
+        mapperStub.totalElements = 1L;
+        mapperStub.simulations = List.of(
+                simulation(200L, SimulationStatus.SAVED, 2_999L, 2_000L)
+        );
+        mapperStub.results = List.of(result(2_001L, 200L, 2_000L, 100L));
+        mapperStub.recommendations = List.of(
+                portfolio(2_101L, 2_001L, 200L, RiskProfile.CONSERVATIVE, 2_100L),
+                portfolio(2_102L, 2_001L, 200L, RiskProfile.BALANCED, 2_200L),
+                portfolio(2_103L, 2_001L, 200L, RiskProfile.AGGRESSIVE, 2_400L)
+        );
+
+        SimulationException exception = assertThrows(
+                SimulationException.class,
+                () -> service(mapperStub).getHistory(1L, null, null, 0, 10)
+        );
+
+        // 회귀 방지: SAVED 카드에 확정 상품·수익 정보가 없는 상태를 정상 이력으로 표시하지 않는다.
+        assertEquals(SimulationError.SIMULATION_HISTORY_INCOMPLETE,
+                exception.getError());
+    }
+
+    @Test
+    @DisplayName("선택 포트폴리오가 다른 시뮬레이션에 속하면 이력 조회를 거부한다")
+    void rejectSelectedPortfolioFromAnotherSimulation() {
+        HistoryMapperStub mapperStub = new HistoryMapperStub();
+        mapperStub.totalElements = 1L;
+        mapperStub.simulations = List.of(
+                simulation(200L, SimulationStatus.SAVED, 2_999L, 2_000L)
+        );
+        mapperStub.results = List.of(result(2_001L, 200L, 2_000L, 100L));
+        mapperStub.recommendations = List.of(
+                portfolio(2_101L, 2_001L, 200L, RiskProfile.CONSERVATIVE, 2_100L),
+                portfolio(2_102L, 2_001L, 200L, RiskProfile.BALANCED, 2_200L),
+                portfolio(2_103L, 2_001L, 200L, RiskProfile.AGGRESSIVE, 2_400L)
+        );
+        mapperStub.selectedPortfolios = List.of(
+                portfolio(2_999L, 2_001L, 999L, RiskProfile.BALANCED, 2_300L)
+        );
+
+        SimulationException exception = assertThrows(
+                SimulationException.class,
+                () -> service(mapperStub).getHistory(1L, null, null, 0, 10)
+        );
+
+        // 회귀 방지: 잘못 연결된 선택 포트폴리오가 다른 이력 카드에 노출되지 않게 한다.
+        assertEquals(SimulationError.SELECTED_PORTFOLIO_MISMATCH,
+                exception.getError());
+    }
+
+    @Test
+    @DisplayName("투자 원금이 0원인 추천 결과는 수익률 범위를 계산하지 않는다")
+    void rejectReturnRangeWithZeroInvestmentPrincipal() {
+        HistoryMapperStub mapperStub = new HistoryMapperStub();
+        mapperStub.totalElements = 1L;
+        mapperStub.simulations = List.of(
+                simulation(100L, SimulationStatus.DRAFT, null, 1_000L)
+        );
+        mapperStub.results = List.of(result(1_001L, 100L, 0L, 0L));
+        mapperStub.recommendations = List.of(
+                portfolio(1_101L, 1_001L, 100L, RiskProfile.CONSERVATIVE, 0L),
+                portfolio(1_102L, 1_001L, 100L, RiskProfile.BALANCED, 0L),
+                portfolio(1_103L, 1_001L, 100L, RiskProfile.AGGRESSIVE, 0L)
+        );
+
+        SimulationException exception = assertThrows(
+                SimulationException.class,
+                () -> service(mapperStub).getHistory(1L, null, null, 0, 10)
+        );
+
+        // 회귀 방지: 0원으로 나눈 잘못된 수익률을 목록 카드에 표시하지 않는다.
+        assertEquals(SimulationError.SIMULATION_RETURN_CALCULATION_INVALID,
+                exception.getError());
+    }
+
     private SimulationHistoryService service(HistoryMapperStub mapperStub) {
         return new SimulationHistoryService(
                 mapperStub.mapper(),
