@@ -1,5 +1,7 @@
 package com.example.project.admin.user.service;
 
+import com.example.project.admin.audit.service.AdminAuditWriter;
+import com.example.project.admin.audit.support.InMemoryAdminAuditLogMapper;
 import com.example.project.admin.auth.domain.AdminPrincipal;
 import com.example.project.admin.auth.service.AdminAuthorizationService;
 import com.example.project.admin.user.domain.AdminUserRecord;
@@ -47,7 +49,8 @@ class AdminUserServiceTest {
                 userService,
                 new AdminAuthorizationService(
                         null, null, null,
-                        com.example.project.support.PiiTestSupport.protectionService()
+                        com.example.project.support.PiiTestSupport.protectionService(),
+                        new AdminAuditWriter(new InMemoryAdminAuditLogMapper())
                 ),
                 new AccountAccessService(
                         null, null, clock,
@@ -81,7 +84,8 @@ class AdminUserServiceTest {
                     }
                 },
                 clock,
-                com.example.project.support.PiiTestSupport.protectionService()
+                com.example.project.support.PiiTestSupport.protectionService(),
+                new AdminAuditWriter(new InMemoryAdminAuditLogMapper())
         );
     }
 
@@ -192,7 +196,9 @@ class AdminUserServiceTest {
     @Test
     @DisplayName("회원 삭제는 기존 회원탈퇴 서비스를 그대로 재사용한다")
     void deleteUserWithExistingWithdrawalService() {
-        service.deleteUser(7L);
+        mapper.users.add(user(7L, "tester@example.com", "홍길동", 0L, 0L, 0L));
+
+        service.deleteUser(authentication("ROOT"), 7L);
 
         assertEquals(7L, userService.deletedUserId);
     }
@@ -200,11 +206,12 @@ class AdminUserServiceTest {
     @Test
     @DisplayName("회원 삭제 실패는 기존 회원탈퇴 서비스의 응답 코드를 유지한다")
     void propagateDeleteFailure() {
+        mapper.users.add(user(99L, "tester@example.com", "홍길동", 0L, 0L, 0L));
         userService.deleteFailure = new ServiceException(ResponseCode.MEMBER_NOT_FOUND);
 
         ServiceException exception = assertThrows(
                 ServiceException.class,
-                () -> service.deleteUser(99L)
+                () -> service.deleteUser(authentication("ROOT"), 99L)
         );
 
         assertEquals(ResponseCode.MEMBER_NOT_FOUND, exception.getResponseCode());

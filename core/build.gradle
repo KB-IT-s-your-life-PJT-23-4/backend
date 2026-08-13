@@ -49,6 +49,10 @@ dependencies {
     implementation "org.mybatis:mybatis:${mybatisVersion}"
     implementation "org.mybatis:mybatis-spring:${mybatisSpringVersion}"
 
+    // Spring Batch. 관리자 화면의 수동 실행이 batch 모듈의 Job 을 그대로 띄운다.
+    runtimeOnly project(':batch')
+    implementation "org.springframework.batch:spring-batch-core:${springBatchVersion}"
+
     // Local cache
     implementation "com.github.ben-manes.caffeine:caffeine:${caffeineVersion}"
 

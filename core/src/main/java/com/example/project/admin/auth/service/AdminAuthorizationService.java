@@ -1,5 +1,6 @@
 package com.example.project.admin.auth.service;
 
+import com.example.project.admin.audit.service.AdminAuditWriter;
 import com.example.project.admin.auth.domain.AdminPrincipal;
 import com.example.project.admin.auth.dto.request.AdminAuthCreateRequest;
 import com.example.project.admin.auth.dto.request.AdminChangeAuthRequest;
@@ -23,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.security.Principal;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -36,6 +38,7 @@ public class AdminAuthorizationService {
     private final AdminAuthMapper adminAuthMapper;
     private final PasswordEncoder passwordEncoder;
     private final UserPiiProtectionService piiProtectionService;
+    private final AdminAuditWriter adminAuditWriter;
 
     public Optional<AdminPrincipal> findCurrentUser(Object authenticatedPrincipal) {
         Long authenticatedUserId = parseUserId(authenticatedPrincipal);
@@ -126,23 +129,39 @@ public class AdminAuthorizationService {
     }
 
     @Transactional
-    public void changeAuth(Long userId, AdminChangeAuthRequest request) {
+    public void changeAuth(
+            Long userId,
+            AdminChangeAuthRequest request,
+            AdminPrincipal actor
+    ) {
         validateUserId(userId);
         if (request == null || request.getRole() == null || request.getRole().isBlank()) {
             throw new ServiceException(ResponseCode.BAD_REQUEST);
         }
 
-        requireUser(userId);
+        UserVO target = requireUser(userId);
         String role = request.getRole().trim().toUpperCase(Locale.ROOT);
         if (!ADMIN_ROLES.contains(role)) {
             throw new ServiceException(ResponseCode.BAD_REQUEST);
         }
 
         validateAffectedRows(adminAuthMapper.changeAuth(userId, role));
+
+        adminAuditWriter.record(
+                actor,
+                "ADMIN_ROLE_CHANGE",
+                "ADMIN",
+                userId,
+                "관리자 권한을 변경했습니다.",
+                Map.of(
+                        "beforeRole", target.getRole(),
+                        "afterRole", role
+                )
+        );
     }
 
     @Transactional
-    public void deleteAdmin(Long userId) {
+    public void deleteAdmin(Long userId, AdminPrincipal actor) {
         validateUserId(userId);
         UserVO user = requireUser(userId);
         if (!isAdminRole(user.getRole())) {
@@ -150,6 +169,15 @@ public class AdminAuthorizationService {
         }
 
         validateAffectedRows(adminAuthMapper.deleteAdmin(userId));
+
+        adminAuditWriter.record(
+                actor,
+                "ADMIN_ROLE_DELETE",
+                "ADMIN",
+                userId,
+                "관리자 권한을 해제했습니다.",
+                Map.of("beforeRole", user.getRole())
+        );
     }
 
     private UserVO requireUser(Long userId) {
@@ -174,7 +202,10 @@ public class AdminAuthorizationService {
     }
 
     @Transactional
-    public AdminAuthResponse createAdmin(AdminAuthCreateRequest request) {
+    public AdminAuthResponse createAdmin(
+            AdminAuthCreateRequest request,
+            AdminPrincipal actor
+    ) {
         if (request == null) {
             throw new ServiceException(ResponseCode.BAD_REQUEST);
         }
@@ -211,6 +242,15 @@ public class AdminAuthorizationService {
         UserVO createdAdmin = adminAuthMapper.findByUserId(admin.getUserId())
                 .map(piiProtectionService::reveal)
                 .orElseThrow(() -> new ServiceException(ResponseCode.DATABASE_ERROR));
+
+        adminAuditWriter.record(
+                actor,
+                "ADMIN_CREATE",
+                "ADMIN",
+                createdAdmin.getUserId(),
+                "관리자 계정을 생성했습니다.",
+                Map.of("role", createdAdmin.getRole())
+        );
 
         return AdminAuthResponse.of(createdAdmin);
     }

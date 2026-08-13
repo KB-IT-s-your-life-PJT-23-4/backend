@@ -2,6 +2,7 @@ package com.example.project.consultation.controller;
 
 import com.example.project.common.api.ApiResponse;
 import com.example.project.common.api.ResponseCode;
+import com.example.project.common.logging.ApiLog;
 import com.example.project.consultation.dto.response.FaqAnswerResponse;
 import com.example.project.consultation.dto.response.FaqListResponse;
 import com.example.project.consultation.service.FaqService;
@@ -13,6 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import javax.servlet.http.HttpServletRequest;
 
+@ApiLog
 @RestController
 @RequestMapping("/api/ai")
 @RequiredArgsConstructor

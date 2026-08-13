@@ -42,7 +42,7 @@ public interface SimulationMapper {
     List<GiftHistoryRecord> selectCompletedGifts(
             @Param("familyId") Long familyId,
             @Param("windowStart") LocalDate windowStart,
-            @Param("asOfDate") LocalDate asOfDate
+            @Param("giftDate") LocalDate giftDate
     );
 
     List<TaxBracket> selectTaxBrackets(@Param("asOfDate") LocalDate asOfDate);
@@ -53,14 +53,12 @@ public interface SimulationMapper {
 
     List<ProductCandidate> selectDepositCandidates(
             @Param("productDataVersionId") Long productDataVersionId,
-            @Param("investmentPeriodMonths") Integer investmentPeriodMonths,
-            @Param("limit") Integer limit
+            @Param("investmentPeriodMonths") Integer investmentPeriodMonths
     );
 
     List<ProductCandidate> selectSavingsCandidates(
             @Param("productDataVersionId") Long productDataVersionId,
-            @Param("investmentPeriodMonths") Integer investmentPeriodMonths,
-            @Param("limit") Integer limit
+            @Param("investmentPeriodMonths") Integer investmentPeriodMonths
     );
 
     List<ProductCandidate> selectEtfCandidates(
@@ -203,6 +201,7 @@ public interface SimulationMapper {
 
     int resetSavedSimulation(
             @Param("simulationId") Long simulationId,
-            @Param("expiredAt") LocalDateTime expiredAt
+            @Param("expiredAt") LocalDateTime expiredAt,
+            @Param("updatedAt") LocalDateTime updatedAt
     );
 }

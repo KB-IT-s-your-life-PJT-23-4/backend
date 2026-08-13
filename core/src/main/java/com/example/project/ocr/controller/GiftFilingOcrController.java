@@ -2,6 +2,7 @@ package com.example.project.ocr.controller;
 
 import com.example.project.common.api.ApiResponse;
 import com.example.project.common.api.ResponseCode;
+import com.example.project.common.logging.ApiLog;
 import com.example.project.common.web.CurrentUser;
 import com.example.project.ocr.dto.response.GiftFilingVerifyResponse;
 import com.example.project.ocr.service.OcrService;
@@ -22,6 +23,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import javax.servlet.http.HttpServletRequest;
 
+@ApiLog
 @Api(tags = "증여 신고서 OCR API", description = "증여세과세표준신고서 이미지에서 증여 이력 입력값을 추출")
 @Log4j2
 @RestController

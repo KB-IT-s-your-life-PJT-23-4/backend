@@ -1,5 +1,8 @@
 package com.example.project.admin.report.service;
 
+import com.example.project.admin.audit.service.AdminAuditWriter;
+import com.example.project.admin.audit.support.InMemoryAdminAuditLogMapper;
+import com.example.project.admin.auth.domain.AdminPrincipal;
 import com.example.project.admin.report.dto.request.ReportProcessRequest;
 import com.example.project.admin.report.dto.response.AdminReportPageResponse;
 import com.example.project.admin.report.mapper.ReportMapper;
@@ -22,13 +25,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class AdminReportServiceTest {
 
+    private static final AdminPrincipal ACTOR = new AdminPrincipal(7L, "MIDDLE");
+
     @Test
     @DisplayName("신고 목록을 조회할 때 필터와 페이지 정보를 정규화해 매퍼에 전달한다")
     void getPageReportListNormalizesFiltersAndReturnsPagination() {
         ReportMapperStub mapper = new ReportMapperStub();
         mapper.totalElements = 45L;
         mapper.reports = List.of(report(101L), report(102L));
-        AdminReportService service = new AdminReportService(mapper);
+        AdminReportService service = service(mapper);
 
         AdminReportPageResponse response = service.getPageReportList(
                 1,
@@ -59,7 +64,7 @@ class AdminReportServiceTest {
     @DisplayName("빈 필터는 전체 조회 조건으로 처리한다")
     void getPageReportListTreatsBlankFiltersAsNull() {
         ReportMapperStub mapper = new ReportMapperStub();
-        AdminReportService service = new AdminReportService(mapper);
+        AdminReportService service = service(mapper);
 
         AdminReportPageResponse response = service.getPageReportList(
                 0,
@@ -81,7 +86,7 @@ class AdminReportServiceTest {
     @DisplayName("페이지 범위와 신고 필터가 올바르지 않으면 요청 오류를 발생시킨다")
     void getPageReportListRejectsInvalidRequest() {
         ReportMapperStub mapper = new ReportMapperStub();
-        AdminReportService service = new AdminReportService(mapper);
+        AdminReportService service = service(mapper);
 
         assertBadRequest(() -> service.getPageReportList(-1, 20, null, null));
         assertBadRequest(() -> service.getPageReportList(0, 0, null, null));
@@ -96,12 +101,12 @@ class AdminReportServiceTest {
     @DisplayName("신고 처리 상태와 관리자 처리 내용을 정규화해 저장한다")
     void processReportNormalizesAndUpdatesReport() {
         ReportMapperStub mapper = new ReportMapperStub();
-        AdminReportService service = new AdminReportService(mapper);
+        AdminReportService service = service(mapper);
 
         service.processReport(
                 10L,
                 request("  resolved  ", "  정상적인 문의로 확인했습니다.  "),
-                7L
+                ACTOR
         );
 
         assertEquals(10L, mapper.observedReportId);
@@ -115,12 +120,12 @@ class AdminReportServiceTest {
     @DisplayName("관리자 처리 내용은 null 또는 빈 문자열일 수 있다")
     void processReportAllowsNullableResolutionNote() {
         ReportMapperStub mapper = new ReportMapperStub();
-        AdminReportService service = new AdminReportService(mapper);
+        AdminReportService service = service(mapper);
 
-        service.processReport(10L, request("IN_REVIEW", null), 7L);
+        service.processReport(10L, request("IN_REVIEW", null), ACTOR);
         assertNull(mapper.observedResolutionNote);
 
-        service.processReport(10L, request("OPEN", "   "), 7L);
+        service.processReport(10L, request("OPEN", "   "), ACTOR);
         assertNull(mapper.observedResolutionNote);
         assertEquals(2, mapper.updateCalls);
     }
@@ -129,14 +134,18 @@ class AdminReportServiceTest {
     @DisplayName("신고 처리 요청값이 올바르지 않으면 저장하지 않는다")
     void processReportRejectsInvalidRequest() {
         ReportMapperStub mapper = new ReportMapperStub();
-        AdminReportService service = new AdminReportService(mapper);
+        AdminReportService service = service(mapper);
 
-        assertBadRequest(() -> service.processReport(0L, request("OPEN", null), 7L));
-        assertBadRequest(() -> service.processReport(10L, request("OPEN", null), 0L));
-        assertBadRequest(() -> service.processReport(10L, null, 7L));
-        assertBadRequest(() -> service.processReport(10L, request("", null), 7L));
-        assertBadRequest(() -> service.processReport(10L, request("UNKNOWN", null), 7L));
-        assertBadRequest(() -> service.processReport(10L, request("OPEN", "가".repeat(2001)), 7L));
+        assertBadRequest(() -> service.processReport(0L, request("OPEN", null), ACTOR));
+        assertBadRequest(() -> service.processReport(
+                10L,
+                request("OPEN", null),
+                new AdminPrincipal(0L, "MIDDLE")
+        ));
+        assertBadRequest(() -> service.processReport(10L, null, ACTOR));
+        assertBadRequest(() -> service.processReport(10L, request("", null), ACTOR));
+        assertBadRequest(() -> service.processReport(10L, request("UNKNOWN", null), ACTOR));
+        assertBadRequest(() -> service.processReport(10L, request("OPEN", "가".repeat(2001)), ACTOR));
         assertEquals(0, mapper.updateCalls);
     }
 
@@ -145,11 +154,11 @@ class AdminReportServiceTest {
     void processReportRejectsMissingReport() {
         ReportMapperStub mapper = new ReportMapperStub();
         mapper.updatedRows = 0;
-        AdminReportService service = new AdminReportService(mapper);
+        AdminReportService service = service(mapper);
 
         ServiceException exception = assertThrows(
                 ServiceException.class,
-                () -> service.processReport(999L, request("RESOLVED", null), 7L)
+                () -> service.processReport(999L, request("RESOLVED", null), ACTOR)
         );
 
         assertEquals(ResponseCode.RESOURCE_NOT_FOUND, exception.getResponseCode());
@@ -160,11 +169,11 @@ class AdminReportServiceTest {
     void processReportRejectsUnexpectedAffectedRows() {
         ReportMapperStub mapper = new ReportMapperStub();
         mapper.updatedRows = 2;
-        AdminReportService service = new AdminReportService(mapper);
+        AdminReportService service = service(mapper);
 
         ServiceException exception = assertThrows(
                 ServiceException.class,
-                () -> service.processReport(10L, request("DISMISSED", null), 7L)
+                () -> service.processReport(10L, request("DISMISSED", null), ACTOR)
         );
 
         assertEquals(ResponseCode.DATABASE_ERROR, exception.getResponseCode());
@@ -176,6 +185,13 @@ class AdminReportServiceTest {
                 executable
         );
         assertEquals(ResponseCode.BAD_REQUEST, exception.getResponseCode());
+    }
+
+    private AdminReportService service(ReportMapper mapper) {
+        return new AdminReportService(
+                mapper,
+                new AdminAuditWriter(new InMemoryAdminAuditLogMapper())
+        );
     }
 
     private AiSafetyReportVO report(Long reportId) {

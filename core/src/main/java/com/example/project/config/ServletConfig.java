@@ -1,22 +1,24 @@
 package com.example.project.config;
 
+import com.example.project.admin.access.service.AdminAccessSseService;
 import com.example.project.common.logging.RequestLoggingAspect;
+import com.example.project.common.logging.DeferredAccessLogInterceptor;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.*;
+import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.multipart.MultipartResolver;
 import org.springframework.web.multipart.support.StandardServletMultipartResolver;
 import org.springframework.validation.beanvalidation.MethodValidationPostProcessor;
-import org.springframework.web.servlet.config.annotation.EnableWebMvc;
-import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
-import org.springframework.web.servlet.config.annotation.ViewResolverRegistry;
-import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+import org.springframework.web.servlet.config.annotation.*;
 import org.springframework.web.servlet.view.JstlView;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.springframework.http.converter.HttpMessageConverter;
 import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 
+import java.time.Clock;
 import java.util.List;
 
 @Configuration
@@ -31,6 +33,26 @@ import java.util.List;
                 @ComponentScan.Filter(type = FilterType.ANNOTATION, classes = ControllerAdvice.class)
         })
 public class ServletConfig implements WebMvcConfigurer {
+
+    private final AsyncTaskExecutor adminAccessSseExecutor;
+
+    public ServletConfig(
+            @Qualifier("adminAccessSseExecutor")
+            AsyncTaskExecutor adminAccessSseExecutor
+    ){
+        this.adminAccessSseExecutor = adminAccessSseExecutor;
+    }
+
+    @Override
+    public void configureAsyncSupport(AsyncSupportConfigurer configurer) {
+        configurer.setTaskExecutor(adminAccessSseExecutor);
+
+        configurer.setDefaultTimeout(60L * 60L * 1000L);
+        configurer.registerDeferredResultInterceptors(
+                new DeferredAccessLogInterceptor()
+        );
+    }
+
     @Override
     public void configureViewResolvers(ViewResolverRegistry registry) {
         registry.jsp("/WEB-INF/views/", ".jsp").viewClass(JstlView.class);
@@ -69,7 +91,10 @@ public class ServletConfig implements WebMvcConfigurer {
     }
 
     @Bean
-    public RequestLoggingAspect requestLoggingAspect() {
-        return new RequestLoggingAspect();
+    public RequestLoggingAspect requestLoggingAspect(
+            AdminAccessSseService adminAccessSseService,
+            Clock applicationClock
+    ) {
+        return new RequestLoggingAspect(adminAccessSseService, applicationClock);
     }
 }

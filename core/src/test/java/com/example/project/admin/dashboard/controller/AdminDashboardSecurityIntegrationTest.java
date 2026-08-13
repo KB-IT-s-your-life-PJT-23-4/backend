@@ -193,7 +193,10 @@ class AdminDashboardSecurityIntegrationTest {
                     userMapper,
                     adminAuthMapper,
                     passwordEncoder,
-                    com.example.project.support.PiiTestSupport.protectionService()
+                    com.example.project.support.PiiTestSupport.protectionService(),
+                    new com.example.project.admin.audit.service.AdminAuditWriter(
+                            new com.example.project.admin.audit.support.InMemoryAdminAuditLogMapper()
+                    )
             );
         }
 

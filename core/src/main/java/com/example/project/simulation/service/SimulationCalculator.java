@@ -19,6 +19,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.function.IntFunction;
 
 @Component
 public class SimulationCalculator {
@@ -26,6 +27,8 @@ public class SimulationCalculator {
     private static final MathContext MC = new MathContext(18, RoundingMode.HALF_UP);
     private static final BigDecimal ONE_HUNDRED = BigDecimal.valueOf(100);
     private static final BigDecimal TWELVE = BigDecimal.valueOf(12);
+    private static final BigDecimal FILING_TAX_CREDIT_RATE = new BigDecimal("0.03");
+    private static final long MINIMUM_TAXABLE_BASE = 500_000L;
     private static final int MAX_GROSS_UP_ITERATIONS = 50;
 
     public TaxOutcome calculateTax(
@@ -83,17 +86,18 @@ public class SimulationCalculator {
                     previousTaxableAmount,
                     currentTaxableAmount
             );
-            long tax = Math.max(
+            long calculatedTax = Math.max(
                     0L,
                     calculateProgressiveTax(cumulativeTaxableAmount, brackets)
                             - previousCalculatedTax
             );
+            long payableTax = calculatePayableTax(calculatedTax);
             return new TaxOutcome(
                     appliedDeduction,
                     currentTaxableAmount,
-                    tax,
+                    payableTax,
                     normalizedGiftAmount,
-                    Math.max(0, normalizedGiftAmount - tax)
+                    Math.max(0, normalizedGiftAmount - payableTax)
             );
         }
 
@@ -104,28 +108,30 @@ public class SimulationCalculator {
                     previousTaxableAmount,
                     taxableAmount
             );
-            long nextTax = Math.max(
+            long calculatedTax = Math.max(
                     0L,
                     calculateProgressiveTax(cumulativeTaxableAmount, brackets)
                             - previousCalculatedTax
             );
-            if (Math.abs(nextTax - grossedUpTax) <= 1) {
+            long nextPayableTax = calculatePayableTax(calculatedTax);
+            if (Math.abs(nextPayableTax - grossedUpTax) <= 1) {
                 return new TaxOutcome(
                         appliedDeduction,
                         taxableAmount,
-                        nextTax,
-                        Math.addExact(normalizedGiftAmount, nextTax),
+                        nextPayableTax,
+                        Math.addExact(normalizedGiftAmount, nextPayableTax),
                         normalizedGiftAmount
                 );
             }
-            grossedUpTax = nextTax;
+            grossedUpTax = nextPayableTax;
         }
 
         throw new SimulationException(SimulationError.TAX_CALCULATION_NOT_CONVERGED);
     }
 
     public long calculateProgressiveTax(long taxableAmount, List<TaxBracket> brackets) {
-        if (taxableAmount <= 0) {
+        // 상속세 및 증여세법 제55조 제2항: 과세표준이 50만 원 미만이면 증여세를 부과하지 않는다.
+        if (taxableAmount < MINIMUM_TAXABLE_BASE) {
             return 0;
         }
 
@@ -149,6 +155,15 @@ public class SimulationCalculator {
                 .subtract(BigDecimal.valueOf(value(bracket.getProgressiveDeduction(), 0L)))
                 .setScale(0, RoundingMode.HALF_UP)
                 .longValue());
+    }
+
+    public long calculatePayableTax(long calculatedTax) {
+        long normalizedTax = Math.max(0L, calculatedTax);
+        long filingTaxCredit = BigDecimal.valueOf(normalizedTax)
+                .multiply(FILING_TAX_CREDIT_RATE, MC)
+                .setScale(0, RoundingMode.HALF_UP)
+                .longValue();
+        return Math.max(0L, normalizedTax - filingTaxCredit);
     }
 
     public long calculateProductFutureValue(
@@ -202,17 +217,20 @@ public class SimulationCalculator {
         }
 
         int contractCount = minimumContractCount;
-        int baseMonths = totalMonths / contractCount;
-        int remainder = totalMonths % contractCount;
-        if (baseMonths < minimumContractMonths
-                || baseMonths > maximumContractMonths
-                || (remainder > 0 && baseMonths + 1 > maximumContractMonths)) {
-            return List.of();
-        }
-
+        int remainingMonths = totalMonths;
         List<Integer> periods = new ArrayList<>(contractCount);
         for (int index = 0; index < contractCount; index++) {
-            periods.add(baseMonths + (index < remainder ? 1 : 0));
+            int remainingContracts = contractCount - index - 1;
+            int contractMonths = Math.min(
+                    maximumContractMonths,
+                    remainingMonths - remainingContracts * minimumContractMonths
+            );
+            if (contractMonths < minimumContractMonths
+                    || contractMonths > maximumContractMonths) {
+                return List.of();
+            }
+            periods.add(contractMonths);
+            remainingMonths -= contractMonths;
         }
         return List.copyOf(periods);
     }
@@ -225,11 +243,29 @@ public class SimulationCalculator {
             Integer minimumContractMonths,
             Integer maximumContractMonths
     ) {
+        return calculateReinvestedProductFutureValue(
+                calculationType,
+                principal,
+                totalMonths,
+                minimumContractMonths,
+                maximumContractMonths,
+                ignored -> annualRatePercent
+        );
+    }
+
+    public long calculateReinvestedProductFutureValue(
+            CalculationType calculationType,
+            long principal,
+            int totalMonths,
+            Integer minimumContractMonths,
+            Integer maximumContractMonths,
+            IntFunction<BigDecimal> annualRateResolver
+    ) {
         if (calculationType == CalculationType.COMPOUND_RETURN) {
             return calculateProductFutureValue(
                     calculationType,
                     principal,
-                    annualRatePercent,
+                    annualRateResolver.apply(totalMonths),
                     totalMonths
             );
         }
@@ -248,7 +284,7 @@ public class SimulationCalculator {
             maturityValue = calculateProductFutureValue(
                     calculationType,
                     maturityValue,
-                    annualRatePercent,
+                    annualRateResolver.apply(period),
                     period
             );
         }
@@ -261,6 +297,24 @@ public class SimulationCalculator {
             List<SimulationTrancheRecord> tranches,
             long investmentPrincipal,
             LocalDate evaluationDate
+    ) {
+        return calculateSelectedProductValue(
+                product,
+                allocatedAmount,
+                tranches,
+                investmentPrincipal,
+                evaluationDate,
+                ignored -> product.getAppliedAnnualRatePercent()
+        );
+    }
+
+    public long calculateSelectedProductValue(
+            SimulationProductRecord product,
+            long allocatedAmount,
+            List<SimulationTrancheRecord> tranches,
+            long investmentPrincipal,
+            LocalDate evaluationDate,
+            IntFunction<BigDecimal> annualRateResolver
     ) {
         if (allocatedAmount <= 0 || investmentPrincipal <= 0) {
             return 0;
@@ -278,10 +332,10 @@ public class SimulationCalculator {
             total += calculateReinvestedProductFutureValue(
                     product.calculationType(),
                     portions.get(index),
-                    product.getAppliedAnnualRatePercent(),
                     months,
                     product.getMinimumContractMonths(),
-                    product.getMaximumContractMonths()
+                    product.getMaximumContractMonths(),
+                    annualRateResolver
             );
         }
 
@@ -347,8 +401,8 @@ public class SimulationCalculator {
                 .multiply(BigDecimal.valueOf(months).divide(TWELVE, MC), MC);
         return BigDecimal.valueOf(principal)
                 .add(interest)
-                .setScale(0, RoundingMode.FLOOR)
-                .longValue();
+                .setScale(0, RoundingMode.HALF_UP)
+                .longValueExact();
     }
 
     private long calculateSavings(long totalContribution, BigDecimal annualRatePercent, int months) {
@@ -368,8 +422,8 @@ public class SimulationCalculator {
 
         return monthlyContribution
                 .multiply(annuityFactor, MC)
-                .setScale(0, RoundingMode.FLOOR)
-                .longValue();
+                .setScale(0, RoundingMode.HALF_UP)
+                .longValueExact();
     }
 
     private long calculateEtf(long principal, BigDecimal annualRatePercent, int months) {
@@ -378,7 +432,7 @@ public class SimulationCalculator {
                 1 + annualRatePercent.divide(ONE_HUNDRED, MC).doubleValue()
         );
         double value = principal * Math.pow(annualGrowth, months / 12.0);
-        return (long) Math.floor(value);
+        return Math.round(value);
     }
 
     private List<Long> splitAcrossTranches(

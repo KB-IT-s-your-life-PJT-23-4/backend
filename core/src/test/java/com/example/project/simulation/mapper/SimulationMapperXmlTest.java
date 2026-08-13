@@ -12,6 +12,7 @@ import com.example.project.simulation.domain.SimulationTrancheRecord;
 
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Map;
 
@@ -68,6 +69,15 @@ class SimulationMapperXmlTest {
                 namespace + "selectSimulation",
                 1L
         );
+        String selectCompletedGifts = sql(
+                configuration,
+                namespace + "selectCompletedGifts",
+                Map.of(
+                        "familyId", 1L,
+                        "windowStart", LocalDate.of(2016, 8, 12),
+                        "giftDate", LocalDate.of(2026, 8, 12)
+                )
+        );
         String insertTranche = sql(configuration, namespace + "insertTranche",
                 new SimulationTrancheRecord());
         String selectTranches = sql(configuration, namespace + "selectTranches", 1L);
@@ -100,7 +110,8 @@ class SimulationMapperXmlTest {
                 namespace + "resetSavedSimulation",
                 Map.of(
                         "simulationId", 1L,
-                        "expiredAt", LocalDateTime.of(2026, 9, 6, 13, 15)
+                        "expiredAt", LocalDateTime.of(2026, 9, 6, 13, 15),
+                        "updatedAt", LocalDateTime.of(2026, 8, 6, 13, 15)
                 )
         );
 
@@ -116,6 +127,9 @@ class SimulationMapperXmlTest {
         assertTrue(selectSimulation.contains(
                 "s.kb_product_data_version_id AS product_data_version_id"));
         assertTrue(selectSimulation.contains("s.gift_date"));
+        assertTrue(selectCompletedGifts.contains("gift_date >= ?"));
+        assertTrue(selectCompletedGifts.contains("gift_date <= ?"));
+        assertFalse(selectCompletedGifts.contains("gift_date < ?"));
         assertTrue(insertTranche.contains("simulation_tranche ( simul_result_id,"));
         assertTrue(insertTranche.contains("investment_amount, created_at"));
         assertTrue(insertTranche.contains("NOW()"));
@@ -140,10 +154,10 @@ class SimulationMapperXmlTest {
         assertTrue(selectEtfHoldings.contains("holding_rank"));
         assertFalse(selectEtfHoldings.contains("holding_rank AS `rank`"));
         assertTrue(resetSavedSimulation.contains("status = 'DRAFT'"));
+        assertTrue(resetSavedSimulation.contains("selected_portfolio_id = NULL"));
         assertTrue(resetSavedSimulation.contains("saved_at = NULL"));
         assertTrue(resetSavedSimulation.contains("expired_at = ?"));
-        assertFalse(resetSavedSimulation.contains("selected_portfolio_id"));
-        assertFalse(resetSavedSimulation.contains("updated_at"));
+        assertTrue(resetSavedSimulation.contains("updated_at = ?"));
     }
 
     private String sql(Configuration configuration, String statement, Object parameter) {
@@ -222,12 +236,24 @@ class SimulationMapperXmlTest {
             xml = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
         }
 
-        assertFalse(xml.contains(
-                "d.max_month &gt;= #{investmentPeriodMonths}"
+        String depositQuery = xml.substring(
+                xml.indexOf("<select id=\"selectDepositCandidates\""),
+                xml.indexOf("<select id=\"selectSavingsCandidates\"")
+        );
+        String savingsQuery = xml.substring(
+                xml.indexOf("<select id=\"selectSavingsCandidates\""),
+                xml.indexOf("<select id=\"selectEtfCandidates\"")
+        );
+
+        // 재가입 조합이 가능한 상품을 먼저 거르고, 서비스 검증 전에 후보 수를 잘라내지 않는다.
+        assertTrue(depositQuery.contains(
+                "CEIL(#{investmentPeriodMonths} / d.max_month)"
         ));
-        assertFalse(xml.contains(
-                "s.max_month &gt;= #{investmentPeriodMonths}"
+        assertTrue(savingsQuery.contains(
+                "CEIL(#{investmentPeriodMonths} / s.max_month)"
         ));
+        assertFalse(depositQuery.contains("LIMIT"));
+        assertFalse(savingsQuery.contains("LIMIT"));
         assertTrue(xml.contains(
                 "COALESCE(d.min_month, sv.min_month) AS minimum_contract_months"
         ));

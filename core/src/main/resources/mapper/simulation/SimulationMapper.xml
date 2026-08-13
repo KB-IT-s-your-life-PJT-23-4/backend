@@ -35,7 +35,7 @@
         WHERE family_id = #{familyId}
           AND status = 'COMPLETED'
           AND gift_date &gt;= #{windowStart}
-          AND gift_date &lt; #{asOfDate}
+          AND gift_date &lt;= #{giftDate}
         ORDER BY gift_date, gift_id
     </select>
 
@@ -83,9 +83,9 @@
         SELECT
             <include refid="productCandidateColumns"/>,
             'DEPOSIT' AS product_category,
-            MAX(br.base_rate_percent) AS base_annual_rate_percent,
+            MIN(br.base_rate_percent) AS base_annual_rate_percent,
             MAX(br.max_rate_percent) AS maximum_annual_rate_percent,
-            MAX(br.base_rate_percent) AS applied_annual_rate_percent,
+            MIN(br.base_rate_percent) AS applied_annual_rate_percent,
             d.min_month,
             d.max_month,
             d.min_amount,
@@ -100,12 +100,15 @@
         WHERE pv.kb_product_data_version_id = #{productDataVersionId}
           AND pv.sales_status = 'ON_SALE'
           AND p.product_type = 'DEPOSIT'
+          AND d.min_month &gt; 0
+          AND d.max_month &gt;= d.min_month
+          AND CEIL(#{investmentPeriodMonths} / d.max_month)
+              &lt;= FLOOR(#{investmentPeriodMonths} / d.min_month)
         GROUP BY pv.kb_product_version_id, pv.kb_product_data_version_id,
                  p.product_id, p.product_code, pv.product_name, p.product_type,
                  pv.description, pv.product_url, pv.sales_status, dv.data_date,
                  d.min_month, d.max_month, d.min_amount, d.max_amount
         ORDER BY applied_annual_rate_percent DESC, pv.kb_product_version_id
-        LIMIT #{limit}
     </select>
 
     <select id="selectSavingsCandidates"
@@ -113,9 +116,9 @@
         SELECT
             <include refid="productCandidateColumns"/>,
             s.savings_category AS product_category,
-            MAX(br.base_rate_percent) AS base_annual_rate_percent,
+            MIN(br.base_rate_percent) AS base_annual_rate_percent,
             MAX(br.max_rate_percent) AS maximum_annual_rate_percent,
-            MAX(br.base_rate_percent) AS applied_annual_rate_percent,
+            MIN(br.base_rate_percent) AS applied_annual_rate_percent,
             s.min_month,
             s.max_month,
             s.monthly_min_amount,
@@ -130,13 +133,16 @@
         WHERE pv.kb_product_data_version_id = #{productDataVersionId}
           AND pv.sales_status = 'ON_SALE'
           AND p.product_type = 'SAVINGS'
+          AND s.min_month &gt; 0
+          AND s.max_month &gt;= s.min_month
+          AND CEIL(#{investmentPeriodMonths} / s.max_month)
+              &lt;= FLOOR(#{investmentPeriodMonths} / s.min_month)
         GROUP BY pv.kb_product_version_id, pv.kb_product_data_version_id,
                  p.product_id, p.product_code, pv.product_name, p.product_type,
                  pv.description, pv.product_url, pv.sales_status, dv.data_date,
                  s.savings_category, s.min_month, s.max_month,
                  s.monthly_min_amount, s.monthly_max_amount
         ORDER BY applied_annual_rate_percent DESC, pv.kb_product_version_id
-        LIMIT #{limit}
     </select>
 
     <select id="selectEtfCandidates"
@@ -374,7 +380,7 @@
         spr.allocated_amount,
         spr.applied_annual_rate AS applied_annual_rate_percent,
         spr.expected_future_value,
-        COALESCE(MAX(br.base_rate_percent), e.annual_return_10y) AS base_annual_rate_percent,
+        COALESCE(MIN(br.base_rate_percent), e.annual_return_10y) AS base_annual_rate_percent,
         COALESCE(MAX(br.max_rate_percent), e.annual_return_10y) AS maximum_annual_rate_percent,
         e.risk_level,
         COALESCE(d.min_month, sv.min_month) AS minimum_contract_months,
@@ -757,8 +763,10 @@
     <update id="resetSavedSimulation">
         UPDATE simulation
         SET status = 'DRAFT',
+            selected_portfolio_id = NULL,
             saved_at = NULL,
             expired_at = #{expiredAt},
+            updated_at = #{updatedAt},
             version = version + 1
         WHERE simul_id = #{simulationId}
           AND status = 'SAVED'

@@ -1,5 +1,6 @@
 package com.example.project.admin.faq.controller;
 
+import com.example.project.admin.auth.domain.AdminPrincipal;
 import com.example.project.admin.faq.dto.request.AdminCategoryRequest;
 import com.example.project.admin.faq.dto.request.AdminFaqRequest;
 import com.example.project.admin.faq.dto.response.*;
@@ -68,7 +69,7 @@ public class AdminFaqController {
             @RequestParam(required = false)
             String keyword,
 
-            @AuthenticationPrincipal String principal,
+            @AuthenticationPrincipal AdminPrincipal principal,
             HttpServletRequest httpRequest
     ){
 
@@ -92,7 +93,7 @@ public class AdminFaqController {
             @io.swagger.annotations.ApiResponse(code = 500, message = "서버 또는 데이터베이스 처리 오류", response = ApiResponse.class)
     })
     public ApiResponse<AdminFaqCategoriesDto> getFaqCategories(
-            @AuthenticationPrincipal String principal,
+            @AuthenticationPrincipal AdminPrincipal principal,
             HttpServletRequest httpRequest
     ){
 
@@ -116,11 +117,11 @@ public class AdminFaqController {
     public ApiResponse<AdminCategoryResponse> createCategory(
             @ApiParam(value = "생성할 FAQ 카테고리 정보", required = true)
             @Valid @RequestBody AdminCategoryRequest request,
-            @AuthenticationPrincipal String principal,
+            @AuthenticationPrincipal AdminPrincipal principal,
             HttpServletRequest httpRequest
     ){
 
-        AdminCategoryResponse response = adminFaqService.createCategory(request);
+        AdminCategoryResponse response = adminFaqService.createCategory(request, principal);
 
         return ApiResponse.success(ResponseCode.SUCCESS, httpRequest.getRequestURI(), response);
     }
@@ -142,10 +143,10 @@ public class AdminFaqController {
     public ApiResponse<AdminCategoryResponse> updateCategory(
             @ApiParam(value = "수정할 FAQ 카테고리 ID와 이름", required = true)
             @Valid @RequestBody AdminCategoryRequest request,
-            @AuthenticationPrincipal String principal,
+            @AuthenticationPrincipal AdminPrincipal principal,
             HttpServletRequest httpRequest
     ){
-        AdminCategoryResponse response = adminFaqService.updateCategory(request);
+        AdminCategoryResponse response = adminFaqService.updateCategory(request, principal);
 
         return ApiResponse.success(ResponseCode.SUCCESS, httpRequest.getRequestURI(), response);
     }
@@ -167,10 +168,10 @@ public class AdminFaqController {
     public ApiResponse<Void> deleteCategory(
             @ApiParam(value = "삭제할 FAQ 카테고리 ID", required = true, example = "1")
             @Valid @PathVariable long categoryId,
-            @AuthenticationPrincipal String principal,
+            @AuthenticationPrincipal AdminPrincipal principal,
             HttpServletRequest httpRequest
     ){
-        adminFaqService.deleteCategory(categoryId);
+        adminFaqService.deleteCategory(categoryId, principal);
 
         return ApiResponse.success(ResponseCode.SUCCESS, httpRequest.getRequestURI(), null);
     }
@@ -191,10 +192,10 @@ public class AdminFaqController {
     public ApiResponse<AdminFaqResponse> createFaq(
             @ApiParam(value = "생성할 FAQ 정보", required = true)
             @Valid @RequestBody AdminFaqRequest request,
-            @AuthenticationPrincipal String principal,
+            @AuthenticationPrincipal AdminPrincipal principal,
             HttpServletRequest httpRequest
     ){
-        AdminFaqResponse response = adminFaqService.createFaq(request);
+        AdminFaqResponse response = adminFaqService.createFaq(request, principal);
 
         return ApiResponse.success(ResponseCode.SUCCESS, httpRequest.getRequestURI(), response);
     }
@@ -218,10 +219,10 @@ public class AdminFaqController {
             @PathVariable long faqId,
             @ApiParam(value = "수정할 FAQ 정보", required = true)
             @Valid @RequestBody AdminFaqRequest request,
-            @AuthenticationPrincipal String principal,
+            @AuthenticationPrincipal AdminPrincipal principal,
             HttpServletRequest httpRequest
     ){
-        AdminFaqResponse response = adminFaqService.updateFaq(faqId, request);
+        AdminFaqResponse response = adminFaqService.updateFaq(faqId, request, principal);
 
         return ApiResponse.success(ResponseCode.SUCCESS, httpRequest.getRequestURI(), response);
     }
@@ -243,10 +244,10 @@ public class AdminFaqController {
     public ApiResponse<Void> deleteFaq(
             @ApiParam(value = "삭제할 FAQ ID", required = true, example = "1")
             @Valid @PathVariable long faqId,
-            @AuthenticationPrincipal String principal,
+            @AuthenticationPrincipal AdminPrincipal principal,
             HttpServletRequest httpRequest
     ){
-        adminFaqService.deleteFaq(faqId);
+        adminFaqService.deleteFaq(faqId, principal);
 
         return ApiResponse.success(ResponseCode.SUCCESS, httpRequest.getRequestURI(), null);
     }

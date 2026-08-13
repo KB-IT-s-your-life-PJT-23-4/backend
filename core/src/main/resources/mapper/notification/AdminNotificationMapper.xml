@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.example.project.notification.mapper.AdminNotificationMapper">
+
+    <!--
+      읽음 여부는 조회하는 관리자 기준이라 adminId 조건을 WHERE 가 아니라 ON 절에 둔다.
+      WHERE 로 내리면 LEFT JOIN 이 INNER JOIN 처럼 동작해서, 내가 안 읽은 알림이 목록에서 사라진다.
+    -->
+    <sql id="notificationFilter">
+        <where>
+            <if test="status != null">
+                AND n.status = #{status}
+            </if>
+            <if test="notificationType != null">
+                AND n.notification_type = #{notificationType}
+            </if>
+            <if test="unreadOnly">
+                AND r.admin_id IS NULL
+            </if>
+        </where>
+    </sql>
+
+    <!--
+      정렬에 admin_notification_id 를 함께 넣는 이유는 created_at 이 같은 행들의 순서를 고정하기
+      위해서다. 동점이 흔들리면 1페이지에서 본 행이 2페이지에 또 나오거나 아예 빠진다.
+    -->
+    <select id="selectNotificationPage"
+            resultType="com.example.project.notification.domain.AdminNotificationVO">
+        SELECT n.admin_notification_id,
+               n.notification_type,
+               n.severity,
+               n.title,
+               n.message,
+               n.reference_type,
+               n.reference_id,
+               n.dedupe_key,
+               n.occurrence_count,
+               n.last_occurred_at,
+               n.status,
+               n.resolved_by,
+               n.resolved_at,
+               n.created_at,
+               r.admin_id IS NOT NULL AS `read`
+        FROM admin_notification n
+                 LEFT JOIN admin_notification_read r
+                           ON r.admin_notification_id = n.admin_notification_id
+                               AND r.admin_id = #{adminId}
+        <include refid="notificationFilter"/>
+        ORDER BY n.created_at DESC, n.admin_notification_id DESC
+        LIMIT #{size} OFFSET #{offset}
+    </select>
+
+    <!-- 목록과 같은 조인·필터를 써야 총 개수가 목록과 어긋나지 않는다. -->
+    <select id="countNotifications" resultType="long">
+        SELECT COUNT(*)
+        FROM admin_notification n
+                 LEFT JOIN admin_notification_read r
+                           ON r.admin_notification_id = n.admin_notification_id
+                               AND r.admin_id = #{adminId}
+        <include refid="notificationFilter"/>
+    </select>
+
+    <select id="countUnread" resultType="long">
+        SELECT COUNT(*)
+        FROM admin_notification n
+                 LEFT JOIN admin_notification_read r
+                           ON r.admin_notification_id = n.admin_notification_id
+                               AND r.admin_id = #{adminId}
+        WHERE r.admin_id IS NULL
+    </select>
+
+    <!--
+      이미 읽은 알림을 다시 눌러도 그냥 무시한다(PK 중복). 읽음은 멱등이라 에러가 아니다.
+      없는 알림 ID 는 FK 위반으로 걸리므로 서비스에서 예외로 받는다.
+    -->
+    <insert id="insertRead">
+        INSERT IGNORE INTO admin_notification_read (admin_notification_id, admin_id)
+        VALUES (#{adminNotificationId}, #{adminId})
+    </insert>
+
+    <!--
+      OPEN 인 건만 바꾼다. 이미 RESOLVED 인 것을 다시 누르면 0 행이 바뀌고, 먼저 조치한 관리자가
+      resolved_by 에 남는다. 배치가 같은 dedupe_key 로 다시 INSERT 하면 OPEN 으로 되돌아간다.
+    -->
+    <update id="updateResolved">
+        UPDATE admin_notification
+        SET status      = 'RESOLVED',
+            resolved_by = #{adminId},
+            resolved_at = CURRENT_TIMESTAMP
+        WHERE admin_notification_id = #{adminNotificationId}
+          AND status = 'OPEN'
+    </update>
+</mapper>

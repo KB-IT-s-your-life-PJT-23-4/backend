@@ -1,5 +1,6 @@
 package com.example.project.admin.product.controller;
 
+import com.example.project.admin.auth.domain.AdminPrincipal;
 import com.example.project.admin.product.dto.request.AdminProductCreateRequest;
 import com.example.project.admin.product.dto.request.AdminProductUpdateRequest;
 import com.example.project.admin.product.dto.response.AdminProductResponse;
@@ -28,7 +29,7 @@ public class AdminProductController {
 
     @GetMapping("/versions")
     public ApiResponse<List<AdminProductVersionResponse>> getProductDataVersions(
-            @AuthenticationPrincipal String principal,
+            @AuthenticationPrincipal AdminPrincipal principal,
             HttpServletRequest request
     ) {
         List<AdminProductVersionResponse> data = adminProductService.getProductDataVersions();
@@ -37,21 +38,21 @@ public class AdminProductController {
 
     @PostMapping("/versions")
     public ApiResponse<AdminProductVersionResponse> createDraftVersion(
-            @AuthenticationPrincipal String principal,
+            @AuthenticationPrincipal AdminPrincipal principal,
             HttpServletRequest request
     ) {
-        AdminProductVersionResponse data = adminProductService.createDraftVersionFromLatest();
+        AdminProductVersionResponse data = adminProductService.createDraftVersionFromLatest(principal);
         return ApiResponse.success(ResponseCode.CREATED, request.getRequestURI(), data);
     }
 
     @PatchMapping("/versions/{productDataVersionId}/complete")
     public ApiResponse<AdminProductVersionResponse> completeProductDataVersion(
             @PathVariable Long productDataVersionId,
-            @AuthenticationPrincipal String principal,
+            @AuthenticationPrincipal AdminPrincipal principal,
             HttpServletRequest request
     ) {
         AdminProductVersionResponse data =
-                adminProductService.completeProductDataVersion(productDataVersionId);
+                adminProductService.completeProductDataVersion(productDataVersionId, principal);
         return ApiResponse.success(ResponseCode.UPDATED, request.getRequestURI(), data);
     }
 
@@ -59,7 +60,7 @@ public class AdminProductController {
     public ApiResponse<List<AdminProductResponse>> getProducts(
             @PathVariable Long productDataVersionId,
             @RequestParam(required = false) String type,
-            @AuthenticationPrincipal String principal,
+            @AuthenticationPrincipal AdminPrincipal principal,
             HttpServletRequest request
     ) {
         List<AdminProductResponse> data =
@@ -71,11 +72,11 @@ public class AdminProductController {
     public ApiResponse<AdminProductResponse> createProduct(
             @PathVariable Long productDataVersionId,
             @Valid @RequestBody AdminProductCreateRequest createRequest,
-            @AuthenticationPrincipal String principal,
+            @AuthenticationPrincipal AdminPrincipal principal,
             HttpServletRequest request
     ) {
         AdminProductResponse data =
-                adminProductService.createProduct(productDataVersionId, createRequest);
+                adminProductService.createProduct(productDataVersionId, createRequest, principal);
         return ApiResponse.success(ResponseCode.CREATED, request.getRequestURI(), data);
     }
 
@@ -84,18 +85,21 @@ public class AdminProductController {
             @PathVariable Long productDataVersionId,
             @PathVariable Long productVersionId,
             @Valid @RequestBody AdminProductUpdateRequest updateRequest,
-            @AuthenticationPrincipal String principal,
+            @AuthenticationPrincipal AdminPrincipal principal,
             HttpServletRequest request
     ) {
         AdminProductResponse data = adminProductService.updateProduct(
-                productDataVersionId, productVersionId, updateRequest
+                productDataVersionId, productVersionId, updateRequest, principal
         );
         return ApiResponse.success(ResponseCode.UPDATED, request.getRequestURI(), data);
     }
 
     @DeleteMapping("/versions/{id}")
-    public ApiResponse<Void> deleteVersion(@PathVariable Long id) {
-        adminProductService.deleteProductDataVersion(id);
+    public ApiResponse<Void> deleteVersion(
+            @PathVariable Long id,
+            @AuthenticationPrincipal AdminPrincipal principal
+    ) {
+        adminProductService.deleteProductDataVersion(id, principal);
         return ApiResponse.success(ResponseCode.DELETED, ResponseCode.DELETED.getMessage(), null);
     }
 }

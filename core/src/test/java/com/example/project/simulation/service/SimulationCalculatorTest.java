@@ -42,7 +42,25 @@ class SimulationCalculatorTest {
                 36
         );
 
-        assertEquals(38_012_140L, result);
+        assertEquals(38_012_141L, result);
+    }
+
+    @Test
+    @DisplayName("상품 예상 미래가치는 최종 원 단위에서 반올림한다")
+    void roundProductFutureValueToNearestWon() {
+        // 프론트의 Math.round와 동일하게 1.5원을 2원으로 반올림한다.
+        assertEquals(2L, calculator.calculateProductFutureValue(
+                CalculationType.SIMPLE_INTEREST,
+                1L,
+                new BigDecimal("50"),
+                12
+        ));
+        assertEquals(2L, calculator.calculateProductFutureValue(
+                CalculationType.COMPOUND_RETURN,
+                1L,
+                new BigDecimal("50"),
+                12
+        ));
     }
 
     @Test
@@ -69,6 +87,41 @@ class SimulationCalculatorTest {
                 List.of(12, 12, 11),
                 calculator.reinvestmentPeriods(35, 6, 12)
         );
+    }
+
+    @Test
+    @DisplayName("재가입은 최대 가입기간부터 배치해 60개월을 36개월과 24개월로 나눈다")
+    void prioritizeMaximumContractMonthsForReinvestment() {
+        assertEquals(
+                List.of(36, 24),
+                calculator.reinvestmentPeriods(60, 12, 36)
+        );
+    }
+
+    @Test
+    @DisplayName("마지막 잔여기간이 최소 가입기간보다 짧으면 앞 회차를 조정한다")
+    void adjustEarlierContractWhenRemainderIsTooShort() {
+        assertEquals(
+                List.of(28, 12),
+                calculator.reinvestmentPeriods(40, 12, 36)
+        );
+    }
+
+    @Test
+    @DisplayName("재가입 회차마다 계약기간에 해당하는 서로 다른 금리를 적용한다")
+    void applyRateForEachReinvestmentContract() {
+        long result = calculator.calculateReinvestedProductFutureValue(
+                CalculationType.SIMPLE_INTEREST,
+                100_000_000L,
+                60,
+                12,
+                36,
+                months -> months == 36
+                        ? new BigDecimal("3.5")
+                        : new BigDecimal("3.0")
+        );
+
+        assertEquals(117_130_000L, result);
     }
 
     @Test
@@ -120,9 +173,39 @@ class SimulationCalculatorTest {
         );
 
         assertEquals(70_000_000L, result.taxableAmount());
-        assertEquals(7_000_000L, result.giftTax());
-        assertEquals(93_000_000L, result.investmentAmount());
+        assertEquals(6_790_000L, result.giftTax());
+        assertEquals(93_210_000L, result.investmentAmount());
         assertEquals(100_000_000L, result.donorRequiredAmount());
+    }
+
+    @Test
+    @DisplayName("과세표준이 50만 원 미만이면 증여세를 부과하지 않는다")
+    void exemptTaxableBaseBelowFiveHundredThousandWon() {
+        SimulationCalculator.TaxOutcome result = calculator.calculateTax(
+                50_499_999L,
+                50_000_000L,
+                TaxPaymentMethod.RECIPIENT_PAYS,
+                brackets()
+        );
+
+        assertEquals(499_999L, result.taxableAmount());
+        assertEquals(0L, result.giftTax());
+        assertEquals(50_499_999L, result.investmentAmount());
+    }
+
+    @Test
+    @DisplayName("과세표준이 정확히 50만 원이면 누진세율을 적용한다")
+    void taxTaxableBaseAtFiveHundredThousandWon() {
+        SimulationCalculator.TaxOutcome result = calculator.calculateTax(
+                50_500_000L,
+                50_000_000L,
+                TaxPaymentMethod.RECIPIENT_PAYS,
+                brackets()
+        );
+
+        assertEquals(500_000L, result.taxableAmount());
+        assertEquals(48_500L, result.giftTax());
+        assertEquals(50_451_500L, result.investmentAmount());
     }
 
     @Test
@@ -155,8 +238,8 @@ class SimulationCalculatorTest {
 
         assertEquals(0L, result.deductionAmount());
         assertEquals(100_000_000L, result.taxableAmount());
-        assertEquals(25_000_000L, result.giftTax());
-        assertEquals(75_000_000L, result.investmentAmount());
+        assertEquals(24_250_000L, result.giftTax());
+        assertEquals(75_750_000L, result.investmentAmount());
     }
 
     @Test
@@ -170,8 +253,8 @@ class SimulationCalculatorTest {
                 brackets()
         );
 
-        assertEquals(35_714_285L, result.giftTax());
-        assertEquals(135_714_285L, result.donorRequiredAmount());
+        assertEquals(34_203_103L, result.giftTax());
+        assertEquals(134_203_103L, result.donorRequiredAmount());
         assertEquals(100_000_000L, result.investmentAmount());
     }
 

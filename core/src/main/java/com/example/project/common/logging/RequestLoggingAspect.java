@@ -1,5 +1,8 @@
 package com.example.project.common.logging;
 
+import com.example.project.admin.access.domain.AdminAccessEvent;
+import com.example.project.admin.access.service.AdminAccessSseService;
+import com.example.project.admin.auth.domain.AdminPrincipal;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -9,15 +12,20 @@ import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
 import org.aspectj.lang.reflect.MethodSignature;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.validation.BindingResult;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
+import org.springframework.web.context.request.async.DeferredResult;
 import org.springframework.web.multipart.MultipartFile;
 
 import javax.servlet.ServletRequest;
 import javax.servlet.ServletResponse;
 import javax.servlet.http.HttpServletRequest;
 import java.security.Principal;
+import java.time.Clock;
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -27,6 +35,8 @@ public class RequestLoggingAspect {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper().registerModule(new JavaTimeModule());
 
+    private final AdminAccessSseService adminAccessSseService;
+    private final Clock applicationClock;
 
     private static final Set<String> SENSITIVE_FIELDS = Set.of(
             "password",
@@ -36,6 +46,14 @@ public class RequestLoggingAspect {
             "token",
             "secret"
     );
+
+    public RequestLoggingAspect(
+            AdminAccessSseService adminAccessSseService,
+            Clock applicationClock
+    ) {
+        this.adminAccessSseService = adminAccessSseService;
+        this.applicationClock = applicationClock;
+    }
 
     @Around(
             "@within(com.example.project.common.logging.ApiLog) || " +
@@ -56,8 +74,14 @@ public class RequestLoggingAspect {
                 .getClass()
                 .getSimpleName();
         String controllerMethod = signature.getMethod().getName();
+        AccessActor actor = currentActor();
 
         String requestBody = "-";
+
+        // access log 접근이면 pass
+        if (isAccessLogStream(uri)) {
+            return joinPoint.proceed();
+        }
 
         if (isAiConsultationRequest(uri)) {
             requestBody = "[MASKED]";
@@ -79,21 +103,76 @@ public class RequestLoggingAspect {
         try {
             Object result = joinPoint.proceed();
 
-            long elapsedMs = (System.nanoTime() - startTime) / 1_000_000;
+            if (result instanceof DeferredResult<?>) {
+                request.setAttribute(
+                        DeferredAccessLogContext.REQUEST_ATTRIBUTE,
+                        new DeferredAccessLogContext((asyncResult, exceptionName) -> {
+                            long elapsedMs = (System.nanoTime() - startTime) / 1_000_000;
+                            completeRequestLog(
+                                    httpMethod,
+                                    uri,
+                                    controller,
+                                    controllerMethod,
+                                    actor,
+                                    asyncResult,
+                                    exceptionName,
+                                    elapsedMs
+                            );
+                        })
+                );
+                return result;
+            }
 
-            log.info(
-                    "HTTP_RESPONSE method={} uri={} controller={}.{} elapsedMS={} result=SUCCESS",
+            long elapsedMs = (System.nanoTime() - startTime) / 1_000_000;
+            completeRequestLog(
                     httpMethod,
                     uri,
                     controller,
                     controllerMethod,
+                    actor,
+                    "SUCCESS",
+                    null,
                     elapsedMs
             );
 
             return result;
         } catch (Throwable exception) {
             long elapsedMs = (System.nanoTime() - startTime) / 1_000_000;
+            completeRequestLog(
+                    httpMethod,
+                    uri,
+                    controller,
+                    controllerMethod,
+                    actor,
+                    "ERROR",
+                    exception.getClass().getSimpleName(),
+                    elapsedMs
+            );
 
+            throw exception;
+        }
+    }
+
+    private void completeRequestLog(
+            String httpMethod,
+            String uri,
+            String controller,
+            String controllerMethod,
+            AccessActor actor,
+            String result,
+            String exceptionName,
+            long elapsedMs
+    ) {
+        if ("SUCCESS".equals(result)) {
+            log.info(
+                    "HTTP_RESPONSE method={} uri={} controller={}.{} elapsedMs={} result=SUCCESS",
+                    httpMethod,
+                    uri,
+                    controller,
+                    controllerMethod,
+                    elapsedMs
+            );
+        } else {
             log.warn(
                     "HTTP_RESPONSE method={} uri={} controller={}.{} elapsedMs={} result=ERROR exception={}",
                     httpMethod,
@@ -101,11 +180,20 @@ public class RequestLoggingAspect {
                     controller,
                     controllerMethod,
                     elapsedMs,
-                    exception.getClass().getSimpleName()
+                    exceptionName
             );
-
-            throw exception;
         }
+
+        publishAccessEvent(
+                httpMethod,
+                uri,
+                controller,
+                controllerMethod,
+                actor,
+                result,
+                exceptionName,
+                elapsedMs
+        );
     }
 
     //현재 request 반환
@@ -150,7 +238,7 @@ public class RequestLoggingAspect {
             log.debug("Failed to serialize request arguments", e);
         }
 
-        return "[SERIALIZATION_FAILED";
+        return "[SERIALIZATION_FAILED]";
     }
 
 
@@ -190,5 +278,83 @@ public class RequestLoggingAspect {
         }
 
         return node;
+    }
+
+    private void publishAccessEvent(
+            String httpMethod,
+            String uri,
+            String controller,
+            String controllerMethod,
+            AccessActor actor,
+            String result,
+            String exceptionName,
+            long elapsedMs
+    ){
+        AdminAccessEvent event = AdminAccessEvent.builder()
+                .eventId(UUID.randomUUID().toString())
+                .userId(actor.getUserId())
+                .role(actor.getRole())
+                .httpMethod(httpMethod)
+                .requestUri(uri)
+                .controllerName(controller)
+                .controllerMethod(controllerMethod)
+                .result(result)
+                .exceptionName(exceptionName)
+                .elapsedMs(elapsedMs)
+                .occurredAt(LocalDateTime.now(applicationClock))
+                .build();
+
+        adminAccessSseService.publish(event);
+    }
+
+    private AccessActor currentActor() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return new AccessActor(null, null);
+        }
+
+        Object principal = authentication.getPrincipal();
+        if (principal instanceof AdminPrincipal admin) {
+            return new AccessActor(admin.userId(), admin.role());
+        }
+
+        Long userId = parseUserId(principal);
+        return new AccessActor(userId, "USER");
+    }
+
+    private Long parseUserId(Object principal) {
+        if (principal == null) {
+            return null;
+        }
+
+        try {
+            return Long.valueOf(principal.toString());
+        } catch (NumberFormatException exception) {
+            return null;
+        }
+    }
+
+    private boolean isAccessLogStream(String uri) {
+        return uri != null && uri.equals("/api/admin/access-logs/stream");
+    }
+
+    private static class AccessActor {
+
+        private final Long userId;
+        private final String role;
+
+        private AccessActor(Long userId, String role) {
+            this.userId = userId;
+            this.role = role;
+        }
+
+        private Long getUserId() {
+            return userId;
+        }
+
+        private String getRole() {
+            return role;
+        }
     }
 }

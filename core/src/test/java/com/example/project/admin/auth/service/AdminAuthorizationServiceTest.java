@@ -1,5 +1,7 @@
 package com.example.project.admin.auth.service;
 
+import com.example.project.admin.audit.service.AdminAuditWriter;
+import com.example.project.admin.audit.support.InMemoryAdminAuditLogMapper;
 import com.example.project.admin.auth.domain.AdminPrincipal;
 import com.example.project.admin.auth.dto.request.AdminAuthCreateRequest;
 import com.example.project.admin.auth.dto.request.AdminChangeAuthRequest;
@@ -29,6 +31,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class AdminAuthorizationServiceTest {
 
+    private static final AdminPrincipal ROOT_ACTOR = new AdminPrincipal(1L, "ROOT");
+
     private FakeUserMapper userMapper;
     private FakeAdminAuthMapper adminAuthMapper;
     private AdminAuthorizationService service;
@@ -41,7 +45,8 @@ class AdminAuthorizationServiceTest {
                 userMapper,
                 adminAuthMapper,
                 new BCryptPasswordEncoder(4),
-                com.example.project.support.PiiTestSupport.protectionService()
+                com.example.project.support.PiiTestSupport.protectionService(),
+                new AdminAuditWriter(new InMemoryAdminAuditLogMapper())
         );
     }
 
@@ -143,7 +148,8 @@ class AdminAuthorizationServiceTest {
 
         service.changeAuth(
                 10L,
-                AdminChangeAuthRequest.builder().role(" middle ").build()
+                AdminChangeAuthRequest.builder().role(" middle ").build(),
+                ROOT_ACTOR
         );
 
         assertEquals(10L, adminAuthMapper.changedUserId);
@@ -159,7 +165,8 @@ class AdminAuthorizationServiceTest {
                 ServiceException.class,
                 () -> service.changeAuth(
                         10L,
-                        AdminChangeAuthRequest.builder().role("USER").build()
+                        AdminChangeAuthRequest.builder().role("USER").build(),
+                        ROOT_ACTOR
                 )
         );
         assertEquals(ResponseCode.BAD_REQUEST, invalidRole.getResponseCode());
@@ -168,7 +175,8 @@ class AdminAuthorizationServiceTest {
                 ServiceException.class,
                 () -> service.changeAuth(
                         999L,
-                        AdminChangeAuthRequest.builder().role("DEFAULT").build()
+                        AdminChangeAuthRequest.builder().role("DEFAULT").build(),
+                        ROOT_ACTOR
                 )
         );
         assertEquals(ResponseCode.MEMBER_NOT_FOUND, missingUser.getResponseCode());
@@ -180,7 +188,7 @@ class AdminAuthorizationServiceTest {
     void deleteAdmin() {
         adminAuthMapper.save(user(10L, "DEFAULT"));
 
-        service.deleteAdmin(10L);
+        service.deleteAdmin(10L, ROOT_ACTOR);
 
         assertEquals(10L, adminAuthMapper.deletedUserId);
         assertEquals(1, adminAuthMapper.deleteCalls);
@@ -194,7 +202,7 @@ class AdminAuthorizationServiceTest {
 
         ServiceException exception = assertThrows(
                 ServiceException.class,
-                () -> service.deleteAdmin(10L)
+                () -> service.deleteAdmin(10L, ROOT_ACTOR)
         );
 
         assertEquals(ResponseCode.RESOURCE_NOT_FOUND, exception.getResponseCode());
@@ -211,7 +219,8 @@ class AdminAuthorizationServiceTest {
                         .name("관리자")
                         .phone("010-1234-5678")
                         .role(" middle ")
-                        .build()
+                        .build(),
+                ROOT_ACTOR
         );
 
         UserVO created = adminAuthMapper.findByUserId(response.getAdminId()).orElseThrow();
@@ -232,13 +241,19 @@ class AdminAuthorizationServiceTest {
 
         ServiceException duplicate = assertThrows(
                 ServiceException.class,
-                () -> service.createAdmin(adminRequest("existing@example.com", "DEFAULT"))
+                () -> service.createAdmin(
+                        adminRequest("existing@example.com", "DEFAULT"),
+                        ROOT_ACTOR
+                )
         );
         assertEquals(ResponseCode.DUPLICATE_DATA, duplicate.getResponseCode());
 
         ServiceException invalidRole = assertThrows(
                 ServiceException.class,
-                () -> service.createAdmin(adminRequest("new@example.com", "USER"))
+                () -> service.createAdmin(
+                        adminRequest("new@example.com", "USER"),
+                        ROOT_ACTOR
+                )
         );
         assertEquals(ResponseCode.BAD_REQUEST, invalidRole.getResponseCode());
     }
