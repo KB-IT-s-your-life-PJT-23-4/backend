@@ -45,7 +45,7 @@ coverage
 *.local
 
 ### Local application secrets ###
-core/src/main/resources/database.properties
+#core/src/main/resources/database.properties
 core/src/main/resources/security.properties
-core/src/main/resources/application.properties
+#core/src/main/resources/application.properties
 batch/src/main/resources/database.properties
