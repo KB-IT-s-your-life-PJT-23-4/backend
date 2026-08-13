@@ -1,0 +1,11 @@
+.git
+.github
+.gradle
+.idea
+build
+*/build
+core/build
+*.war
+*.log
+sql
+scripts
