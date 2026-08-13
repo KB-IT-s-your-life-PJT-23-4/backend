@@ -175,6 +175,7 @@ class SimulationServiceOptimizedScenarioTest {
                 LocalDate.class,
                 List.class,
                 LocalDate.class,
+                LocalDate.class,
                 Function.class
         );
         optimizedScenario.setAccessible(true);
@@ -186,6 +187,7 @@ class SimulationServiceOptimizedScenarioTest {
                 GIFT_DATE,
                 completedGifts,
                 GIFT_DATE.plusMonths(investmentPeriodMonths),
+                null,
                 deductionLimitResolver
         );
 
