@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org/DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.example.project.batch.common.notification.BatchNotificationMapper">
+    <!--
+     같은 잡이 하루에 여러 번 실패해도 알림은 하나로 묶는다(uk_admin_notification_dedupe).
+     일 단위로 돌리게 되면 같은 원인의 실패가 매일 쌓여 관리자 화면이 한 잡으로 가득 찬다.
+
+     이미 처리(RESOLVED)한 알림이 같은 키로 또 들어오면 다시 OPEN 으로 되돌린다.
+     조치했는데 또 실패했다는 뜻이라 처리 완료로 남겨두면 안 된다.
+   -->
+
+    <insert id="insertBatchFailure">
+        INSERT INTO admin_notification (notification_type, severity, title, message, reference_type, reference_id,
+                                        dedupe_key)
+        VALUES ('BATCH_FAILURE', 'CRITICAL', #{title}, #{message},
+                'BATCH_JOB_EXECUTION', #{jobExecutionId}, #{dedupeKey}) ON DUPLICATE KEY
+        UPDATE
+            occurrence_count = occurrence_count + 1,
+            last_occurred_at = CURRENT_TIMESTAMP,
+            title =
+        VALUES (title), message =
+        VALUES (message), reference_id =
+        VALUES (reference_id), status = 'OPEN', resolved_by = NULL, resolved_at = NULL
+    </insert>
+</mapper>

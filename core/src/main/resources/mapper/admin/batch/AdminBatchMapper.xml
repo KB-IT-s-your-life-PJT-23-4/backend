@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.example.project.admin.batch.mapper.AdminBatchMapper">
+
+    <!--
+      건수는 Step 단위로만 기록되므로 잡 단위로 보려면 합산해야 한다. 상관 서브쿼리 대신 파생 테이블로
+      한 번에 묶는 이유는, 목록이 페이지당 20행이라 실행마다 서브쿼리를 도는 것보다 싸기 때문이다.
+      실패 건수는 세 가지 skip 을 더한 값이다(읽기/가공/쓰기 어느 단계에서 건너뛰었든 실패로 본다).
+    -->
+    <sql id="executionColumns">
+        SELECT e.JOB_EXECUTION_ID              AS jobExecutionId,
+               i.JOB_INSTANCE_ID               AS jobInstanceId,
+               i.JOB_NAME                      AS jobName,
+               e.STATUS                        AS status,
+               e.EXIT_CODE                     AS exitCode,
+               e.EXIT_MESSAGE                  AS exitMessage,
+               e.CREATE_TIME                   AS createTime,
+               e.START_TIME                    AS startTime,
+               e.END_TIME                      AS endTime,
+               COALESCE(s.readCount, 0)        AS readCount,
+               COALESCE(s.writeCount, 0)       AS writeCount,
+               COALESCE(s.skipCount, 0)        AS skipCount,
+               COALESCE(s.stepCount, 0)        AS stepCount
+        FROM BATCH_JOB_EXECUTION e
+                 JOIN BATCH_JOB_INSTANCE i ON i.JOB_INSTANCE_ID = e.JOB_INSTANCE_ID
+                 LEFT JOIN (SELECT JOB_EXECUTION_ID,
+                                   SUM(READ_COUNT)                                          AS readCount,
+                                   SUM(WRITE_COUNT)                                         AS writeCount,
+                                   SUM(READ_SKIP_COUNT + PROCESS_SKIP_COUNT + WRITE_SKIP_COUNT) AS skipCount,
+                                   COUNT(*)                                                 AS stepCount
+                            FROM BATCH_STEP_EXECUTION
+                            GROUP BY JOB_EXECUTION_ID) s ON s.JOB_EXECUTION_ID = e.JOB_EXECUTION_ID
+    </sql>
+
+    <sql id="executionFilter">
+        <where>
+            <if test="jobName != null">
+                AND i.JOB_NAME = #{jobName}
+            </if>
+            <if test="status != null">
+                AND e.STATUS = #{status}
+            </if>
+        </where>
+    </sql>
+
+    <!--
+      정렬 키가 JOB_EXECUTION_ID 인 이유는 START_TIME 이 NULL 인 실행이 있기 때문이다.
+      잡이 시작조차 못 하고 죽으면 START_TIME 이 비어 시간 정렬에서 순서가 흔들린다.
+    -->
+    <select id="selectExecutionPage" resultType="com.example.project.admin.batch.domain.BatchJobExecutionVO">
+        <include refid="executionColumns"/>
+        <include refid="executionFilter"/>
+        ORDER BY e.JOB_EXECUTION_ID DESC
+        LIMIT #{size} OFFSET #{offset}
+    </select>
+
+    <select id="countExecutions" resultType="long">
+        SELECT COUNT(*)
+        FROM BATCH_JOB_EXECUTION e
+                 JOIN BATCH_JOB_INSTANCE i ON i.JOB_INSTANCE_ID = e.JOB_INSTANCE_ID
+        <include refid="executionFilter"/>
+    </select>
+
+    <select id="selectLatestExecution" resultType="com.example.project.admin.batch.domain.BatchJobExecutionVO">
+        <include refid="executionColumns"/>
+        WHERE i.JOB_NAME = #{jobName}
+        ORDER BY e.JOB_EXECUTION_ID DESC
+        LIMIT 1
+    </select>
+
+    <select id="selectExecution" resultType="com.example.project.admin.batch.domain.BatchJobExecutionVO">
+        <include refid="executionColumns"/>
+        WHERE e.JOB_EXECUTION_ID = #{jobExecutionId}
+    </select>
+</mapper>
