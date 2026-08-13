@@ -8,8 +8,11 @@
     <resultMap id="adminResultMap"
                type="com.example.project.user.domain.UserVO">
         <id property="userId" column="user_id"/>
-        <result property="email" column="email"/>
-        <result property="userName" column="user_name"/>
+        <result property="emailEncrypted" column="email_encrypted"/>
+        <result property="emailHmac" column="email_hmac"/>
+        <result property="userNameEncrypted" column="user_name_encrypted"/>
+        <result property="phoneEncrypted" column="phone_encrypted"/>
+        <result property="phoneHmac" column="phone_hmac"/>
         <result property="role" column="role"/>
         <result property="createdAt" column="created_at"/>
         <result property="updatedAt" column="updated_at"/>
@@ -29,8 +32,11 @@
     <select id="getAdmins" resultMap="adminResultMap">
         SELECT
             user_id,
-            email,
-            user_name,
+            email_encrypted,
+            email_hmac,
+            user_name_encrypted,
+            phone_encrypted,
+            phone_hmac,
             role,
             created_at,
             updated_at
@@ -52,8 +58,11 @@
     <select id="findByUserId" resultMap="adminResultMap">
         SELECT
             user_id,
-            email,
-            user_name,
+            email_encrypted,
+            email_hmac,
+            user_name_encrypted,
+            phone_encrypted,
+            phone_hmac,
             role,
             created_at,
             updated_at
@@ -78,16 +87,20 @@
             useGeneratedKeys="true"
             keyProperty="userId">
         INSERT INTO user (
-            email,
+            email_encrypted,
+            email_hmac,
             password,
-            user_name,
-            phone,
+            user_name_encrypted,
+            phone_encrypted,
+            phone_hmac,
             role
         ) VALUES (
-            #{email},
+            #{emailEncrypted},
+            #{emailHmac},
             #{password},
-            #{userName},
-            #{phone},
+            #{userNameEncrypted},
+            #{phoneEncrypted},
+            #{phoneHmac},
             #{role}
         )
     </insert>

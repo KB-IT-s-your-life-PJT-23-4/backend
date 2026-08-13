@@ -40,7 +40,8 @@ class AdminAuthorizationServiceTest {
         service = new AdminAuthorizationService(
                 userMapper,
                 adminAuthMapper,
-                new BCryptPasswordEncoder(4)
+                new BCryptPasswordEncoder(4),
+                com.example.project.support.PiiTestSupport.protectionService()
         );
     }
 
@@ -275,7 +276,8 @@ class AdminAuthorizationServiceTest {
         @Override
         public UserVO findByEmail(String email) {
             return users.values().stream()
-                    .filter(user -> email.equals(user.getEmail()))
+                    .filter(user -> com.example.project.support.PiiTestSupport
+                            .emailMatches(user, email))
                     .findFirst()
                     .orElse(null);
         }

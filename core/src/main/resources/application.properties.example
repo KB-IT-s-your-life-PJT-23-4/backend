@@ -26,5 +26,9 @@ ai.conversation.crypto.key-v1=${AI_CONVERSATION_KEY_V1}
 # 값이 없으면 빈 문자열로 처리됩니다.
 ai.conversation.crypto.key-v2=${AI_CONVERSATION_KEY_V2:}
 
+# Email/phone exact-match indexes use a dedicated HMAC-SHA-256 key.
+# Set PII_HMAC_KEY_V1 to a Base64-encoded 32-byte key that is different from every AES key.
+pii.search.hmac-key-v1=${PII_HMAC_KEY_V1}
+
 kakao.local.base-url=https://dapi.kakao.com
 kakao.rest-api-key=${KAKAO_REST_API_KEY}

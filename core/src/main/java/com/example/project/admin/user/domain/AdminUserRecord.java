@@ -12,6 +12,8 @@ public class AdminUserRecord {
     private Long userId;
     private String email;
     private String userName;
+    private String emailEncrypted;
+    private String userNameEncrypted;
     private String role;
     private String accountStatus;
     private LocalDateTime blockedUntil;

@@ -12,6 +12,8 @@ public class DeductionVO {
     private String familyName;
     private String relation;
     private LocalDate birthDate;
+    private String familyNameEncrypted;
+    private String birthDateEncrypted;
 
     /** 성년/미성년 구분 */
     private boolean minor;

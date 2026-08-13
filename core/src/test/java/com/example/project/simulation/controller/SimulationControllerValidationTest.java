@@ -301,7 +301,10 @@ class SimulationControllerValidationTest {
         private int accessCheckCount;
 
         private TestAccountAccessService() {
-            super(null, null, null);
+            super(
+                    null, null, null,
+                    com.example.project.support.PiiTestSupport.protectionService()
+            );
         }
 
         @Override
@@ -316,7 +319,10 @@ class SimulationControllerValidationTest {
     private static final class TestSimulationHistoryService extends SimulationHistoryService {
 
         private TestSimulationHistoryService() {
-            super(null, null);
+            super(
+                    null, null,
+                    com.example.project.support.PiiTestSupport.protectionService()
+            );
         }
 
         @Override

@@ -51,7 +51,10 @@ class RecipientServiceTest {
     void setUp() {
         recipientMapper = new FakeRecipientMapper();
         giftMapper = new FakeGiftMapper();
-        recipientService = new RecipientService(recipientMapper, giftMapper);
+        recipientService = new RecipientService(
+                recipientMapper, giftMapper, null,
+                com.example.project.support.PiiTestSupport.protectionService()
+        );
     }
 
     @Test
@@ -97,7 +100,10 @@ class RecipientServiceTest {
     void updateEditableRecipientProfile() {
         recipientMapper.add(recipient(10L, OWNER_ID, "기존이름"));
         ProfileImageStorageService storage = new ProfileImageStorageService(tempDirectory.toString(), 1024);
-        recipientService = new RecipientService(recipientMapper, giftMapper, storage);
+        recipientService = new RecipientService(
+                recipientMapper, giftMapper, storage,
+                com.example.project.support.PiiTestSupport.protectionService()
+        );
         RecipientProfileUpdateRequest request = new RecipientProfileUpdateRequest(
                 "변경이름",
                 LocalDate.of(2011, 2, 3)

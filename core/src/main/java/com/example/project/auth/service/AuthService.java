@@ -11,6 +11,7 @@ import com.example.project.security.TokenRevocationStore;
 import com.example.project.user.domain.UserVO;
 import com.example.project.user.dto.UserDTO;
 import com.example.project.user.mapper.UserMapper;
+import com.example.project.user.crypto.UserPiiProtectionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -25,10 +26,13 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtProvider jwtProvider;
     private final TokenRevocationStore tokenRevocationStore;
+    private final UserPiiProtectionService piiProtectionService;
 
     public AuthTokenResponse login(LoginRequest request) {
         String email = normalizeEmail(request.email());
-        UserVO user = userMapper.findByEmail(email);
+        UserVO user = piiProtectionService.reveal(
+                userMapper.findByEmail(piiProtectionService.emailLookup(email))
+        );
 
         if (user == null || !passwordEncoder.matches(request.password(), user.getPassword())) {
             throw new ServiceException(ResponseCode.UNAUTHORIZED);
@@ -95,7 +99,7 @@ public class AuthService {
             throw new ServiceException(ResponseCode.UNAUTHORIZED);
         }
 
-        UserVO user = userMapper.findById(userId);
+        UserVO user = piiProtectionService.reveal(userMapper.findById(userId));
         if (user == null) {
             throw new ServiceException(ResponseCode.MEMBER_NOT_FOUND);
         }

@@ -10,6 +10,7 @@ import com.example.project.recipient.dto.request.RecipientProfileUpdateRequest;
 import com.example.project.recipient.dto.request.RecipientRequest;
 import com.example.project.recipient.dto.response.RecipientResponse;
 import com.example.project.recipient.mapper.RecipientMapper;
+import com.example.project.user.crypto.UserPiiProtectionService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,20 +25,31 @@ public class RecipientService {
     private final RecipientMapper recipientMapper;
     private final GiftMapper giftMapper;
     private final ProfileImageStorageService profileImageStorageService;
+    private final UserPiiProtectionService piiProtectionService;
 
     @Autowired
     public RecipientService(
             RecipientMapper recipientMapper,
             GiftMapper giftMapper,
-            ProfileImageStorageService profileImageStorageService
+            ProfileImageStorageService profileImageStorageService,
+            UserPiiProtectionService piiProtectionService
     ) {
         this.recipientMapper = recipientMapper;
         this.giftMapper = giftMapper;
         this.profileImageStorageService = profileImageStorageService;
+        this.piiProtectionService = piiProtectionService;
     }
 
     public RecipientService(RecipientMapper recipientMapper, GiftMapper giftMapper) {
-        this(recipientMapper, giftMapper, null);
+        this(recipientMapper, giftMapper, null, null);
+    }
+
+    public RecipientService(
+            RecipientMapper recipientMapper,
+            GiftMapper giftMapper,
+            ProfileImageStorageService profileImageStorageService
+    ) {
+        this(recipientMapper, giftMapper, profileImageStorageService, null);
     }
 
     public RecipientResponse createRecipient(RecipientRequest recipientRequest, Long userId) {
@@ -48,6 +60,7 @@ public class RecipientService {
         recipient.setRelation(requireRelation(recipientRequest.getRelation()));
         recipient.setBirthDate(requireBirthDate(recipientRequest.getBirthDate()));
         recipient.setFamilyImg(recipientRequest.getFamilyImg());
+        pii().protect(recipient);
 
         recipientMapper.insertRecipient(recipient);
 
@@ -73,6 +86,7 @@ public class RecipientService {
         if (recipientRequest.getFamilyImg() != null) {
             recipient.setFamilyImg(recipientRequest.getFamilyImg());
         }
+        pii().protect(recipient);
 
         recipientMapper.updateRecipient(recipient);
 
@@ -105,6 +119,7 @@ public class RecipientService {
 
             recipient.setFamilyName(updateRequest.getFamilyName().trim());
             recipient.setBirthDate(updateRequest.getBirthDate());
+            pii().protect(recipient);
             recipientMapper.updateRecipient(recipient);
 
             RecipientResponse updatedRecipient = selectRecipient(familyId, userId);
@@ -145,12 +160,13 @@ public class RecipientService {
 
     public List<RecipientResponse> selectAllRecipient(Long userId) {
         return recipientMapper.selectAllRecipient(userId).stream()
+                .map(pii()::reveal)
                 .map(RecipientResponse::from)
                 .toList();
     }
 
     private RecipientVO findOwnedRecipient(Long familyId, Long userId) {
-        RecipientVO recipient = recipientMapper.selectRecipient(familyId, userId);
+        RecipientVO recipient = pii().reveal(recipientMapper.selectRecipient(familyId, userId));
 
         if (recipient == null) {
             throw new ServiceException(ResponseCode.BENEFICIARY_NOT_FOUND);
@@ -196,5 +212,12 @@ public class RecipientService {
 
     private boolean previousImageEquals(String previousImage, String updatedImage) {
         return previousImage == null ? updatedImage == null : previousImage.equals(updatedImage);
+    }
+
+    private UserPiiProtectionService pii() {
+        if (piiProtectionService == null) {
+            throw new ServiceException(ResponseCode.INTERNAL_SERVER_ERROR);
+        }
+        return piiProtectionService;
     }
 }

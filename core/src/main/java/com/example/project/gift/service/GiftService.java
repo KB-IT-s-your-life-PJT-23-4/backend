@@ -16,6 +16,7 @@ import com.example.project.gift.dto.response.GiftResponse;
 import com.example.project.gift.mapper.GiftMapper;
 import com.example.project.recipient.service.RecipientService;
 import com.example.project.simulation.domain.SimulationTrancheRecord;
+import com.example.project.user.crypto.UserPiiProtectionService;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -23,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.Period;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -41,6 +43,7 @@ public class GiftService {
 
     private final GiftMapper giftMapper;
     private final RecipientService recipientService;
+    private final UserPiiProtectionService piiProtectionService;
 
     public GiftResponse createGift(GiftRequest giftRequest, Long userId) {
         validate(giftRequest);
@@ -187,6 +190,7 @@ public class GiftService {
                 .collect(Collectors.groupingBy(GiftVO::getFamilyId));
 
         return giftMapper.selectDeduction(familyId, userId, windowStartDate, baseDate, null).stream()
+                .map(deduction -> revealDeduction(deduction, baseDate))
                 .map(deduction -> {
                     RenewalEvent renewal = renewalEvent(deduction, windowGiftsByFamily, baseDate);
 
@@ -219,6 +223,7 @@ public class GiftService {
                 .selectDeduction(gift.getFamilyId(), userId, windowStartDate, baseDate, giftId)
                 .stream()
                 .findFirst()
+                .map(value -> revealDeduction(value, baseDate))
                 .orElseThrow(() -> new ServiceException(ResponseCode.BENEFICIARY_NOT_FOUND));
 
         long giftAmount = gift.getAmount();
@@ -460,6 +465,26 @@ public class GiftService {
                 .map(GiftVO::getGiftId)
                 .findFirst()
                 .orElseGet(() -> windowGifts.get(0).getGiftId());
+    }
+
+    private DeductionVO revealDeduction(DeductionVO deduction, LocalDate baseDate) {
+        if (deduction.getFamilyNameEncrypted() != null) {
+            deduction.setFamilyName(
+                    piiProtectionService.decryptFamilyName(deduction.getFamilyNameEncrypted())
+            );
+        }
+        if (deduction.getBirthDateEncrypted() != null) {
+            deduction.setBirthDate(
+                    piiProtectionService.decryptFamilyBirthDate(deduction.getBirthDateEncrypted())
+            );
+        }
+        boolean minor = "LINEAL_DESCENDANT".equals(deduction.getRelation())
+                && Period.between(deduction.getBirthDate(), baseDate).getYears() < ADULT_AGE;
+        deduction.setMinor(minor);
+        deduction.setDeductionLimit(giftMapper.selectDeductionLimit(
+                deduction.getRelation(), minor, baseDate
+        ));
+        return deduction;
     }
 
     /**

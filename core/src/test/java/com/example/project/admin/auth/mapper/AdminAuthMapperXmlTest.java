@@ -38,7 +38,9 @@ class AdminAuthMapperXmlTest {
         assertTrue(sql.contains("ORDER BY created_at DESC, user_id DESC"));
         assertTrue(sql.contains("LIMIT ? OFFSET ?"));
         assertFalse(sql.contains("password"));
-        assertFalse(sql.contains("phone"));
+        assertTrue(sql.contains("phone_encrypted"));
+        assertTrue(sql.contains("phone_hmac"));
+        assertFalse(sql.matches("(?i).*\\bphone\\b.*"));
     }
 
     @Test
@@ -97,8 +99,8 @@ class AdminAuthMapperXmlTest {
         String sql = sql(configuration, "createAdmin", admin);
 
         assertTrue(sql.startsWith("INSERT INTO user"));
-        assertTrue(sql.contains("email, password, user_name, phone, role"));
-        assertEquals(5, questionMarkCount(sql));
+        assertTrue(sql.contains("email_encrypted, email_hmac, password, user_name_encrypted, phone_encrypted, phone_hmac, role"));
+        assertEquals(7, questionMarkCount(sql));
     }
 
     private Map<String, Object> parameters() {

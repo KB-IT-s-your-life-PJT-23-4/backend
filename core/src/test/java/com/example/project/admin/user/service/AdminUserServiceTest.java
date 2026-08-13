@@ -45,8 +45,14 @@ class AdminUserServiceTest {
         service = new AdminUserService(
                 mapper,
                 userService,
-                new AdminAuthorizationService(null, null, null),
-                new AccountAccessService(null, null, clock) {
+                new AdminAuthorizationService(
+                        null, null, null,
+                        com.example.project.support.PiiTestSupport.protectionService()
+                ),
+                new AccountAccessService(
+                        null, null, clock,
+                        com.example.project.support.PiiTestSupport.protectionService()
+                ) {
                     @Override
                     public com.example.project.user.domain.UserVO refreshAndGet(Long userId) {
                         activateIfExpired(mapper.selectUserById(userId));
@@ -74,22 +80,26 @@ class AdminUserServiceTest {
                         return 0;
                     }
                 },
-                clock
+                clock,
+                com.example.project.support.PiiTestSupport.protectionService()
         );
     }
 
     @Test
-    @DisplayName("이메일·이름·회원 ID 검색 조건과 페이지 정보를 전달하고 개인정보를 마스킹한다")
+    @DisplayName("정확 이메일·회원 ID 검색 조건과 페이지 정보를 전달하고 개인정보를 마스킹한다")
     void searchUsersAndMaskPersonalInformation() {
         mapper.totalElements = 21L;
         mapper.users.add(user(7L, "tester@example.com", "홍길동", 2L, 3L, 4L));
 
-        var response = service.getUsers(7L, " TESTER@EXAMPLE.COM ", " 홍길동 ", 1, 20);
+        var response = service.getUsers(7L, " TESTER@EXAMPLE.COM ", null, 1, 20);
         var user = response.getUsers().get(0);
 
         assertEquals(7L, mapper.userId);
-        assertEquals("tester@example.com", mapper.email);
-        assertEquals("홍길동", mapper.name);
+        assertEquals(
+                com.example.project.support.PiiTestSupport.emailLookup("tester@example.com"),
+                mapper.email
+        );
+        assertNull(mapper.name);
         assertEquals(20L, mapper.offset);
         assertEquals(20, mapper.size);
         assertEquals("t***@example.com", user.getEmail());
@@ -102,6 +112,17 @@ class AdminUserServiceTest {
         assertEquals(4L, user.getSimulationCount());
         assertEquals(2, response.getPagination().getTotalPages());
         assertFalse(response.getPagination().isFirst());
+    }
+
+    @Test
+    @DisplayName("암호화된 이름에 대한 부분 검색 요청은 명확히 거부한다")
+    void rejectNameSearch() {
+        ServiceException exception = assertThrows(
+                ServiceException.class,
+                () -> service.getUsers(null, null, "홍길동", 0, 10)
+        );
+
+        assertEquals(ResponseCode.BAD_REQUEST, exception.getResponseCode());
     }
 
     @Test

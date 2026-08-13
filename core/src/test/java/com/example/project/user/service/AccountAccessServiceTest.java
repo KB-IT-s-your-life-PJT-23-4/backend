@@ -36,7 +36,8 @@ class AccountAccessServiceTest {
         service = new AccountAccessService(
                 accountStatusMapper,
                 new FakeUserMapper(user),
-                Clock.fixed(NOW.toInstant(ZoneOffset.UTC), ZoneOffset.UTC)
+                Clock.fixed(NOW.toInstant(ZoneOffset.UTC), ZoneOffset.UTC),
+                com.example.project.support.PiiTestSupport.protectionService()
         );
     }
 

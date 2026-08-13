@@ -189,7 +189,12 @@ class AdminDashboardSecurityIntegrationTest {
                 AdminAuthMapper adminAuthMapper,
                 PasswordEncoder passwordEncoder
         ) {
-            return new AdminAuthorizationService(userMapper, adminAuthMapper, passwordEncoder);
+            return new AdminAuthorizationService(
+                    userMapper,
+                    adminAuthMapper,
+                    passwordEncoder,
+                    com.example.project.support.PiiTestSupport.protectionService()
+            );
         }
 
         @Bean

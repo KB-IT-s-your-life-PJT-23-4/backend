@@ -60,7 +60,10 @@ class UserControllerTest {
                 "홍길동"
         ));
 
-        UserService userService = new UserService(userMapper, passwordEncoder, null, userMapper);
+        UserService userService = new UserService(
+                userMapper, passwordEncoder, null, null, userMapper,
+                com.example.project.support.PiiTestSupport.protectionService()
+        );
         UserController controller = new UserController(userService);
 
         LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
@@ -353,7 +356,8 @@ class UserControllerTest {
         @Override
         public UserVO findByEmail(String email) {
             return users.values().stream()
-                    .filter(user -> user.getEmail().equals(email))
+                    .filter(user -> com.example.project.support.PiiTestSupport
+                            .emailMatches(user, email))
                     .findFirst()
                     .orElse(null);
         }

@@ -6,6 +6,8 @@ import com.example.project.config.ocr.OCRWebClientConfig;
 import com.example.project.consultation.config.WebClientConfig;
 import com.example.project.security.SecurityConfig;
 import com.example.project.user.domain.UserVO;
+import com.example.project.recipient.domain.RecipientVO;
+import com.example.project.user.crypto.UserPiiProtectionService;
 import com.example.project.user.dto.UserDTO;
 import com.example.project.user.dto.request.UserSignupRequest;
 import com.example.project.user.dto.request.UserUpdateRequest;
@@ -42,7 +44,8 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
         "jwt.secret=test-secret-key-for-integration-at-least-32-bytes",
         "ai.conversation.crypto.active-key-id=v1",
         "ai.conversation.crypto.key-v1=MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE=",
-        "ai.conversation.crypto.key-v2="
+        "ai.conversation.crypto.key-v2=",
+        "pii.search.hmac-key-v1=QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVo1Njc4OTA="
 })
 @Transactional
 class UserDatabaseIntegrationTest {
@@ -55,6 +58,9 @@ class UserDatabaseIntegrationTest {
 
     @Autowired
     private DataSource dataSource;
+
+    @Autowired
+    private UserPiiProtectionService piiProtectionService;
 
     @Test
     @DisplayName("회원가입, 조회, 수정 시 최종 DDL의 User 컬럼이 MyBatis로 연동된다")
@@ -80,7 +86,7 @@ class UserDatabaseIntegrationTest {
         assertEquals("profile.png", created.img());
 
         UserVO foundById = userMapper.findById(created.userId());
-        UserVO foundByEmail = userMapper.findByEmail(email);
+        UserVO foundByEmail = userMapper.findByEmail(piiProtectionService.emailLookup(email));
 
         assertNotNull(foundById);
         assertNotNull(foundByEmail);
@@ -109,7 +115,7 @@ class UserDatabaseIntegrationTest {
         assertEquals("USER", updated.role());
         assertEquals("updated.png", updated.img());
 
-        UserVO reloaded = userMapper.findById(created.userId());
+        UserVO reloaded = piiProtectionService.reveal(userMapper.findById(created.userId()));
         assertEquals(updatedEmail, reloaded.getEmail());
         assertEquals(updatedPhone, reloaded.getPhone());
         assertEquals("updated.png", reloaded.getImg());
@@ -133,10 +139,16 @@ class UserDatabaseIntegrationTest {
                 "profile.png"
         ));
 
+        RecipientVO family = new RecipientVO();
+        family.setFamilyName("Withdrawal Family");
+        family.setBirthDate(LocalDate.of(2010, 1, 1));
+        piiProtectionService.protect(family);
         jdbc.update("""
-                INSERT INTO family (user_id, family_name, relation, birth_date, family_img)
+                INSERT INTO family
+                    (user_id, family_name_encrypted, relation, birth_date_encrypted, family_img)
                 VALUES (?, ?, 'OTHER', ?, ?)
-                """, user.userId(), "가상가족", LocalDate.of(2010, 1, 1), "family.png");
+                """, user.userId(), family.getFamilyNameEncrypted(),
+                family.getBirthDateEncrypted(), "family.png");
         Long familyId = jdbc.queryForObject(
                 "SELECT family_id FROM family WHERE user_id = ?",
                 Long.class,

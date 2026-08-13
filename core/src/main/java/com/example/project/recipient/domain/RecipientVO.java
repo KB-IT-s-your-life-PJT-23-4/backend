@@ -16,5 +16,7 @@ public class RecipientVO {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private String familyImg;
+    private String familyNameEncrypted;
+    private String birthDateEncrypted;
 
 }

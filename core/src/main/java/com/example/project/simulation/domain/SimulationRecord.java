@@ -14,6 +14,8 @@ public class SimulationRecord {
     private String familyName;
     private String relation;
     private LocalDate birthDate;
+    private String familyNameEncrypted;
+    private String birthDateEncrypted;
     private Long requestedAmount;
     private SimulationStatus status;
     private TaxPaymentMethod taxPaymentMethod;

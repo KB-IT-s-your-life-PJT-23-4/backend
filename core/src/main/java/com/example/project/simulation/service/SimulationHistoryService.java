@@ -12,6 +12,7 @@ import com.example.project.simulation.dto.response.SimulationHistoryResponse;
 import com.example.project.simulation.exception.SimulationError;
 import com.example.project.simulation.exception.SimulationException;
 import com.example.project.simulation.mapper.SimulationMapper;
+import com.example.project.user.crypto.UserPiiProtectionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Service;
@@ -44,6 +45,7 @@ public class SimulationHistoryService {
 
     private final SimulationMapper simulationMapper;
     private final SimulationService simulationService;
+    private final UserPiiProtectionService piiProtectionService;
 
     @Transactional(readOnly = true)
     public SimulationHistoryResponse getHistory(
@@ -76,7 +78,7 @@ public class SimulationHistoryService {
                             (long) page * size,
                             size
                     )
-            );
+            ).stream().map(this::revealSimulation).toList();
             if (simulations.isEmpty()) {
                 return new SimulationHistoryResponse(
                         List.of(),
@@ -518,5 +520,19 @@ public class SimulationHistoryService {
 
     private <T> List<T> safeList(List<T> values) {
         return values == null ? List.of() : values;
+    }
+
+    private SimulationRecord revealSimulation(SimulationRecord simulation) {
+        if (simulation.getFamilyNameEncrypted() != null) {
+            simulation.setFamilyName(
+                    piiProtectionService.decryptFamilyName(simulation.getFamilyNameEncrypted())
+            );
+        }
+        if (simulation.getBirthDateEncrypted() != null) {
+            simulation.setBirthDate(
+                    piiProtectionService.decryptFamilyBirthDate(simulation.getBirthDateEncrypted())
+            );
+        }
+        return simulation;
     }
 }

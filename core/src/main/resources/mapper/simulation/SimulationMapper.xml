@@ -6,13 +6,13 @@
 <mapper namespace="com.example.project.simulation.mapper.SimulationMapper">
 
     <select id="selectFamily" resultType="com.example.project.simulation.domain.FamilySnapshot">
-        SELECT family_id, user_id, family_name, relation, birth_date
+        SELECT family_id, user_id, family_name_encrypted, relation, birth_date_encrypted
         FROM family
         WHERE family_id = #{familyId}
     </select>
 
     <select id="lockFamily" resultType="com.example.project.simulation.domain.FamilySnapshot">
-        SELECT family_id, user_id, family_name, relation, birth_date
+        SELECT family_id, user_id, family_name_encrypted, relation, birth_date_encrypted
         FROM family
         WHERE family_id = #{familyId}
         FOR UPDATE
@@ -265,9 +265,9 @@
         s.kb_product_data_version_id AS product_data_version_id,
         s.family_id,
         f.user_id,
-        f.family_name,
+        f.family_name_encrypted,
         f.relation,
-        f.birth_date,
+        f.birth_date_encrypted,
         s.requested_amount,
         s.status,
         s.tax_payment_method,

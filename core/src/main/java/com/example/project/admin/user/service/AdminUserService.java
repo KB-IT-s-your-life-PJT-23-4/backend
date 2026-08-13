@@ -11,6 +11,7 @@ import com.example.project.common.api.ResponseCode;
 import com.example.project.common.exception.ServiceException;
 import com.example.project.user.service.AccountAccessService;
 import com.example.project.user.service.UserService;
+import com.example.project.user.crypto.UserPiiProtectionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.security.core.Authentication;
@@ -37,6 +38,7 @@ public class AdminUserService {
     private final AdminAuthorizationService adminAuthorizationService;
     private final AccountAccessService accountAccessService;
     private final Clock clock;
+    private final UserPiiProtectionService piiProtectionService;
 
     @Transactional
     public AdminUserPageResponse getUsers(
@@ -53,8 +55,14 @@ public class AdminUserService {
 
         accountAccessService.refreshAllExpiredBlocks();
 
-        String email = normalize(emailValue, true);
-        String name = normalize(nameValue, false);
+        if (nameValue != null && !nameValue.isBlank()) {
+            throw new ServiceException(ResponseCode.BAD_REQUEST);
+        }
+        String normalizedEmail = normalize(emailValue, true);
+        String email = normalizedEmail == null
+                ? null
+                : piiProtectionService.emailLookup(normalizedEmail);
+        String name = null;
         long totalElements = adminUserMapper.countUsers(userId, email, name);
         long offset = (long) page * size;
         List<AdminUserRecord> rows = adminUserMapper.selectUsers(
@@ -66,7 +74,10 @@ public class AdminUserService {
         );
         List<AdminUserResponse> users = rows == null
                 ? List.of()
-                : rows.stream().map(AdminUserResponse::from).toList();
+                : rows.stream()
+                .map(this::reveal)
+                .map(AdminUserResponse::from)
+                .toList();
 
         int totalPages = totalPages(totalElements, size);
         boolean hasNext = page + 1 < totalPages;
@@ -94,7 +105,7 @@ public class AdminUserService {
         if (user == null) {
             throw new ServiceException(ResponseCode.MEMBER_NOT_FOUND);
         }
-        return AdminUserResponse.from(user);
+        return AdminUserResponse.from(reveal(user));
     }
 
     public void deleteUser(Long userId) {
@@ -190,5 +201,15 @@ public class AdminUserService {
     private int totalPages(long totalElements, int size) {
         long pages = totalElements / size + (totalElements % size == 0 ? 0 : 1);
         return pages > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) pages;
+    }
+
+    private AdminUserRecord reveal(AdminUserRecord user) {
+        if (user.getEmailEncrypted() != null) {
+            user.setEmail(piiProtectionService.decryptEmail(user.getEmailEncrypted()));
+        }
+        if (user.getUserNameEncrypted() != null) {
+            user.setUserName(piiProtectionService.decryptUserName(user.getUserNameEncrypted()));
+        }
+        return user;
     }
 }

@@ -61,7 +61,10 @@ class RecipientControllerTest {
         objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
         recipientMapper = new FakeRecipientMapper();
         giftMapper = new FakeGiftMapper();
-        RecipientService recipientService = new RecipientService(recipientMapper, giftMapper);
+        RecipientService recipientService = new RecipientService(
+                recipientMapper, giftMapper, null,
+                com.example.project.support.PiiTestSupport.protectionService()
+        );
         RecipientController controller = new RecipientController(recipientService);
 
         LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
