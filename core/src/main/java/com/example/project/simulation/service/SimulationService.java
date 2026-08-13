@@ -59,9 +59,10 @@ import java.util.stream.Collectors;
 public class SimulationService {
 
     public static final String FORMULA_VERSION = "INVESTMENT_V4";
-    public static final String CALCULATION_VERSION = "GIFT_SIM_V6";
+    public static final String CALCULATION_VERSION = "GIFT_SIM_V7";
 
     private static final int DEDUCTION_WINDOW_YEARS = 10;
+    private static final int ADULT_AGE = 19;
     private static final int MAX_PRODUCT_CANDIDATES = 3;
     private static final int MAX_INVESTMENT_MONTHS = 240;
     static final Period DRAFT_RETENTION = Period.ofMonths(1);
@@ -149,6 +150,7 @@ public class SimulationService {
                     giftDate,
                     completedGifts,
                     investmentEndDate,
+                    family.getBirthDate().plusYears(ADULT_AGE),
                     date -> resolveDeductionLimit(family, date)
             );
             LocalDate renewalDate = resolveDeductionRenewalDate(
@@ -932,6 +934,7 @@ public class SimulationService {
             LocalDate giftDate,
             List<GiftHistoryRecord> completedGifts,
             LocalDate investmentEndDate,
+            LocalDate adulthoodDate,
             Function<LocalDate, Long> deductionLimitResolver
     ) {
         long amountLeft = request.getRequestedAmount();
@@ -968,7 +971,7 @@ public class SimulationService {
             }
             LocalDate nextDate = nextDateBasis.isEmpty()
                     ? null
-                    : nextReleaseDate(nextDateBasis, trancheDate);
+                    : nextPlanningDate(nextDateBasis, trancheDate, adulthoodDate);
             boolean hasNextDeductionDate = nextDate != null
                     && !nextDate.isAfter(investmentEndDate);
             long giftAmount = hasNextDeductionDate
@@ -997,7 +1000,7 @@ public class SimulationService {
             totalInvestment += tax.investmentAmount();
 
             if (amountLeft > 0) {
-                trancheDate = nextReleaseDate(history, trancheDate);
+                trancheDate = nextPlanningDate(history, trancheDate, adulthoodDate);
             }
         }
         if (amountLeft > 0) {
@@ -2386,7 +2389,7 @@ public class SimulationService {
 
     private long resolveDeductionLimit(FamilySnapshot family, LocalDate giftDate) {
         int age = Period.between(family.getBirthDate(), giftDate).getYears();
-        boolean minor = age < 19;
+        boolean minor = age < ADULT_AGE;
         DeductionRule rule = simulationMapper.selectDeductionRule(
                 family.getRelation(),
                 minor,
@@ -2426,6 +2429,21 @@ public class SimulationService {
                 .filter(date -> date.isAfter(afterDate))
                 .min(LocalDate::compareTo)
                 .orElse(afterDate.plusYears(DEDUCTION_WINDOW_YEARS).plusDays(1));
+    }
+
+    private LocalDate nextPlanningDate(
+            List<GiftPoint> history,
+            LocalDate afterDate,
+            LocalDate adulthoodDate
+    ) {
+        LocalDate nextReleaseDate = nextReleaseDate(history, afterDate);
+
+        if (adulthoodDate != null
+                && adulthoodDate.isAfter(afterDate)
+                && adulthoodDate.isBefore(nextReleaseDate)) {
+            return adulthoodDate;
+        }
+        return nextReleaseDate;
     }
 
     static boolean isWithinDeductionWindow(LocalDate giftDate, LocalDate calculationDate) {

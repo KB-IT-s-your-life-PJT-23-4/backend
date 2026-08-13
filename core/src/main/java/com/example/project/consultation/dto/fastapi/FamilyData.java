@@ -18,7 +18,6 @@ public class FamilyData {
     private final String name;
     private final String relationshipType;
     private final Long giftAmount;
-    private final Integer recipientAge;
     private final Boolean recipientIsMinor;
     private final Boolean hasPreviousGifts;
     private final Long previousGiftAmount;

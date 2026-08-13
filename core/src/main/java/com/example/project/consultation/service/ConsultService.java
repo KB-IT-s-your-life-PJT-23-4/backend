@@ -246,7 +246,6 @@ public class ConsultService {
                 .name(family.getName())
                 .relationshipType(relationshipType)
                 .giftAmount(null)
-                .recipientAge(recipientAge)
                 .recipientIsMinor(recipientIsMinor)
                 .hasPreviousGifts(hasPreviousGifts)
                 .previousGiftAmount(previousGiftAmount)

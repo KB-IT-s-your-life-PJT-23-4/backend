@@ -157,11 +157,29 @@ class SimulationServiceExecuteTest {
         SimulationResponse.Result optimized = result(response, ScenarioType.TAX_OPTIMIZED);
 
         // 회귀 방지: 최초 회차의 미성년 공제 한도를 미래 회차에 고정 적용하지 않는다.
-        assertEquals(List.of(20_000_000L, 50_000_000L), giftAmounts(optimized));
+        assertEquals(List.of(20_000_000L, 30_000_000L, 20_000_000L),
+                giftAmounts(optimized));
         assertEquals(70_000_000L, optimized.deductionAmount());
         assertEquals(0L, optimized.giftTax());
         assertTrue(fixture.deductionQueries.stream().anyMatch(Query::minor));
         assertTrue(fixture.deductionQueries.stream().anyMatch(query -> !query.minor()));
+    }
+
+    @Test
+    @DisplayName("18세 자녀에게 5천만 원을 증여하면 성년 전후로 공제 한도만큼 분할한다")
+    void splitGiftAtAdulthoodForEighteenYearOldChild() {
+        LocalDate giftDate = futureDate();
+        LocalDate adulthoodDate = giftDate.plusYears(1);
+        Fixture fixture = new Fixture(giftDate.minusYears(18));
+
+        SimulationResponse response = fixture.execute(50_000_000L, 24, giftDate);
+        SimulationResponse.Result optimized = result(response, ScenarioType.TAX_OPTIMIZED);
+
+        assertEquals(List.of(20_000_000L, 30_000_000L), giftAmounts(optimized));
+        assertEquals(List.of(giftDate, adulthoodDate), giftDates(optimized));
+        assertEquals(50_000_000L, optimized.deductionAmount());
+        assertEquals(0L, optimized.taxableAmount());
+        assertEquals(0L, optimized.giftTax());
     }
 
     @Test
