@@ -8,8 +8,8 @@
     <resultMap id="adminUserRecordMap"
                type="com.example.project.admin.user.domain.AdminUserRecord">
         <id property="userId" column="user_id"/>
-        <result property="email" column="email"/>
-        <result property="userName" column="user_name"/>
+        <result property="emailEncrypted" column="email_encrypted"/>
+        <result property="userNameEncrypted" column="user_name_encrypted"/>
         <result property="role" column="role"/>
         <result property="accountStatus" column="account_status"/>
         <result property="blockedUntil" column="blocked_until"/>
@@ -25,17 +25,14 @@
             AND u.user_id = #{userId}
         </if>
         <if test="email != null">
-            AND LOWER(u.email) LIKE CONCAT('%', #{email}, '%')
-        </if>
-        <if test="name != null">
-            AND u.user_name LIKE CONCAT('%', #{name}, '%')
+            AND u.email_hmac = #{email}
         </if>
     </sql>
 
     <sql id="adminUserColumns">
         u.user_id,
-        u.email,
-        u.user_name,
+        u.email_encrypted,
+        u.user_name_encrypted,
         u.role,
         u.account_status,
         u.blocked_until,
@@ -61,7 +58,7 @@
         LEFT JOIN simulation s ON s.family_id = f.family_id
         WHERE u.role = 'USER'
         <include refid="userFilters"/>
-        GROUP BY u.user_id, u.email, u.user_name, u.role, u.account_status,
+        GROUP BY u.user_id, u.email_encrypted, u.user_name_encrypted, u.role, u.account_status,
                  u.blocked_until, u.created_at, u.updated_at
         ORDER BY u.created_at DESC, u.user_id DESC
         LIMIT #{size} OFFSET #{offset}
@@ -74,7 +71,7 @@
         LEFT JOIN gift g ON g.family_id = f.family_id
         LEFT JOIN simulation s ON s.family_id = f.family_id
         WHERE u.user_id = #{userId}
-        GROUP BY u.user_id, u.email, u.user_name, u.role, u.account_status,
+        GROUP BY u.user_id, u.email_encrypted, u.user_name_encrypted, u.role, u.account_status,
                  u.blocked_until, u.created_at, u.updated_at
     </select>
 

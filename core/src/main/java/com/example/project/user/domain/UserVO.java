@@ -22,6 +22,11 @@ public class UserVO {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private String img;
+    private String emailEncrypted;
+    private String emailHmac;
+    private String phoneEncrypted;
+    private String phoneHmac;
+    private String userNameEncrypted;
 
     public UserVO(
             Long userId,
@@ -35,20 +40,17 @@ public class UserVO {
             LocalDateTime updatedAt,
             String img
     ) {
-        this(
-                userId,
-                email,
-                password,
-                userName,
-                birthDate,
-                phone,
-                role,
-                "ACTIVE",
-                null,
-                createdAt,
-                updatedAt,
-                img
-        );
+        this.userId = userId;
+        this.email = email;
+        this.password = password;
+        this.userName = userName;
+        this.birthDate = birthDate;
+        this.phone = phone;
+        this.role = role;
+        this.accountStatus = "ACTIVE";
+        this.createdAt = createdAt;
+        this.updatedAt = updatedAt;
+        this.img = img;
     }
 
     public UserVO(

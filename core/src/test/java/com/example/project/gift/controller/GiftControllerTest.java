@@ -58,8 +58,15 @@ class GiftControllerTest {
         recipientMapper = new FakeRecipientMapper();
         giftMapper = new FakeGiftMapper(recipientMapper);
 
-        RecipientService recipientService = new RecipientService(recipientMapper, giftMapper);
-        GiftService giftService = new GiftService(giftMapper, recipientService);
+        RecipientService recipientService = new RecipientService(
+                recipientMapper, giftMapper, null,
+                com.example.project.support.PiiTestSupport.protectionService()
+        );
+        GiftService giftService = new GiftService(
+                giftMapper,
+                recipientService,
+                com.example.project.support.PiiTestSupport.protectionService()
+        );
         GiftController controller = new GiftController(giftService);
 
         mockMvc = standaloneSetup(controller)
@@ -466,7 +473,7 @@ class GiftControllerTest {
 
         @Override
         public Long selectDeductionLimit(String relation, boolean minor, LocalDate baseDate) {
-            return null;
+            return 50_000_000L;
         }
 
         @Override

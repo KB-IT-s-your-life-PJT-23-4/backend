@@ -151,7 +151,8 @@ class SimulationProductServiceTest {
                     userMapper(),
                     new SimulationCalculator(),
                     new SimulationIdempotencyStore(),
-                    new EtfVolatilityCalculator()
+                    new EtfVolatilityCalculator(),
+                    com.example.project.support.PiiTestSupport.protectionService()
             );
             return new SimulationProductService(
                     mapper,

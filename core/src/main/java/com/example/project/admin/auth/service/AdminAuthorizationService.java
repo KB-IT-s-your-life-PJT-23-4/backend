@@ -13,6 +13,7 @@ import com.example.project.common.api.ResponseCode;
 import com.example.project.common.exception.ServiceException;
 import com.example.project.user.domain.UserVO;
 import com.example.project.user.mapper.UserMapper;
+import com.example.project.user.crypto.UserPiiProtectionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.security.core.Authentication;
@@ -36,6 +37,7 @@ public class AdminAuthorizationService {
     private final UserMapper userMapper;
     private final AdminAuthMapper adminAuthMapper;
     private final PasswordEncoder passwordEncoder;
+    private final UserPiiProtectionService piiProtectionService;
     private final AdminAuditWriter adminAuditWriter;
 
     public Optional<AdminPrincipal> findCurrentUser(Object authenticatedPrincipal) {
@@ -44,7 +46,7 @@ public class AdminAuthorizationService {
             return Optional.empty();
         }
 
-        UserVO user = userMapper.findById(authenticatedUserId);
+        UserVO user = piiProtectionService.reveal(userMapper.findById(authenticatedUserId));
         if (user == null || !authenticatedUserId.equals(user.getUserId())) {
             return Optional.empty();
         }
@@ -109,6 +111,7 @@ public class AdminAuthorizationService {
 
         List<AdminAuthResponse> items = admins.stream()
                 .filter(admin -> admin != null && isAdminRole(admin.getRole()))
+                .map(piiProtectionService::reveal)
                 .map(AdminAuthResponse::of)
                 .toList();
 
@@ -179,6 +182,7 @@ public class AdminAuthorizationService {
 
     private UserVO requireUser(Long userId) {
         return adminAuthMapper.findByUserId(userId)
+                .map(piiProtectionService::reveal)
                 .orElseThrow(() -> new ServiceException(ResponseCode.MEMBER_NOT_FOUND));
     }
 
@@ -215,7 +219,7 @@ public class AdminAuthorizationService {
         if (password == null || password.isBlank() || !ADMIN_ROLES.contains(role)) {
             throw new ServiceException(ResponseCode.BAD_REQUEST);
         }
-        if (userMapper.findByEmail(email) != null) {
+        if (userMapper.findByEmail(piiProtectionService.emailLookup(email)) != null) {
             throw new ServiceException(ResponseCode.DUPLICATE_DATA);
         }
 
@@ -225,6 +229,7 @@ public class AdminAuthorizationService {
         admin.setUserName(name);
         admin.setPhone(phone);
         admin.setRole(role);
+        piiProtectionService.protect(admin);
 
         try {
             if (adminAuthMapper.createAdmin(admin) != 1) {
@@ -235,6 +240,7 @@ public class AdminAuthorizationService {
         }
 
         UserVO createdAdmin = adminAuthMapper.findByUserId(admin.getUserId())
+                .map(piiProtectionService::reveal)
                 .orElseThrow(() -> new ServiceException(ResponseCode.DATABASE_ERROR));
 
         adminAuditWriter.record(

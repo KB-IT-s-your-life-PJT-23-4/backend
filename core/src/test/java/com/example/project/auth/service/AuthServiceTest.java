@@ -45,7 +45,8 @@ class AuthServiceTest {
                 userMapper,
                 passwordEncoder,
                 jwtProvider,
-                tokenRevocationStore
+                tokenRevocationStore,
+                com.example.project.support.PiiTestSupport.protectionService()
         );
     }
 
@@ -211,7 +212,9 @@ class AuthServiceTest {
 
         @Override
         public UserVO findByEmail(String email) {
-            return !deleted && user.getEmail().equals(email) ? user : null;
+            return !deleted
+                    && com.example.project.support.PiiTestSupport.emailMatches(user, email)
+                    ? user : null;
         }
 
         @Override

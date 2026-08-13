@@ -8,11 +8,13 @@
     <resultMap id="userResultMap"
                type="com.example.project.user.domain.UserVO">
         <id property="userId" column="user_id"/>
-        <result property="email" column="email"/>
+        <result property="emailEncrypted" column="email_encrypted"/>
+        <result property="emailHmac" column="email_hmac"/>
         <result property="password" column="password"/>
-        <result property="userName" column="user_name"/>
+        <result property="userNameEncrypted" column="user_name_encrypted"/>
         <result property="birthDate" column="birth_date"/>
-        <result property="phone" column="phone"/>
+        <result property="phoneEncrypted" column="phone_encrypted"/>
+        <result property="phoneHmac" column="phone_hmac"/>
         <result property="role" column="role"/>
         <result property="accountStatus" column="account_status"/>
         <result property="blockedUntil" column="blocked_until"/>
@@ -23,11 +25,13 @@
 
     <sql id="userColumns">
         user_id,
-        email,
+        email_encrypted,
+        email_hmac,
         password,
-        user_name,
+        user_name_encrypted,
         birth_date,
-        phone,
+        phone_encrypted,
+        phone_hmac,
         role,
         account_status,
         blocked_until,
@@ -51,7 +55,7 @@
         SELECT
         <include refid="userColumns"/>
         FROM user
-        WHERE email = #{email}
+        WHERE email_hmac = #{email}
     </select>
 
     <insert id="insert"
@@ -59,19 +63,23 @@
             useGeneratedKeys="true"
             keyProperty="userId">
         INSERT INTO user (
-            email,
+            email_encrypted,
+            email_hmac,
             password,
-            user_name,
+            user_name_encrypted,
             birth_date,
-            phone,
+            phone_encrypted,
+            phone_hmac,
             img
         )
         VALUES (
-            #{email},
+            #{emailEncrypted},
+            #{emailHmac},
             #{password},
-            #{userName},
+            #{userNameEncrypted},
             #{birthDate},
-            #{phone},
+            #{phoneEncrypted},
+            #{phoneHmac},
             #{img}
         )
     </insert>
@@ -79,10 +87,12 @@
     <update id="update"
             parameterType="com.example.project.user.domain.UserVO">
         UPDATE user
-        SET email = #{email},
-            user_name = #{userName},
+        SET email_encrypted = #{emailEncrypted},
+            email_hmac = #{emailHmac},
+            user_name_encrypted = #{userNameEncrypted},
             birth_date = #{birthDate},
-            phone = #{phone},
+            phone_encrypted = #{phoneEncrypted},
+            phone_hmac = #{phoneHmac},
             img = #{img},
             updated_at = CURRENT_TIMESTAMP
         WHERE user_id = #{userId}

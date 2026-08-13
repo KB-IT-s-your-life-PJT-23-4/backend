@@ -8,9 +8,9 @@
                type="com.example.project.recipient.domain.RecipientVO">
         <id property="familyId" column="family_id"/>
         <result property="userId" column="user_id"/>
-        <result property="familyName" column="family_name"/>
+        <result property="familyNameEncrypted" column="family_name_encrypted"/>
         <result property="relation" column="relation"/>
-        <result property="birthDate" column="birth_date"/>
+        <result property="birthDateEncrypted" column="birth_date_encrypted"/>
         <result property="createdAt" column="created_at"/>
         <result property="updatedAt" column="updated_at"/>
         <result property="familyImg" column="family_img"/>
@@ -19,9 +19,9 @@
     <sql id="recipientColumns">
         family_id,
         user_id,
-        family_name,
+        family_name_encrypted,
         relation,
-        birth_date,
+        birth_date_encrypted,
         created_at,
         updated_at,
         family_img
@@ -30,18 +30,18 @@
     <insert id="insertRecipient" parameterType="com.example.project.recipient.domain.RecipientVO"
             useGeneratedKeys="true" keyProperty="familyId">
         INSERT INTO family (
-        user_id, family_name, relation, birth_date, family_img
+        user_id, family_name_encrypted, relation, birth_date_encrypted, family_img
         ) VALUES (
-        #{userId}, #{familyName}, #{relation}, #{birthDate}, #{familyImg}
+        #{userId}, #{familyNameEncrypted}, #{relation}, #{birthDateEncrypted}, #{familyImg}
         )
     </insert>
 
     <!-- 사용자 가족이 수증자인지 확인 -->
     <update id="updateRecipient" parameterType="com.example.project.recipient.domain.RecipientVO">
         UPDATE family
-        SET family_name = #{familyName},
+        SET family_name_encrypted = #{familyNameEncrypted},
         relation = #{relation},
-        birth_date = #{birthDate},
+        birth_date_encrypted = #{birthDateEncrypted},
         family_img = #{familyImg}
         WHERE family_id = #{familyId}
         AND user_id = #{userId}

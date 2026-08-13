@@ -53,7 +53,10 @@ class UserServiceTest {
     void setUp() {
         userMapper = new FakeUserMapper();
         passwordEncoder = new BCryptPasswordEncoder();
-        userService = new UserService(userMapper, passwordEncoder, null, userMapper);
+        userService = new UserService(
+                userMapper, passwordEncoder, null, null, userMapper,
+                com.example.project.support.PiiTestSupport.protectionService()
+        );
     }
 
     @Test
@@ -222,7 +225,10 @@ class UserServiceTest {
     void updateEditableProfileImage() {
         userMapper.savedUser = createUser("user@example.com");
         ProfileImageStorageService storage = new ProfileImageStorageService(tempDirectory.toString(), 1024);
-        userService = new UserService(userMapper, passwordEncoder, storage);
+        userService = new UserService(
+                userMapper, passwordEncoder, storage, null, null,
+                com.example.project.support.PiiTestSupport.protectionService()
+        );
         UserProfileUpdateRequest request = new UserProfileUpdateRequest(
                 "김길동",
                 LocalDate.of(1991, 2, 2),
@@ -290,7 +296,10 @@ class UserServiceTest {
         userMapper.savedUser = createUser("user@example.com");
         userMapper.savedUser.setImg(userImage);
         userMapper.familyImagePaths.add(familyImage);
-        userService = new UserService(userMapper, passwordEncoder, storage, userMapper);
+        userService = new UserService(
+                userMapper, passwordEncoder, storage, null, userMapper,
+                com.example.project.support.PiiTestSupport.protectionService()
+        );
 
         TransactionSynchronizationManager.initSynchronization();
         try {
@@ -316,7 +325,10 @@ class UserServiceTest {
         userMapper.savedUser = createUser("user@example.com");
         userMapper.savedUser.setImg(userImage);
         userMapper.throwOnDeleteEvents = true;
-        userService = new UserService(userMapper, passwordEncoder, storage, userMapper);
+        userService = new UserService(
+                userMapper, passwordEncoder, storage, null, userMapper,
+                com.example.project.support.PiiTestSupport.protectionService()
+        );
 
         assertThrows(RuntimeException.class, () -> userService.deleteUser(1L));
 
@@ -406,9 +418,17 @@ class UserServiceTest {
         AccountAccessService accountAccessService = new AccountAccessService(
                 accountStatusMapper,
                 userMapper,
-                Clock.fixed(NOW.toInstant(ZoneOffset.UTC), ZoneOffset.UTC)
+                Clock.fixed(NOW.toInstant(ZoneOffset.UTC), ZoneOffset.UTC),
+                com.example.project.support.PiiTestSupport.protectionService()
         );
-        return new UserService(userMapper, passwordEncoder, null, accountAccessService);
+        return new UserService(
+                userMapper,
+                passwordEncoder,
+                null,
+                accountAccessService,
+                null,
+                com.example.project.support.PiiTestSupport.protectionService()
+        );
     }
 
     private static class FakeUserMapper implements UserMapper, UserWithdrawalMapper {
@@ -434,11 +454,12 @@ class UserServiceTest {
 
         @Override
         public UserVO findByEmail(String email) {
-            if (savedUser != null && savedUser.getEmail().equals(email)) {
+            if (com.example.project.support.PiiTestSupport.emailMatches(savedUser, email)) {
                 return savedUser;
             }
 
-            if (userWithDuplicateEmail != null && userWithDuplicateEmail.getEmail().equals(email)) {
+            if (com.example.project.support.PiiTestSupport
+                    .emailMatches(userWithDuplicateEmail, email)) {
                 return userWithDuplicateEmail;
             }
 

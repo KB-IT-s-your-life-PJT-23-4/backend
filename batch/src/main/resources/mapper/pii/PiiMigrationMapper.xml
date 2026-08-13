@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.project.batch.pii.PiiMigrationMapper">
+
+    <select id="selectUsersAfter" resultType="com.example.project.batch.pii.PiiMigrationUser">
+        SELECT user_id,
+               email,
+               phone,
+               user_name,
+               email_encrypted,
+               email_hmac,
+               phone_encrypted,
+               phone_hmac,
+               user_name_encrypted
+        FROM `user`
+        WHERE user_id > #{afterId}
+        ORDER BY user_id
+        LIMIT #{limit}
+    </select>
+
+    <select id="selectFamiliesAfter" resultType="com.example.project.batch.pii.PiiMigrationFamily">
+        SELECT family_id,
+               family_name,
+               birth_date,
+               family_name_encrypted,
+               birth_date_encrypted
+        FROM family
+        WHERE family_id > #{afterId}
+        ORDER BY family_id
+        LIMIT #{limit}
+    </select>
+
+    <select id="countEmailHmacCollision" resultType="int">
+        SELECT COUNT(*)
+        FROM `user`
+        WHERE email_hmac = #{emailHmac}
+          AND user_id != #{userId}
+    </select>
+
+    <select id="countPhoneHmacCollision" resultType="int">
+        SELECT COUNT(*)
+        FROM `user`
+        WHERE phone_hmac = #{phoneHmac}
+          AND user_id != #{userId}
+    </select>
+
+    <update id="updateUser">
+        UPDATE `user`
+        SET email_encrypted = #{emailEncrypted},
+            email_hmac = #{emailHmac},
+            phone_encrypted = #{phoneEncrypted},
+            phone_hmac = #{phoneHmac},
+            user_name_encrypted = #{userNameEncrypted}
+        WHERE user_id = #{userId}
+          AND email_encrypted IS NULL
+          AND email_hmac IS NULL
+          AND phone_encrypted IS NULL
+          AND phone_hmac IS NULL
+          AND user_name_encrypted IS NULL
+    </update>
+
+    <update id="updateFamily">
+        UPDATE family
+        SET family_name_encrypted = #{familyNameEncrypted},
+            birth_date_encrypted = #{birthDateEncrypted}
+        WHERE family_id = #{familyId}
+          AND family_name_encrypted IS NULL
+          AND birth_date_encrypted IS NULL
+    </update>
+</mapper>

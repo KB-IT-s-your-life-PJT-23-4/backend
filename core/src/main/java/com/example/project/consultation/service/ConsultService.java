@@ -12,6 +12,9 @@ import com.example.project.consultation.dto.request.ConsultClarificationRequest;
 import com.example.project.consultation.dto.response.ConsultResponse;
 import com.example.project.consultation.dto.response.ConversationHistoryResponse;
 import com.example.project.consultation.mapper.ConsultationMapper;
+import com.example.project.gift.dto.response.DeductionResponse;
+import com.example.project.gift.service.GiftService;
+import com.example.project.user.crypto.UserPiiProtectionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Service;
@@ -19,10 +22,13 @@ import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
 import java.time.LocalDate;
+import java.time.Period;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import java.util.Objects;
 
 @Log4j2
@@ -43,6 +49,8 @@ public class ConsultService {
     private final FastApiClient fastApiClient;
     private final ConsultationMapper consultationMapper;
     private final ConversationPersistenceService conversationPersistenceService;
+    private final GiftService giftService;
+    private final UserPiiProtectionService piiProtectionService;
 
     // 최초 질문
     //public ConsultResponse consult(String question, Long userId) { // 동기 처리
@@ -196,8 +204,12 @@ public class ConsultService {
         }
 
         List<FamilyPreviousGiftVO> families = consultationMapper.selectAllByUserId(userId);
+        Map<Long, DeductionResponse> deductions = giftService.selectDeduction(null, userId)
+                .stream()
+                .collect(Collectors.toMap(DeductionResponse::getFamilyId, Function.identity()));
 
         return families.stream()
+                .map(family -> revealFamily(family, deductions.get(family.getFamilyId())))
                 .map(this::toFamilyData)
                 .toList();
     }*/
@@ -206,14 +218,35 @@ public class ConsultService {
                 .subscribeOn(Schedulers.boundedElastic());
     }
 
+    private FamilyPreviousGiftVO revealFamily(
+            FamilyPreviousGiftVO family,
+            DeductionResponse deduction
+    ) {
+        family.setName(
+                piiProtectionService.decryptFamilyName(family.getFamilyNameEncrypted())
+        );
+        LocalDate birthDate = piiProtectionService.decryptFamilyBirthDate(
+                family.getBirthDateEncrypted()
+        );
+        family.setRecipientAge(Period.between(birthDate, LocalDate.now()).getYears());
+        family.setDeductionRenewalDate(
+                deduction == null ? null : deduction.getNextRenewalDate()
+        );
+        return family;
+    }
+
     private List<FamilyData> fetchFamilies(Long userId) {
         if (userId == null) {
             throw new ServiceException(ResponseCode.UNAUTHORIZED);
         }
 
         List<FamilyPreviousGiftVO> families = consultationMapper.selectAllByUserId(userId);
+        Map<Long, DeductionResponse> deductions = giftService.selectDeduction(null, userId)
+                .stream()
+                .collect(Collectors.toMap(DeductionResponse::getFamilyId, Function.identity()));
 
         return families.stream()
+                .map(family -> revealFamily(family, deductions.get(family.getFamilyId())))
                 .map(this::toFamilyData)
                 .toList();
     }

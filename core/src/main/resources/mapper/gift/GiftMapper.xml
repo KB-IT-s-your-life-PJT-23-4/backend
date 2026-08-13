@@ -89,9 +89,9 @@
 
     <resultMap id="deductionResultMap" type="com.example.project.gift.domain.DeductionVO">
         <id property="familyId" column="family_id"/>
-        <result property="familyName" column="family_name"/>
+        <result property="familyNameEncrypted" column="family_name_encrypted"/>
         <result property="relation" column="relation"/>
-        <result property="birthDate" column="birth_date"/>
+        <result property="birthDateEncrypted" column="birth_date_encrypted"/>
         <result property="minor" column="is_minor"/>
         <result property="deductionLimit" column="deduction_limit"/>
         <result property="usedAmount" column="used_amount"/>
@@ -108,15 +108,9 @@
     <select id="selectDeduction" resultMap="deductionResultMap">
         SELECT
         f.family_id,
-        f.family_name,
+        f.family_name_encrypted,
         f.relation,
-        f.birth_date,
-        CASE
-        WHEN f.relation = 'LINEAL_DESCENDANT'
-        AND TIMESTAMPDIFF(YEAR, f.birth_date, #{baseDate}) &lt; 19
-        THEN 1 ELSE 0
-        END AS is_minor,
-        l.deduction_limit,
+        f.birth_date_encrypted,
         COALESCE(SUM(CASE WHEN g.status = 'COMPLETED' THEN g.amount END), 0) AS used_amount,
         COALESCE(SUM(CASE WHEN g.status = 'PLANNED' THEN g.amount END), 0) AS planned_amount,
         COUNT(CASE WHEN g.status = 'COMPLETED' THEN 1 END) AS aggregated_count,
@@ -129,20 +123,11 @@
         <if test="excludeGiftId != null">
             AND g.gift_id != #{excludeGiftId}
         </if>
-        LEFT JOIN gift_deduction_limit l
-        ON l.relation = f.relation
-        AND l.is_minor = CASE
-        WHEN f.relation = 'LINEAL_DESCENDANT'
-        AND TIMESTAMPDIFF(YEAR, f.birth_date, #{baseDate}) &lt; 19
-        THEN 1 ELSE 0
-        END
-        AND l.effective_from &lt;= #{baseDate}
-        AND (l.effective_to IS NULL OR l.effective_to &gt; #{baseDate})
         WHERE f.user_id = #{userId}
         <if test="familyId != null">
             AND f.family_id = #{familyId}
         </if>
-        GROUP BY f.family_id, f.family_name, f.relation, f.birth_date, l.deduction_limit
+        GROUP BY f.family_id, f.family_name_encrypted, f.relation, f.birth_date_encrypted
         ORDER BY f.family_id
     </select>
 

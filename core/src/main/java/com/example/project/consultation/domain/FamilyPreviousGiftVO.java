@@ -15,6 +15,8 @@ public class FamilyPreviousGiftVO {
     private Long familyId;
 //    가족 이름
     private String name;
+    private String familyNameEncrypted;
+    private String birthDateEncrypted;
 //    조회일 기준 가족 나이
     private Integer recipientAge;
 //    최근 10년 이내 증여 내역 존재 여부

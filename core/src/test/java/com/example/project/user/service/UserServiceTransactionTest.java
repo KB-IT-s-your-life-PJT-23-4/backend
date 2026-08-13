@@ -44,7 +44,10 @@ class UserServiceTransactionTest {
         ));
         TransactionalUserMapper mapper = new TransactionalUserMapper(user(imagePath));
         SnapshotTransactionManager transactionManager = new SnapshotTransactionManager(mapper);
-        UserService userService = new UserService(mapper, new BCryptPasswordEncoder(), storage, mapper);
+        UserService userService = new UserService(
+                mapper, new BCryptPasswordEncoder(), storage, null, mapper,
+                com.example.project.support.PiiTestSupport.protectionService()
+        );
         WithdrawalFacade facade = transactionalProxy(
                 new WithdrawalFacade(userService),
                 transactionManager,

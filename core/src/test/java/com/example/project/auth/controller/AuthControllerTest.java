@@ -65,7 +65,8 @@ class AuthControllerTest {
                 new FakeUserMapper(user),
                 passwordEncoder,
                 jwtProvider,
-                tokenRevocationStore
+                tokenRevocationStore,
+                com.example.project.support.PiiTestSupport.protectionService()
         );
 
         LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
@@ -218,7 +219,8 @@ class AuthControllerTest {
 
         @Override
         public UserVO findByEmail(String email) {
-            return user.getEmail().equals(email) ? user : null;
+            return com.example.project.support.PiiTestSupport.emailMatches(user, email)
+                    ? user : null;
         }
 
         @Override

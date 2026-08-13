@@ -36,7 +36,10 @@ public class AdminUserController {
 
     private final AdminUserService adminUserService;
 
-    @ApiOperation(value = "관리자 회원 목록 조회", notes = "회원 ID, 이메일, 이름으로 검색합니다.")
+    @ApiOperation(
+            value = "관리자 회원 목록 조회",
+            notes = "회원 ID 또는 전체 이메일의 정확 일치로 검색합니다. 이름 및 이메일 부분 검색은 지원하지 않습니다."
+    )
     @GetMapping
     public ApiResponse<AdminUserPageResponse> getUsers(
             @RequestParam(required = false) Long userId,

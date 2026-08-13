@@ -7,6 +7,9 @@ import com.example.project.config.ServletConfig;
 import com.example.project.config.ocr.OCRWebClientConfig;
 import com.example.project.consultation.config.WebClientConfig;
 import com.example.project.security.SecurityConfig;
+import com.example.project.recipient.domain.RecipientVO;
+import com.example.project.user.crypto.UserPiiProtectionService;
+import com.example.project.user.domain.UserVO;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -61,7 +64,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "jwt.secret=test-secret-key-for-integration-at-least-32-bytes",
         "ai.conversation.crypto.active-key-id=v1",
         "ai.conversation.crypto.key-v1=MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE=",
-        "ai.conversation.crypto.key-v2="
+        "ai.conversation.crypto.key-v2=",
+        "pii.search.hmac-key-v1=QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVo1Njc4OTA="
 })
 @Transactional
 class GiftDeductionApiTest {
@@ -85,6 +89,9 @@ class GiftDeductionApiTest {
     @Autowired
     private DataSource dataSource;
 
+    @Autowired
+    private UserPiiProtectionService piiProtectionService;
+
     private MockMvc mockMvc;
     private JdbcTemplate jdbc;
 
@@ -99,8 +106,7 @@ class GiftDeductionApiTest {
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken(String.valueOf(USER_ID), null, List.of()));
 
-        jdbc.update("INSERT INTO user (user_id, password, user_name, phone, email) VALUES (?,?,?,?,?)",
-                USER_ID, "x", "테스트부모", "010-9999-0001", "deduction-test@example.com");
+        insertUser(USER_ID, "deduction-test@example.com", "010-9999-0001", "Test User");
 
         jdbc.update("DELETE FROM gift_deduction_limit WHERE relation = ?",
                 "LINEAL_DESCENDANT");
@@ -117,16 +123,11 @@ class GiftDeductionApiTest {
                         """,
                 "2000-01-01", null, "LINEAL_DESCENDANT", true, 20_000_000L);
 
-        jdbc.update("INSERT INTO family (family_id, user_id, family_name, relation, birth_date) VALUES (?,?,?,?,?)",
-                ADULT_FAMILY_ID, USER_ID, "성년자녀", "LINEAL_DESCENDANT", "1998-03-02");
-        jdbc.update("INSERT INTO family (family_id, user_id, family_name, relation, birth_date) VALUES (?,?,?,?,?)",
-                MINOR_FAMILY_ID, USER_ID, "미성년자녀", "LINEAL_DESCENDANT", "2012-05-20");
-        jdbc.update("INSERT INTO family (family_id, user_id, family_name, relation, birth_date) VALUES (?,?,?,?,?)",
-                NO_GIFT_FAMILY_ID, USER_ID, "이력없음", "LINEAL_DESCENDANT", "2020-01-01");
-        jdbc.update("INSERT INTO family (family_id, user_id, family_name, relation, birth_date) VALUES (?,?,?,?,?)",
-                YOUNG_MINOR_FAMILY_ID, USER_ID, "성년전환자녀", "LINEAL_DESCENDANT", "2015-08-01");
-        jdbc.update("INSERT INTO family (family_id, user_id, family_name, relation, birth_date) VALUES (?,?,?,?,?)",
-                FUTURE_GIFT_FAMILY_ID, USER_ID, "미래이력자녀", "LINEAL_DESCENDANT", "1995-01-01");
+        insertFamily(ADULT_FAMILY_ID, "Adult", LocalDate.of(1998, 3, 2));
+        insertFamily(MINOR_FAMILY_ID, "Minor", LocalDate.of(2012, 5, 20));
+        insertFamily(NO_GIFT_FAMILY_ID, "No Gift", LocalDate.of(2020, 1, 1));
+        insertFamily(YOUNG_MINOR_FAMILY_ID, "Young Minor", LocalDate.of(2015, 8, 1));
+        insertFamily(FUTURE_GIFT_FAMILY_ID, "Future Gift", LocalDate.of(1995, 1, 1));
 
         // 성년: 확정 3,000만 + 창 밖 1,000만(제외) + 계획 500만 + 취소 900만(제외)
         insertGift(ADULT_FAMILY_ID, 30_000_000L, "2020-04-01", "COMPLETED");
@@ -144,6 +145,34 @@ class GiftDeductionApiTest {
         // 오늘보다 뒤 날짜로 등록된 확정 이력. 등록 자체는 막히지 않는다.
         insertGift(FUTURE_GIFT_FAMILY_ID, 40_000_000L,
                 LocalDate.now().plusYears(1).toString(), "COMPLETED");
+    }
+
+    private void insertUser(long userId, String email, String phone, String name) {
+        UserVO user = new UserVO();
+        user.setEmail(email);
+        user.setPhone(phone);
+        user.setUserName(name);
+        piiProtectionService.protect(user);
+        jdbc.update("""
+                INSERT INTO user
+                    (user_id, password, user_name_encrypted, phone_encrypted, phone_hmac,
+                     email_encrypted, email_hmac)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """, userId, "x", user.getUserNameEncrypted(), user.getPhoneEncrypted(),
+                user.getPhoneHmac(), user.getEmailEncrypted(), user.getEmailHmac());
+    }
+
+    private void insertFamily(long familyId, String name, LocalDate birthDate) {
+        RecipientVO family = new RecipientVO();
+        family.setFamilyName(name);
+        family.setBirthDate(birthDate);
+        piiProtectionService.protect(family);
+        jdbc.update("""
+                INSERT INTO family
+                    (family_id, user_id, family_name_encrypted, relation, birth_date_encrypted)
+                VALUES (?, ?, ?, 'LINEAL_DESCENDANT', ?)
+                """, familyId, USER_ID, family.getFamilyNameEncrypted(),
+                family.getBirthDateEncrypted());
     }
 
     private void insertGift(long familyId, long amount, String giftDate, String status) {

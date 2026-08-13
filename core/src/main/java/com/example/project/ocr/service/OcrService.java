@@ -11,6 +11,7 @@ import com.example.project.ocr.dto.response.GiftFilingOcrResponse;
 import com.example.project.ocr.dto.response.GiftFilingVerifyResponse;
 import com.example.project.recipient.domain.RecipientVO;
 import com.example.project.recipient.mapper.RecipientMapper;
+import com.example.project.user.crypto.UserPiiProtectionService;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -35,13 +36,22 @@ public class OcrService {
     private final RecipientMapper recipientMapper;
     private final GiftMapper giftMapper;
     private final ClovaOcrProperties properties;
+    private final UserPiiProtectionService piiProtectionService;
 
-    public OcrService(GiftFilingParser parser, ClovaOcrClient client, RecipientMapper recipientMapper, GiftMapper giftMapper, ClovaOcrProperties properties) {
+    public OcrService(
+            GiftFilingParser parser,
+            ClovaOcrClient client,
+            RecipientMapper recipientMapper,
+            GiftMapper giftMapper,
+            ClovaOcrProperties properties,
+            UserPiiProtectionService piiProtectionService
+    ) {
         this.parser = parser;
         this.client = client;
         this.recipientMapper = recipientMapper;
         this.giftMapper = giftMapper;
         this.properties = properties;
+        this.piiProtectionService = piiProtectionService;
     }
 
     /**
@@ -108,7 +118,9 @@ public class OcrService {
             return;
         }
 
-        RecipientVO recipient = recipientMapper.selectRecipient(gift.getFamilyId(), userId);
+        RecipientVO recipient = piiProtectionService.reveal(
+                recipientMapper.selectRecipient(gift.getFamilyId(), userId)
+        );
 
         if (recipient == null) {
             throw new ServiceException(ResponseCode.BENEFICIARY_NOT_FOUND);

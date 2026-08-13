@@ -15,9 +15,8 @@
         <id property="familyId" column="family_id"/>
         <result property="userId" column="user_id"/>
 
-        <result property="name" column="name"/>
-
-        <result property="recipientAge" column="recipient_age"/>
+        <result property="familyNameEncrypted" column="family_name_encrypted"/>
+        <result property="birthDateEncrypted" column="birth_date_encrypted"/>
 
         <result property="hasPreviousGifts" column="has_previous_gifts" javaType="boolean"/>
 
@@ -25,7 +24,6 @@
 
         <result property="previousGiftDate" column="previous_gift_date" javaType="java.time.LocalDate"/>
 
-        <result property="deductionRenewalDate" column="deduction_renewal_date" javaType="java.time.LocalDate"/>
     </resultMap>
 
 <!--    AI 상담 유형 저장-->
@@ -97,17 +95,17 @@
             resultMap="familyPreviousGiftResultMap">
 
         SELECT
-        user_id,
-        family_id,
-        name,
-        recipient_age,
-        has_previous_gifts,
-        previous_gift_amount,
-        previous_gift_date,
-        deduction_renewal_date
-        FROM vw_family_previous_gift
-        WHERE user_id = #{userId}
-        ORDER BY family_id
+        v.user_id,
+        v.family_id,
+        f.family_name_encrypted,
+        f.birth_date_encrypted,
+        v.has_previous_gifts,
+        v.previous_gift_amount,
+        v.previous_gift_date
+        FROM vw_family_previous_gift v
+        JOIN family f ON f.family_id = v.family_id
+        WHERE v.user_id = #{userId}
+        ORDER BY v.family_id
 
     </select>
 
@@ -119,17 +117,17 @@
             resultMap="familyPreviousGiftResultMap">
 
         SELECT
-        user_id,
-        family_id,
-        name,
-        recipient_age,
-        has_previous_gifts,
-        previous_gift_amount,
-        previous_gift_date,
-        deduction_renewal_date
-        FROM vw_family_previous_gift
-        WHERE family_id = #{familyId}
-        AND user_id = #{userId}
+        v.user_id,
+        v.family_id,
+        f.family_name_encrypted,
+        f.birth_date_encrypted,
+        v.has_previous_gifts,
+        v.previous_gift_amount,
+        v.previous_gift_date
+        FROM vw_family_previous_gift v
+        JOIN family f ON f.family_id = v.family_id
+        WHERE v.family_id = #{familyId}
+        AND v.user_id = #{userId}
 
     </select>
 

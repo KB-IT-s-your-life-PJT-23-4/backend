@@ -1,6 +1,5 @@
 package com.example.project.admin.batch.service;
 
-import com.example.project.batch.config.BatchConfig;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.JobExecution;
@@ -39,6 +38,8 @@ import java.util.concurrent.TimeUnit;
 @Log4j2
 @Component
 public class BatchJobRunner {
+
+    private static final String BATCH_CONFIG_CLASS = "com.example.project.batch.config.BatchConfig";
 
     /**
      * 실행을 한 줄로 세운다. 배치가 같은 테이블을 건드리는 데다, 관리자가 여러 잡을 동시에
@@ -148,7 +149,11 @@ public class BatchJobRunner {
                 .getPropertySources()
                 .addFirst(new MapPropertySource("admin-batch-override", overrides));
 
-        context.register(BatchConfig.class);
+        try {
+            context.register(Class.forName(BATCH_CONFIG_CLASS));
+        } catch (ClassNotFoundException exception) {
+            throw new IllegalStateException("배치 실행 구성을 찾을 수 없습니다.", exception);
+        }
         context.refresh();
 
         return context;

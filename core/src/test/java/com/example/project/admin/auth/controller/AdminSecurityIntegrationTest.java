@@ -225,6 +225,7 @@ class AdminSecurityIntegrationTest {
                     userMapper,
                     adminAuthMapper,
                     passwordEncoder,
+                    com.example.project.support.PiiTestSupport.protectionService(),
                     new com.example.project.admin.audit.service.AdminAuditWriter(
                             new com.example.project.admin.audit.support.InMemoryAdminAuditLogMapper()
                     )
@@ -272,7 +273,8 @@ class AdminSecurityIntegrationTest {
         @Override
         public UserVO findByEmail(String email) {
             return users.values().stream()
-                    .filter(user -> email.equals(user.getEmail()))
+                    .filter(user -> com.example.project.support.PiiTestSupport
+                            .emailMatches(user, email))
                     .findFirst()
                     .orElse(null);
         }
@@ -433,7 +435,9 @@ class AdminSecurityIntegrationTest {
 
         JsonNode body = responseBody(result.getResponse().getContentAsString());
         JsonNode data = body.path("data");
-        UserVO created = userMapper.findByEmail("new.admin@example.com");
+        UserVO created = userMapper.findByEmail(
+                com.example.project.support.PiiTestSupport.emailLookup("new.admin@example.com")
+        );
         assertEquals(201, body.path("statusCode").asInt());
         assertEquals("DEFAULT", data.path("role").asText());
         assertFalse(data.has("password"));

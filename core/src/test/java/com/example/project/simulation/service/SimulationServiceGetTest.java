@@ -428,7 +428,8 @@ class SimulationServiceGetTest {
                     userMapper,
                     new SimulationCalculator(),
                     new SimulationIdempotencyStore(),
-                    new EtfVolatilityCalculator()
+                    new EtfVolatilityCalculator(),
+                    com.example.project.support.PiiTestSupport.protectionService()
             );
         }
     }

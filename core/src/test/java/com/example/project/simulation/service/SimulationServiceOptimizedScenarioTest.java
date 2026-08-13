@@ -27,7 +27,8 @@ class SimulationServiceOptimizedScenarioTest {
             null,
             new SimulationCalculator(),
             null,
-            null
+            null,
+            com.example.project.support.PiiTestSupport.protectionService()
     );
 
     @Test

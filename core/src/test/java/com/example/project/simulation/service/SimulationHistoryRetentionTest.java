@@ -60,7 +60,8 @@ class SimulationHistoryRetentionTest {
         );
         SimulationHistoryService service = new SimulationHistoryService(
                 mapper,
-                new UserValidatedSimulationService()
+                new UserValidatedSimulationService(),
+                com.example.project.support.PiiTestSupport.protectionService()
         );
 
         SimulationHistoryResponse response = service.getHistory(
@@ -155,7 +156,10 @@ class SimulationHistoryRetentionTest {
     private static final class UserValidatedSimulationService extends SimulationService {
 
         private UserValidatedSimulationService() {
-            super(null, null, null, null, null);
+            super(
+                    null, null, null, null, null,
+                    com.example.project.support.PiiTestSupport.protectionService()
+            );
         }
 
         @Override

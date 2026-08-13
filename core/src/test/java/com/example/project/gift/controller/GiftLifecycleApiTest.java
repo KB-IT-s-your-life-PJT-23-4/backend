@@ -7,6 +7,9 @@ import com.example.project.config.ServletConfig;
 import com.example.project.config.ocr.OCRWebClientConfig;
 import com.example.project.consultation.config.WebClientConfig;
 import com.example.project.security.SecurityConfig;
+import com.example.project.recipient.domain.RecipientVO;
+import com.example.project.user.crypto.UserPiiProtectionService;
+import com.example.project.user.domain.UserVO;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -58,7 +61,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
         "jwt.secret=test-secret-key-for-integration-at-least-32-bytes",
         "ai.conversation.crypto.active-key-id=v1",
         "ai.conversation.crypto.key-v1=MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE=",
-        "ai.conversation.crypto.key-v2="
+        "ai.conversation.crypto.key-v2=",
+        "pii.search.hmac-key-v1=QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVo1Njc4OTA="
 })
 @Transactional
 class GiftLifecycleApiTest {
@@ -73,6 +77,9 @@ class GiftLifecycleApiTest {
     @Autowired
     private DataSource dataSource;
 
+    @Autowired
+    private UserPiiProtectionService piiProtectionService;
+
     private MockMvc mockMvc;
 
     @BeforeEach
@@ -85,10 +92,28 @@ class GiftLifecycleApiTest {
                 new UsernamePasswordAuthenticationToken(String.valueOf(USER_ID), null, List.of()));
 
         JdbcTemplate jdbc = new JdbcTemplate(dataSource);
-        jdbc.update("INSERT INTO user (user_id, password, user_name, phone, email) VALUES (?,?,?,?,?)",
-                USER_ID, "x", "테스트부모2", "010-9999-0002", "lifecycle-test@example.com");
-        jdbc.update("INSERT INTO family (family_id, user_id, family_name, relation, birth_date) VALUES (?,?,?,?,?)",
-                FAMILY_ID, USER_ID, "자녀", "LINEAL_DESCENDANT", "2000-01-01");
+        UserVO user = new UserVO();
+        user.setEmail("lifecycle-test@example.com");
+        user.setPhone("010-9999-0002");
+        user.setUserName("Test User");
+        piiProtectionService.protect(user);
+        jdbc.update("""
+                INSERT INTO user
+                    (user_id, password, user_name_encrypted, phone_encrypted, phone_hmac,
+                     email_encrypted, email_hmac)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """, USER_ID, "x", user.getUserNameEncrypted(), user.getPhoneEncrypted(),
+                user.getPhoneHmac(), user.getEmailEncrypted(), user.getEmailHmac());
+        RecipientVO family = new RecipientVO();
+        family.setFamilyName("Beneficiary");
+        family.setBirthDate(LocalDate.of(2000, 1, 1));
+        piiProtectionService.protect(family);
+        jdbc.update("""
+                INSERT INTO family
+                    (family_id, user_id, family_name_encrypted, relation, birth_date_encrypted)
+                VALUES (?, ?, ?, 'LINEAL_DESCENDANT', ?)
+                """, FAMILY_ID, USER_ID, family.getFamilyNameEncrypted(),
+                family.getBirthDateEncrypted());
     }
 
     private JsonNode log(String label, MvcResult result) throws Exception {

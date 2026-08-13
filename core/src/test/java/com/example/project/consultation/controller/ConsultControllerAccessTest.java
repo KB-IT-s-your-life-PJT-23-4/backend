@@ -34,7 +34,10 @@ class ConsultControllerAccessTest {
     @BeforeEach
     void setUp() {
         objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
-        AccountAccessService blockedAccount = new AccountAccessService(null, null, null) {
+        AccountAccessService blockedAccount = new AccountAccessService(
+                null, null, null,
+                com.example.project.support.PiiTestSupport.protectionService()
+        ) {
             @Override
             public void requireRestrictedFeatureAccess(Long userId) {
                 throw new ServiceException(ResponseCode.FORBIDDEN);

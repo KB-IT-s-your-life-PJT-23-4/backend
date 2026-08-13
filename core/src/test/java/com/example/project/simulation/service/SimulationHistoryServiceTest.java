@@ -294,7 +294,8 @@ class SimulationHistoryServiceTest {
     private SimulationHistoryService service(HistoryMapperStub mapperStub) {
         return new SimulationHistoryService(
                 mapperStub.mapper(),
-                new UserValidatedSimulationService()
+                new UserValidatedSimulationService(),
+                com.example.project.support.PiiTestSupport.protectionService()
         );
     }
 
@@ -399,7 +400,10 @@ class SimulationHistoryServiceTest {
     private static final class UserValidatedSimulationService extends SimulationService {
 
         private UserValidatedSimulationService() {
-            super(null, null, null, null, null);
+            super(
+                    null, null, null, null, null,
+                    com.example.project.support.PiiTestSupport.protectionService()
+            );
         }
 
         @Override

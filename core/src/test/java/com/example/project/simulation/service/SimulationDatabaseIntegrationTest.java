@@ -46,7 +46,8 @@ class SimulationDatabaseIntegrationTest {
                         session.getMapper(UserMapper.class),
                         new SimulationCalculator(),
                         new SimulationIdempotencyStore(),
-                        new EtfVolatilityCalculator()
+                        new EtfVolatilityCalculator(),
+                        com.example.project.support.PiiTestSupport.protectionService()
                 );
 
                 SimulationResponse draft = service.get(990001L, 990001L);

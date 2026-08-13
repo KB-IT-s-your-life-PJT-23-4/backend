@@ -66,8 +66,10 @@ class AdminUserMapperXmlTest {
         String sql = sql("selectUsers", parameters);
 
         assertTrue(sql.contains("u.user_id = ?"));
-        assertTrue(sql.contains("LOWER(u.email) LIKE CONCAT('%', ?, '%')"));
-        assertTrue(sql.contains("u.user_name LIKE CONCAT('%', ?, '%')"));
+        assertTrue(sql.contains("u.email_hmac = ?"));
+        assertFalse(sql.contains("LIKE CONCAT"));
+        assertFalse(sql.matches("(?is).*u\\.user_name(?!_encrypted).*"));
+        assertTrue(sql.contains("u.user_name_encrypted"));
         assertTrue(sql.contains("COUNT(DISTINCT f.family_id) AS recipient_count"));
         assertTrue(sql.contains("COUNT(DISTINCT g.gift_id) AS gift_count"));
         assertTrue(sql.contains("COUNT(DISTINCT s.simul_id) AS simulation_count"));

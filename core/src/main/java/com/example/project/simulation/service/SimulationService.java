@@ -28,6 +28,7 @@ import com.example.project.simulation.exception.SimulationError;
 import com.example.project.simulation.exception.SimulationException;
 import com.example.project.simulation.mapper.SimulationMapper;
 import com.example.project.user.mapper.UserMapper;
+import com.example.project.user.crypto.UserPiiProtectionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Service;
@@ -74,6 +75,7 @@ public class SimulationService {
     private final SimulationCalculator calculator;
     private final SimulationIdempotencyStore idempotencyStore;
     private final EtfVolatilityCalculator volatilityCalculator;
+    private final UserPiiProtectionService piiProtectionService;
 
     @Transactional
     public SimulationResponse execute(
@@ -2111,6 +2113,16 @@ public class SimulationService {
         if (!Objects.equals(family.getUserId(), userId)) {
             throw new SimulationException(SimulationError.FAMILY_ACCESS_DENIED);
         }
+        if (family.getFamilyNameEncrypted() != null) {
+            family.setFamilyName(
+                    piiProtectionService.decryptFamilyName(family.getFamilyNameEncrypted())
+            );
+        }
+        if (family.getBirthDateEncrypted() != null) {
+            family.setBirthDate(
+                    piiProtectionService.decryptFamilyBirthDate(family.getBirthDateEncrypted())
+            );
+        }
         return family;
     }
 
@@ -2154,6 +2166,7 @@ public class SimulationService {
         if (!Objects.equals(simulation.getUserId(), userId)) {
             throw new SimulationException(SimulationError.SIMULATION_ACCESS_DENIED);
         }
+        revealSimulation(simulation);
         if (simulation.getStatus() == SimulationStatus.DRAFT
                 && (simulation.getExpiredAt() == null
                 || !simulation.getExpiredAt().isAfter(LocalDateTime.now()))) {
@@ -2168,6 +2181,20 @@ public class SimulationService {
                 && (simulation.getSelectedPortfolioId() == null
                 || simulation.getSavedAt() == null)) {
             throw incompleteSavedSelection();
+        }
+        return simulation;
+    }
+
+    private SimulationRecord revealSimulation(SimulationRecord simulation) {
+        if (simulation.getFamilyNameEncrypted() != null) {
+            simulation.setFamilyName(
+                    piiProtectionService.decryptFamilyName(simulation.getFamilyNameEncrypted())
+            );
+        }
+        if (simulation.getBirthDateEncrypted() != null) {
+            simulation.setBirthDate(
+                    piiProtectionService.decryptFamilyBirthDate(simulation.getBirthDateEncrypted())
+            );
         }
         return simulation;
     }

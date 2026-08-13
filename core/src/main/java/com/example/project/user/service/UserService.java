@@ -11,6 +11,7 @@ import com.example.project.user.dto.request.UserUpdateRequest;
 import com.example.project.user.dto.response.EmailAvailabilityResponse;
 import com.example.project.user.mapper.UserMapper;
 import com.example.project.user.mapper.UserWithdrawalMapper;
+import com.example.project.user.crypto.UserPiiProtectionService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -30,6 +31,7 @@ public class UserService {
     private final ProfileImageStorageService profileImageStorageService;
     private final AccountAccessService accountAccessService;
     private final UserWithdrawalMapper userWithdrawalMapper;
+    private final UserPiiProtectionService piiProtectionService;
 
     @Autowired
     public UserService(
@@ -37,17 +39,19 @@ public class UserService {
             PasswordEncoder passwordEncoder,
             ProfileImageStorageService profileImageStorageService,
             AccountAccessService accountAccessService,
-            UserWithdrawalMapper userWithdrawalMapper
+            UserWithdrawalMapper userWithdrawalMapper,
+            UserPiiProtectionService piiProtectionService
     ) {
         this.userMapper = userMapper;
         this.passwordEncoder = passwordEncoder;
         this.profileImageStorageService = profileImageStorageService;
         this.accountAccessService = accountAccessService;
         this.userWithdrawalMapper = userWithdrawalMapper;
+        this.piiProtectionService = piiProtectionService;
     }
 
     public UserService(UserMapper userMapper, PasswordEncoder passwordEncoder) {
-        this(userMapper, passwordEncoder, null, null, null);
+        this(userMapper, passwordEncoder, null, null, null, null);
     }
 
     public UserService(
@@ -55,7 +59,7 @@ public class UserService {
             PasswordEncoder passwordEncoder,
             ProfileImageStorageService profileImageStorageService
     ) {
-        this(userMapper, passwordEncoder, profileImageStorageService, null, null);
+        this(userMapper, passwordEncoder, profileImageStorageService, null, null, null);
     }
 
     public UserService(
@@ -64,7 +68,7 @@ public class UserService {
             ProfileImageStorageService profileImageStorageService,
             UserWithdrawalMapper userWithdrawalMapper
     ) {
-        this(userMapper, passwordEncoder, profileImageStorageService, null, userWithdrawalMapper);
+        this(userMapper, passwordEncoder, profileImageStorageService, null, userWithdrawalMapper, null);
     }
 
     public UserService(
@@ -73,13 +77,13 @@ public class UserService {
             ProfileImageStorageService profileImageStorageService,
             AccountAccessService accountAccessService
     ) {
-        this(userMapper, passwordEncoder, profileImageStorageService, accountAccessService, null);
+        this(userMapper, passwordEncoder, profileImageStorageService, accountAccessService, null, null);
     }
 
     public UserDTO signup(UserSignupRequest signupRequest) {
         String normalizedEmail = normalizeEmail(signupRequest.email());
 
-        if (userMapper.findByEmail(normalizedEmail) != null) {
+        if (userMapper.findByEmail(pii().emailLookup(normalizedEmail)) != null) {
             throw new ServiceException(ResponseCode.DUPLICATE_DATA);
         }
 
@@ -95,6 +99,7 @@ public class UserService {
                 null,
                 normalizeNullable(signupRequest.img())
         );
+        pii().protect(newUser);
 
         try {
             if (userMapper.insert(newUser) != 1) {
@@ -104,7 +109,7 @@ public class UserService {
             throw new ServiceException(ResponseCode.DUPLICATE_DATA);
         }
 
-        UserVO savedUser = userMapper.findById(newUser.getUserId());
+        UserVO savedUser = reveal(userMapper.findById(newUser.getUserId()));
         if (savedUser == null) {
             throw new ServiceException(ResponseCode.DATABASE_ERROR);
         }
@@ -114,7 +119,9 @@ public class UserService {
 
     public EmailAvailabilityResponse checkEmailAvailability(String email) {
         String normalizedEmail = normalizeEmail(email);
-        return new EmailAvailabilityResponse(userMapper.findByEmail(normalizedEmail) == null);
+        return new EmailAvailabilityResponse(
+                userMapper.findByEmail(pii().emailLookup(normalizedEmail)) == null
+        );
     }
 
     public UserDTO getProfile(Long userId) {
@@ -127,7 +134,7 @@ public class UserService {
     public UserDTO updateProfile(Long userId, UserUpdateRequest updateRequest) {
         UserVO existingUser = findUser(userId);
         String normalizedEmail = normalizeEmail(updateRequest.email());
-        UserVO userWithSameEmail = userMapper.findByEmail(normalizedEmail);
+        UserVO userWithSameEmail = userMapper.findByEmail(pii().emailLookup(normalizedEmail));
 
         if (userWithSameEmail != null && !userWithSameEmail.getUserId().equals(userId)) {
             throw new ServiceException(ResponseCode.DUPLICATE_DATA);
@@ -138,6 +145,7 @@ public class UserService {
         existingUser.setBirthDate(updateRequest.birthDate());
         existingUser.setPhone(updateRequest.phone().trim());
         existingUser.setImg(normalizeNullable(updateRequest.img()));
+        pii().protect(existingUser);
 
         try {
             if (userMapper.update(existingUser) != 1) {
@@ -147,7 +155,7 @@ public class UserService {
             throw new ServiceException(ResponseCode.DUPLICATE_DATA);
         }
 
-        UserVO updatedUser = userMapper.findById(userId);
+        UserVO updatedUser = reveal(userMapper.findById(userId));
         if (updatedUser == null) {
             throw new ServiceException(ResponseCode.DATABASE_ERROR);
         }
@@ -181,12 +189,13 @@ public class UserService {
             existingUser.setUserName(updateRequest.getName().trim());
             existingUser.setBirthDate(updateRequest.getBirthDate());
             existingUser.setPhone(updateRequest.getPhone().trim());
+            pii().protect(existingUser);
 
             if (userMapper.update(existingUser) != 1) {
                 throw new ServiceException(ResponseCode.DATABASE_ERROR);
             }
 
-            UserVO updatedUser = userMapper.findById(userId);
+            UserVO updatedUser = reveal(userMapper.findById(userId));
             if (updatedUser == null) {
                 throw new ServiceException(ResponseCode.DATABASE_ERROR);
             }
@@ -233,7 +242,7 @@ public class UserService {
     }
 
     private UserVO findUser(Long userId) {
-        UserVO foundUser = userMapper.findById(userId);
+        UserVO foundUser = reveal(userMapper.findById(userId));
         if (foundUser == null) {
             throw new ServiceException(ResponseCode.MEMBER_NOT_FOUND);
         }
@@ -243,6 +252,17 @@ public class UserService {
 
     private String normalizeEmail(String email) {
         return email.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private UserVO reveal(UserVO user) {
+        return user == null ? null : pii().reveal(user);
+    }
+
+    private UserPiiProtectionService pii() {
+        if (piiProtectionService == null) {
+            throw new ServiceException(ResponseCode.INTERNAL_SERVER_ERROR);
+        }
+        return piiProtectionService;
     }
 
     private String normalizeNullable(String value) {
