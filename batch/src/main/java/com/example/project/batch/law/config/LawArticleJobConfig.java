@@ -1,5 +1,6 @@
 package com.example.project.batch.law.config;
 
+import com.example.project.batch.common.notification.BatchFailureNotifier;
 import com.example.project.batch.law.chunk.LawUnit;
 import com.example.project.batch.law.chunk.processor.LawArticleItemProcessor;
 import com.example.project.batch.law.chunk.reader.LawArticleItemReader;
@@ -93,8 +94,9 @@ public class LawArticleJobConfig {
      * 다운로드가 실패하면 옛 파일로 가공하지 않도록 여기서 끊는 것이 중요하다.
      */
     @Bean
-    public Job lawArticleJob(Step lawDownloadStep, Step lawArticleStep) {
+    public Job lawArticleJob(Step lawDownloadStep, Step lawArticleStep, BatchFailureNotifier failureNotifier) {
         return jobBuilderFactory.get("lawArticleJob")
+                .listener(failureNotifier)
                 .start(lawDownloadStep)
                 .next(lawArticleStep)
                 .build();

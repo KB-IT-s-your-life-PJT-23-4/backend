@@ -17,3 +17,8 @@ jwt.refresh-expiration=${JWT_REFRESH_EXPIRATION:604800000}
 
 kakao.local.base-url=https://dapi.kakao.com
 kakao.rest-api-key=${KAKAO_REST_API_KEY}
+
+# 관리자 화면에서 수동 실행한 배치의 산출물 위치.
+# batch.properties 의 경로는 cron 실행 위치 기준 상대경로라 톰캣 안에서는 쓸 수 없다.
+# 배포 시에는 cron 배치가 쓰는 디렉터리와 같은 곳을 가리켜야 산출물이 갈라지지 않는다.
+law.batch.work-dir=${LAW_BATCH_WORK_DIR:${java.io.tmpdir}/law-batch}

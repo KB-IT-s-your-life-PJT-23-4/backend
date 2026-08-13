@@ -27,7 +27,11 @@ import java.time.ZoneId;
         excludeFilters = {
                 @ComponentScan.Filter(type = FilterType.ANNOTATION, classes = Configuration.class),
                 @ComponentScan.Filter(type = FilterType.ANNOTATION, classes = Controller.class),
-                @ComponentScan.Filter(type = FilterType.ANNOTATION, classes = ControllerAdvice.class)
+                @ComponentScan.Filter(type = FilterType.ANNOTATION, classes = ControllerAdvice.class),
+                // batch 모듈이 같은 base package 라 여기에 걸린다. 배치 빈은 실행할 때
+                // 자식 컨텍스트(BatchJobRunner)에서만 살아야 하고, core 가 주워 가면
+                // batch.properties 가 없어 @Value 치환에서 기동이 깨진다.
+                @ComponentScan.Filter(type = FilterType.REGEX, pattern = "com\\.example\\.project\\.batch\\..*")
         })
 @MapperScan(basePackages = "com.example.project", annotationClass = org.apache.ibatis.annotations.Mapper.class)
 @EnableTransactionManagement
