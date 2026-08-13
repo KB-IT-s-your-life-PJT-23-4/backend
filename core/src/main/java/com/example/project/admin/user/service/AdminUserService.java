@@ -1,5 +1,6 @@
 package com.example.project.admin.user.service;
 
+import com.example.project.admin.audit.service.AdminAuditWriter;
 import com.example.project.admin.auth.domain.AdminPrincipal;
 import com.example.project.admin.auth.service.AdminAuthorizationService;
 import com.example.project.admin.user.domain.AdminUserRecord;
@@ -20,6 +21,7 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 
 @Service
@@ -37,6 +39,7 @@ public class AdminUserService {
     private final AdminAuthorizationService adminAuthorizationService;
     private final AccountAccessService accountAccessService;
     private final Clock clock;
+    private final AdminAuditWriter adminAuditWriter;
 
     @Transactional
     public AdminUserPageResponse getUsers(
@@ -97,11 +100,26 @@ public class AdminUserService {
         return AdminUserResponse.from(user);
     }
 
-    public void deleteUser(Long userId) {
+    @Transactional
+    public void deleteUser(Authentication authentication, Long userId) {
         if (userId == null || userId <= 0L) {
             throw new ServiceException(ResponseCode.BAD_REQUEST);
         }
+
+        AdminPrincipal actor = adminAuthorizationService.requireCurrentAdmin(authentication);
+        AdminUserRecord target = getCurrentTarget(userId);
+        requireUserTarget(target);
+
         userService.deleteUser(userId);
+
+        adminAuditWriter.record(
+                actor,
+                "USER_DELETE",
+                "USER",
+                userId,
+                "사용자 계정을 삭제했습니다.",
+                null
+        );
     }
 
     @Transactional
@@ -110,7 +128,7 @@ public class AdminUserService {
             Long userId,
             LocalDateTime blockedUntil
     ) {
-        requireBlockManager(authentication);
+        AdminPrincipal actor = requireBlockManager(authentication);
         validateUserId(userId);
         if (blockedUntil == null || !blockedUntil.isAfter(LocalDateTime.now(clock))) {
             throw new ServiceException(ResponseCode.BAD_REQUEST);
@@ -125,12 +143,22 @@ public class AdminUserService {
         if (adminUserMapper.blockUser(userId, blockedUntil) != 1) {
             throw new ServiceException(ResponseCode.CONFLICT);
         }
+
+        adminAuditWriter.record(
+                actor,
+                "USER_BLOCK",
+                "USER",
+                userId,
+                "사용자 계정을 차단했습니다.",
+                Map.of("blockedUntil", blockedUntil)
+        );
+
         return getUser(userId);
     }
 
     @Transactional
     public AdminUserResponse unblockUser(Authentication authentication, Long userId) {
-        requireBlockManager(authentication);
+        AdminPrincipal actor = requireBlockManager(authentication);
         validateUserId(userId);
 
         AdminUserRecord target = getCurrentTarget(userId);
@@ -142,6 +170,16 @@ public class AdminUserService {
         if (adminUserMapper.unblockUser(userId) != 1) {
             throw new ServiceException(ResponseCode.CONFLICT);
         }
+
+        adminAuditWriter.record(
+                actor,
+                "USER_UNBLOCK",
+                "USER",
+                userId,
+                "사용자 계정 차단을 해제했습니다.",
+                null
+        );
+
         return getUser(userId);
     }
 
@@ -154,11 +192,12 @@ public class AdminUserService {
         return target;
     }
 
-    private void requireBlockManager(Authentication authentication) {
+    private AdminPrincipal requireBlockManager(Authentication authentication) {
         AdminPrincipal principal = adminAuthorizationService.requireCurrentAdmin(authentication);
         if (!BLOCK_MANAGER_ROLES.contains(principal.role())) {
             throw new ServiceException(ResponseCode.FORBIDDEN);
         }
+        return principal;
     }
 
     private void requireUserTarget(AdminUserRecord target) {

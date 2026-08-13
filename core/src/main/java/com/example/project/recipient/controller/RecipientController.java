@@ -2,6 +2,7 @@ package com.example.project.recipient.controller;
 
 import com.example.project.common.api.ApiResponse;
 import com.example.project.common.api.ResponseCode;
+import com.example.project.common.logging.ApiLog;
 import com.example.project.common.web.CurrentUser;
 import com.example.project.recipient.dto.request.RecipientProfileUpdateRequest;
 import com.example.project.recipient.dto.request.RecipientRequest;
@@ -22,6 +23,7 @@ import javax.servlet.http.HttpServletRequest;
 import javax.validation.Valid;
 import java.util.List;
 
+@ApiLog
 @Api(tags = "수증자 API", description = "로그인 회원이 소유한 수증자 등록·조회·수정·삭제")
 @RestController
 @RequestMapping("/api/fm/family")

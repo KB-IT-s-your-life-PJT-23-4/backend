@@ -3,6 +3,7 @@ package com.example.project.user.controller;
 import com.example.project.common.api.ApiResponse;
 import com.example.project.common.api.ResponseCode;
 import com.example.project.common.exception.ServiceException;
+import com.example.project.common.logging.ApiLog;
 import com.example.project.common.web.CurrentUser;
 import com.example.project.user.dto.UserDTO;
 import com.example.project.user.dto.request.UserProfileUpdateRequest;
@@ -38,6 +39,7 @@ import javax.validation.constraints.Email;
 import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.Size;
 
+@ApiLog
 @Api(tags = "회원 API", description = "회원가입, 이메일 중복 확인, 내 정보 조회·수정 및 회원탈퇴")
 @RestController
 @RequestMapping("/api")
@@ -177,7 +179,8 @@ public class UserController {
     @DeleteMapping("/users/me")
     @ApiOperation(
             value = "회원탈퇴",
-            notes = "Access Token의 회원과 ON DELETE CASCADE로 연결된 사용자 데이터를 삭제합니다. "
+            notes = "Access Token의 회원 개인정보와 직접 연결된 데이터를 삭제하고, "
+                    + "ON DELETE CASCADE로 연결된 회원 소유 데이터도 함께 삭제합니다. "
                     + "클라이언트는 성공 후 로그아웃 API로 토큰을 폐기해야 합니다.",
             authorizations = @io.swagger.annotations.Authorization("Bearer")
     )

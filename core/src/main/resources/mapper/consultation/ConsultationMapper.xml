@@ -36,14 +36,20 @@
             keyColumn="ai_consultation_event_id">
 
         INSERT INTO ai_consultation_event (
+            ai_conversation_id,
             conversation_id,
+            request_id,
+            turn_no,
             user_id,
             intent,
             response_status,
             question_excerpt,
             occurred_at
         ) VALUES (
+            #{aiConversationId},
             #{conversationId},
+            #{requestId},
+            #{turnNo},
             #{userId},
             #{intent},
             #{responseStatus},
@@ -186,4 +192,197 @@
         )
         AND p.product_type = 'ETF'
     </select>
+
+    <resultMap id="aiConversationResultMap"
+               type="com.example.project.consultation.domain.AiConversationVO">
+        <id property="aiConversationId" column="ai_conversation_id"/>
+
+        <result property="conversationId" column="conversation_id"/>
+
+        <result property="userId" column="user_id"/>
+
+        <result property="status" column="status"/>
+
+        <result property="processingStatus" column="processing_status"/>
+
+        <result property="processingStartedAt" column="processing_started_at"/>
+
+        <result property="transcriptJson" column="transcript_json" javaType="java.lang.String"/>
+
+        <result property="turnCount" column="turn_count"/>
+
+        <result property="lastMessageAt" column="last_message_at"/>
+
+        <result property="closedAt" column="closed_at"/>
+
+        <result property="createdAt" column="created_at"/>
+
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <!-- 사용자 행 잠금 -->
+    <select id="lockUser" resultType="long">
+        SELECT user_id
+        FROM `user`
+        WHERE user_id = #{userId}
+        FOR UPDATE
+    </select>
+
+    <!-- 활성 대화 조회 및 잠금 -->
+    <select id="selectActiveConversationForUpdate" resultMap="aiConversationResultMap">
+        SELECT
+            ai_conversation_id,
+            conversation_id,
+            user_id,
+            status,
+            processing_status,
+            processing_started_at,
+            transcript_json,
+            turn_count,
+            last_message_at,
+            closed_at,
+            created_at,
+            updated_at
+        FROM ai_conversation
+        WHERE user_id = #{userId}
+        AND status = 'ACTIVE'
+        LIMIT 1
+        FOR UPDATE
+    </select>
+
+    <!-- 내부 ID로 대화 조회 및 잠금 -->
+    <select id="selectConversationForUpdate" resultMap="aiConversationResultMap">
+        SELECT
+            ai_conversation_id,
+            conversation_id,
+            user_id,
+            status,
+            processing_status,
+            processing_started_at,
+            transcript_json,
+            turn_count,
+            last_message_at,
+            closed_at,
+            created_at,
+            updated_at
+        FROM ai_conversation
+        WHERE ai_conversation_id = #{aiConversationId}
+        AND user_id = #{userId}
+        FOR UPDATE
+    </select>
+
+    <!-- 사용자 이력 조회 -->
+    <select id="selectActiveConversation" resultMap="aiConversationResultMap">
+        SELECT
+            ai_conversation_id,
+            conversation_id,
+            user_id,
+            status,
+            processing_status,
+            processing_started_at,
+            transcript_json,
+            turn_count,
+            last_message_at,
+            closed_at,
+            created_at,
+            updated_at
+        FROM ai_conversation
+        WHERE user_id = #{userId}
+        AND status = 'ACTIVE'
+        LIMIT 1
+    </select>
+
+    <!-- 신규 대화 생성 -->
+    <insert id="insertConversation"
+            parameterType="com.example.project.consultation.domain.AiConversationVO"
+            useGeneratedKeys="true"
+            keyProperty="aiConversationId"
+            keyColumn="ai_conversation_id">
+
+        INSERT INTO ai_conversation (
+            conversation_id,
+            user_id,
+            status,
+            processing_status,
+            transcript_json,
+            turn_count
+        ) VALUES (
+            #{conversationId},
+            #{userId},
+            #{status},
+            #{processingStatus},
+            CAST(#{transcriptJson} AS JSON),
+            #{turnCount}
+        )
+    </insert>
+
+    <!-- 질문 처리 시작 -->
+    <update id="markConversationProcessing">
+        UPDATE ai_conversation
+        SET
+        transcript_json = CAST(#{transcriptJson} AS JSON),
+
+        processing_status = 'PROCESSING',
+
+        processing_started_at = #{processingStartedAt},
+
+        last_message_at = #{processingStartedAt},
+
+        turn_count = turn_count + 1
+
+        WHERE ai_conversation_id = #{aiConversationId}
+
+        AND user_id = #{userId}
+
+        AND status = 'ACTIVE'
+
+        AND processing_status = 'IDLE'
+    </update>
+
+    <!-- 질문 완료 -->
+    <update id="completeConversationTurn">
+        UPDATE ai_conversation
+        SET
+        /*
+        * 최초 응답이면 FastAPI conversation_id를 저장하고,
+        * 이미 값이 있으면 기존 값을 유지합니다.
+        */
+        conversation_id = COALESCE( conversation_id, #{conversationId} ),
+
+        transcript_json =
+        CAST(#{transcriptJson} AS JSON),
+
+        processing_status = 'IDLE',
+
+        processing_started_at = NULL,
+
+        last_message_at = #{completedAt}
+
+        WHERE ai_conversation_id = #{aiConversationId}
+
+        AND user_id = #{userId}
+
+        AND status = 'ACTIVE'
+
+        AND processing_status = 'PROCESSING'
+    </update>
+
+    <!-- 질문 실패 -->
+    <update id="failConversationTurn">
+        UPDATE ai_conversation
+        SET
+        transcript_json = CAST(#{transcriptJson} AS JSON),
+
+        processing_status = 'IDLE',
+
+        processing_started_at = NULL,
+
+        last_message_at = #{failedAt}
+
+        WHERE ai_conversation_id = #{aiConversationId}
+
+        AND user_id = #{userId}
+
+        AND processing_status = 'PROCESSING'
+    </update>
 </mapper>

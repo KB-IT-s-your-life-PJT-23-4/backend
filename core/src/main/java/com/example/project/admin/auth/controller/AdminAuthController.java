@@ -1,5 +1,6 @@
 package com.example.project.admin.auth.controller;
 
+import com.example.project.admin.auth.domain.AdminPrincipal;
 import com.example.project.admin.auth.dto.request.AdminAuthCreateRequest;
 import com.example.project.admin.auth.dto.request.AdminChangeAuthRequest;
 import com.example.project.admin.auth.dto.response.AdminAuthPageResponse;
@@ -83,8 +84,8 @@ public class AdminAuthController {
             Authentication authentication,
             HttpServletRequest httpRequest
     ) {
-        adminAccessValidator.requireRoot(authentication);
-        adminAuthorizationService.changeAuth(userId, request);
+        AdminPrincipal actor = adminAccessValidator.requireRoot(authentication);
+        adminAuthorizationService.changeAuth(userId, request, actor);
 
         return ApiResponse.success(ResponseCode.UPDATED, httpRequest.getRequestURI(), null);
     }
@@ -95,8 +96,8 @@ public class AdminAuthController {
             Authentication authentication,
             HttpServletRequest httpRequest
     ) {
-        adminAccessValidator.requireRoot(authentication);
-        adminAuthorizationService.deleteAdmin(userId);
+        AdminPrincipal actor = adminAccessValidator.requireRoot(authentication);
+        adminAuthorizationService.deleteAdmin(userId, actor);
 
         return ApiResponse.success(ResponseCode.DELETED, httpRequest.getRequestURI(), null);
     }
@@ -107,8 +108,8 @@ public class AdminAuthController {
             Authentication authentication,
             HttpServletRequest httpRequest
     ) {
-        adminAccessValidator.requireRoot(authentication);
-        AdminAuthResponse response = adminAuthorizationService.createAdmin(request);
+        AdminPrincipal actor = adminAccessValidator.requireRoot(authentication);
+        AdminAuthResponse response = adminAuthorizationService.createAdmin(request, actor);
 
         return ApiResponse.success(ResponseCode.CREATED, httpRequest.getRequestURI(), response);
     }

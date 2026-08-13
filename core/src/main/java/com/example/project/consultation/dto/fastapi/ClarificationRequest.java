@@ -16,5 +16,6 @@ public record ClarificationRequest(
         Map<String, Object> answers,
         List<FamilyData> families,
         List<ProductData> products,
-        List<EtfProductData> etfProducts
+        List<EtfProductData> etfProducts,
+        List<ConversationContextMessage> conversationHistory
 ) {}

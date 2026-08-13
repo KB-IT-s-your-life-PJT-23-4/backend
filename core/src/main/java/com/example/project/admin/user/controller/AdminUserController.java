@@ -95,14 +95,15 @@ public class AdminUserController {
 
     @ApiOperation(
             value = "관리자 회원 삭제",
-            notes = "기존 회원탈퇴 로직을 재사용하여 회원과 CASCADE 연관 데이터를 삭제합니다."
+            notes = "기존 회원탈퇴 로직을 재사용하여 회원 개인정보와 모든 연관 데이터를 삭제합니다."
     )
     @DeleteMapping("/{userId}")
     public ApiResponse<Void> deleteUser(
             @PathVariable @Min(1) Long userId,
+            Authentication authentication,
             HttpServletRequest request
     ) {
-        adminUserService.deleteUser(userId);
+        adminUserService.deleteUser(authentication, userId);
         return ApiResponse.success(ResponseCode.DELETED, request.getRequestURI(), null);
     }
 }

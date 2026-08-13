@@ -1,5 +1,7 @@
 package com.example.project.admin.report.controller;
 
+import com.example.project.admin.audit.service.AdminAuditWriter;
+import com.example.project.admin.audit.support.InMemoryAdminAuditLogMapper;
 import com.example.project.admin.auth.domain.AdminPrincipal;
 import com.example.project.admin.report.mapper.ReportMapper;
 import com.example.project.admin.report.service.AdminReportService;
@@ -42,7 +44,10 @@ class AdminReportControllerTest {
         objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
         reportMapper = new ReportMapperStub();
         AdminReportController controller = new AdminReportController(
-                new AdminReportService(reportMapper)
+                new AdminReportService(
+                        reportMapper,
+                        new AdminAuditWriter(new InMemoryAdminAuditLogMapper())
+                )
         );
         LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
         validator.afterPropertiesSet();

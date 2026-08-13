@@ -47,7 +47,11 @@ public class FastApiClient {
 
     private Throwable mapError(Throwable e) {
         if (e instanceof WebClientResponseException wcre) {
-            log.error("FastAPI 오류 응답: status={}, body={}", wcre.getStatusCode(), wcre.getResponseBodyAsString(), e);
+            log.error(
+                    "FastAPI 오류 응답: status={}",
+                    wcre.getStatusCode(),
+                    e
+            );
             return new ServiceException(resolveResponseCode(wcre.getStatusCode().value()));
         }
         if (e instanceof WebClientRequestException) {

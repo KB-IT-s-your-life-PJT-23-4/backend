@@ -24,7 +24,8 @@ public class WebConfig extends AbstractAnnotationConfigDispatcherServletInitiali
                 SecurityConfig.class,
                 WebClientConfig.class,
                 KakaoWebClientConfig.class,
-                OCRWebClientConfig.class
+                OCRWebClientConfig.class,
+                AdminAccessStreamConfig.class
         };
     }
 

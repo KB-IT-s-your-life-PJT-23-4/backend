@@ -10,6 +10,7 @@ import com.example.project.user.dto.request.UserProfileUpdateRequest;
 import com.example.project.user.dto.request.UserUpdateRequest;
 import com.example.project.user.mapper.AccountStatusMapper;
 import com.example.project.user.mapper.UserMapper;
+import com.example.project.user.mapper.UserWithdrawalMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -18,12 +19,17 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionSynchronizationUtils;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -47,7 +53,7 @@ class UserServiceTest {
     void setUp() {
         userMapper = new FakeUserMapper();
         passwordEncoder = new BCryptPasswordEncoder();
-        userService = new UserService(userMapper, passwordEncoder);
+        userService = new UserService(userMapper, passwordEncoder, null, userMapper);
     }
 
     @Test
@@ -257,14 +263,66 @@ class UserServiceTest {
     }
 
     @Test
-    @DisplayName("회원 탈퇴 시 인증된 회원 정보를 삭제한다")
+    @DisplayName("회원 탈퇴 시 개인정보를 참조 순서에 맞게 모두 삭제한다")
     void deleteUser() {
         userMapper.savedUser = createUser("user@example.com");
 
         userService.deleteUser(1L);
 
+        assertEquals(List.of(
+                "reportsByEvent",
+                "reportsByUser",
+                "events",
+                "conversations",
+                "tickets",
+                "user"
+        ), userMapper.deletionOrder);
         assertEquals(1, userMapper.deleteCount);
         assertNull(userMapper.savedUser);
+    }
+
+    @Test
+    @DisplayName("회원과 가족 이미지는 DB 커밋 후 삭제한다")
+    void deleteProfileImagesAfterCommit() {
+        ProfileImageStorageService storage = new ProfileImageStorageService(tempDirectory.toString(), 1024);
+        String userImage = storage.store(png("user.png"));
+        String familyImage = storage.store(png("family.png"));
+        userMapper.savedUser = createUser("user@example.com");
+        userMapper.savedUser.setImg(userImage);
+        userMapper.familyImagePaths.add(familyImage);
+        userService = new UserService(userMapper, passwordEncoder, storage, userMapper);
+
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            userService.deleteUser(1L);
+
+            assertTrue(Files.exists(managedFile(userImage)));
+            assertTrue(Files.exists(managedFile(familyImage)));
+
+            TransactionSynchronizationUtils.triggerAfterCommit();
+
+            assertFalse(Files.exists(managedFile(userImage)));
+            assertFalse(Files.exists(managedFile(familyImage)));
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
+    }
+
+    @Test
+    @DisplayName("DB 정리 중 실패하면 사용자 삭제와 이미지 삭제를 진행하지 않는다")
+    void keepUserAndImagesWhenPurgeFails() {
+        ProfileImageStorageService storage = new ProfileImageStorageService(tempDirectory.toString(), 1024);
+        String userImage = storage.store(png("user.png"));
+        userMapper.savedUser = createUser("user@example.com");
+        userMapper.savedUser.setImg(userImage);
+        userMapper.throwOnDeleteEvents = true;
+        userService = new UserService(userMapper, passwordEncoder, storage, userMapper);
+
+        assertThrows(RuntimeException.class, () -> userService.deleteUser(1L));
+
+        assertEquals(0, userMapper.deleteCount);
+        assertEquals(1L, userMapper.savedUser.getUserId());
+        assertTrue(Files.exists(managedFile(userImage)));
     }
 
     @Test
@@ -309,6 +367,21 @@ class UserServiceTest {
         );
     }
 
+    private MockMultipartFile png(String fileName) {
+        return new MockMultipartFile(
+                "image",
+                fileName,
+                "image/png",
+                new byte[]{(byte) 0x89, 'P', 'N', 'G', 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0}
+        );
+    }
+
+    private Path managedFile(String publicPath) {
+        return tempDirectory.resolve("profile-images").resolve(
+                publicPath.substring(ProfileImageStorageService.PUBLIC_PATH_PREFIX.length())
+        );
+    }
+
     private UserService userServiceWithAccountRefresh() {
         AccountStatusMapper accountStatusMapper = new AccountStatusMapper() {
             @Override
@@ -338,7 +411,7 @@ class UserServiceTest {
         return new UserService(userMapper, passwordEncoder, null, accountAccessService);
     }
 
-    private static class FakeUserMapper implements UserMapper {
+    private static class FakeUserMapper implements UserMapper, UserWithdrawalMapper {
 
         private UserVO savedUser;
         private UserVO userWithDuplicateEmail;
@@ -347,6 +420,9 @@ class UserServiceTest {
         private int deleteCount;
         private int deleteResult = 1;
         private boolean throwDuplicateOnUpdate;
+        private boolean throwOnDeleteEvents;
+        private final List<String> familyImagePaths = new ArrayList<>();
+        private final List<String> deletionOrder = new ArrayList<>();
 
         @Override
         public UserVO findById(Long userId) {
@@ -394,7 +470,46 @@ class UserServiceTest {
         }
 
         @Override
+        public List<String> findFamilyImagePaths(Long userId) {
+            return List.copyOf(familyImagePaths);
+        }
+
+        @Override
+        public int deleteAiSafetyReportsByTriggerEventUserId(Long userId) {
+            deletionOrder.add("reportsByEvent");
+            return 1;
+        }
+
+        @Override
+        public int deleteAiSafetyReportsByUserId(Long userId) {
+            deletionOrder.add("reportsByUser");
+            return 1;
+        }
+
+        @Override
+        public int deleteAiConsultationEventsByUserId(Long userId) {
+            deletionOrder.add("events");
+            if (throwOnDeleteEvents) {
+                throw new RuntimeException("event deletion failed");
+            }
+            return 1;
+        }
+
+        @Override
+        public int deleteAiConversationsByUserId(Long userId) {
+            deletionOrder.add("conversations");
+            return 1;
+        }
+
+        @Override
+        public int deleteTicketsByUserId(Long userId) {
+            deletionOrder.add("tickets");
+            return 1;
+        }
+
+        @Override
         public int deleteById(Long userId) {
+            deletionOrder.add("user");
             deleteCount++;
 
             if (deleteResult == 1

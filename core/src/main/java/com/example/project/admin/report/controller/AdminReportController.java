@@ -67,7 +67,7 @@ public class AdminReportController {
             @AuthenticationPrincipal AdminPrincipal principal,
             HttpServletRequest httpRequest
     ) {
-        adminReportService.processReport(reportId, request, principal.userId());
+        adminReportService.processReport(reportId, request, principal);
 
         return ApiResponse.success(
                 ResponseCode.UPDATED,

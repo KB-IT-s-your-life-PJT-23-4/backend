@@ -140,6 +140,7 @@ public record SimulationResponse(
             boolean isSelected,
             Integer minimumContractMonths,
             Integer maximumContractMonths,
+            List<ContractRate> contractRateSchedule,
             List<Reinvestment> reinvestmentSchedule,
             List<SelectedPreferentialCondition> selectedPreferentialConditions
     ) {
@@ -150,6 +151,18 @@ public record SimulationResponse(
             Integer renewalSequenceNo,
             LocalDate renewalDate,
             Integer completedContractMonths
+    ) {
+    }
+
+    public record ContractRate(
+            Integer trancheSequenceNo,
+            Integer contractSequenceNo,
+            LocalDate contractStartDate,
+            LocalDate contractEndDate,
+            Integer contractMonths,
+            BigDecimal baseRatePercent,
+            BigDecimal maximumRatePercent,
+            BigDecimal appliedRatePercent
     ) {
     }
 

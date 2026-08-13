@@ -2,6 +2,7 @@ package com.example.project.reminder.controller;
 
 import com.example.project.common.api.ApiResponse;
 import com.example.project.common.api.ResponseCode;
+import com.example.project.common.logging.ApiLog;
 import com.example.project.common.web.CurrentUser;
 import com.example.project.reminder.dto.request.ReminderReadRequest;
 import com.example.project.reminder.dto.response.ReminderResponse;
@@ -18,6 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 import javax.servlet.http.HttpServletRequest;
 import java.util.List;
 
+@ApiLog
 @Log4j2
 @RestController
 @RequestMapping("/api/rm")
