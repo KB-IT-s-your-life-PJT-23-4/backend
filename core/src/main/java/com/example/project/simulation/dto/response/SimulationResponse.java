@@ -48,7 +48,8 @@ public record SimulationResponse(
             Integer investmentPeriodMonths,
             LocalDate asOfDate,
             LocalDate giftDate,
-            LocalDate investmentEndDate
+            LocalDate investmentEndDate,
+            LocalDate evaluationDate
     ) {
     }
 
@@ -142,6 +143,7 @@ public record SimulationResponse(
             Integer maximumContractMonths,
             List<ContractRate> contractRateSchedule,
             List<Reinvestment> reinvestmentSchedule,
+            List<CashHolding> cashHoldingSchedule,
             List<SelectedPreferentialCondition> selectedPreferentialConditions
     ) {
     }
@@ -163,6 +165,16 @@ public record SimulationResponse(
             BigDecimal baseRatePercent,
             BigDecimal maximumRatePercent,
             BigDecimal appliedRatePercent
+    ) {
+    }
+
+    public record CashHolding(
+            Integer trancheSequenceNo,
+            LocalDate holdingStartDate,
+            LocalDate holdingEndDate,
+            Integer holdingMonths,
+            Long holdingAmount,
+            String reason
     ) {
     }
 

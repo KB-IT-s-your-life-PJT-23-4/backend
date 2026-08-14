@@ -67,6 +67,134 @@ class SimulationServiceExecuteTest {
     }
 
     @Test
+    @DisplayName("11년 운용의 분할 회차는 공통 평가일을 하루 연장해 12개월 계약을 구성한다")
+    void extendEvaluationDateForElevenYearOptimizedSplit() {
+        LocalDate giftDate = futureDate();
+        Fixture fixture = adultFixture(giftDate);
+        fixture.useSafeAssetTerms(12, 36);
+
+        SimulationResponse response = fixture.execute(80_000_000L, 132, giftDate);
+        SimulationResponse.Result optimized = result(response, ScenarioType.TAX_OPTIMIZED);
+
+        // 회귀 방지: 10년+1일 회차가 11개월로 절삭되어 상품 후보가 모두 탈락하면 안 된다.
+        assertEquals(response.input().investmentEndDate().plusDays(1),
+                response.input().evaluationDate());
+        assertEquals(2, optimized.tranches().size());
+        assertTrue(optimized.portfolios().stream()
+                .flatMap(portfolio -> portfolio.productCandidates().stream())
+                .filter(product -> product.productType() != ProductType.ETF)
+                .anyMatch(product -> product.contractRateSchedule().stream()
+                        .anyMatch(contract -> contract.trancheSequenceNo() == 2
+                                && contract.contractMonths() == 12)));
+
+        // 시나리오 비교가 서로 다른 날짜를 사용하지 않도록 즉시 증여도 같은 평가일을 사용한다.
+        SimulationResponse.Result immediate = result(response, ScenarioType.IMMEDIATE);
+        assertTrue(immediate.portfolios().stream()
+                .allMatch(portfolio -> portfolio.expectedFutureValue() > 0));
+    }
+
+    @Test
+    @DisplayName("평가일은 10년 초과 운용과 분할 회차 조건을 모두 만족할 때만 연장한다")
+    void extendEvaluationDateOnlyForLongTermSplitScenario() {
+        LocalDate giftDate = futureDate();
+
+        SimulationResponse tenYearResponse = adultFixture(giftDate)
+                .execute(80_000_000L, 120, giftDate);
+        SimulationResponse noSplitResponse = adultFixture(giftDate)
+                .execute(40_000_000L, 132, giftDate);
+
+        // 회귀 방지: 정확히 10년이거나 10년을 초과해도 분할 회차가 없으면 날짜를 보정하지 않는다.
+        assertEquals(tenYearResponse.input().investmentEndDate(),
+                tenYearResponse.input().evaluationDate());
+        assertEquals(noSplitResponse.input().investmentEndDate(),
+                noSplitResponse.input().evaluationDate());
+        assertEquals(1, result(noSplitResponse, ScenarioType.TAX_OPTIMIZED)
+                .tranches().size());
+    }
+
+    @Test
+    @DisplayName("상품 계약으로 채울 수 없는 잔여기간은 원금 대기 일정으로 반환한다")
+    void returnCashHoldingForUncoveredContractRemainder() {
+        LocalDate giftDate = futureDate();
+        Fixture fixture = adultFixture(giftDate);
+        fixture.useSafeAssetTerms(12, 12);
+
+        SimulationResponse response = fixture.execute(40_000_000L, 37, giftDate);
+        SimulationResponse.Product deposit = result(response, ScenarioType.IMMEDIATE)
+                .portfolios().get(0).productCandidates().stream()
+                .filter(product -> product.productType() == ProductType.DEPOSIT)
+                .findFirst()
+                .orElseThrow();
+
+        // 회귀 방지: 12개월 계약 3회 뒤 남은 1개월 때문에 실행 전체가 실패하면 안 된다.
+        assertEquals(List.of(12, 12, 12), deposit.contractRateSchedule().stream()
+                .map(SimulationResponse.ContractRate::contractMonths)
+                .toList());
+        assertEquals(1, deposit.cashHoldingSchedule().size());
+        assertEquals(1, deposit.cashHoldingSchedule().get(0).holdingMonths());
+        assertTrue(deposit.cashHoldingSchedule().get(0).holdingAmount()
+                >= deposit.allocatedAmount());
+    }
+
+    @Test
+    @DisplayName("짧은 마지막 분할 회차가 있어도 정상 상품 후보를 유지한다")
+    void keepCandidateWhenOnlyLastTrancheIsTooShort() {
+        LocalDate giftDate = futureDate();
+        LocalDate birthDate = giftDate.minusYears(19).plusMonths(11);
+        Fixture fixture = new Fixture(birthDate);
+        fixture.useSafeAssetTerms(12, 36);
+
+        SimulationResponse response = fixture.execute(50_000_000L, 12, giftDate);
+        SimulationResponse.Result optimized = result(response, ScenarioType.TAX_OPTIMIZED);
+        SimulationResponse.Product deposit = optimized.portfolios().get(0)
+                .productCandidates().stream()
+                .filter(product -> product.productType() == ProductType.DEPOSIT)
+                .findFirst()
+                .orElseThrow();
+
+        // 회귀 방지: 첫 회차는 가입 가능하고 마지막 회차만 짧다면 상품 전체를 제외하지 않는다.
+        assertEquals(2, optimized.tranches().size());
+        assertEquals(giftDate.plusMonths(11), optimized.tranches().get(1).giftDate());
+        assertTrue(deposit.contractRateSchedule().stream()
+                .anyMatch(contract -> contract.trancheSequenceNo() == 1));
+        assertTrue(deposit.cashHoldingSchedule().stream()
+                .anyMatch(holding -> holding.trancheSequenceNo() == 2));
+
+        // 회귀 방지: 대기 자금 반영 후에도 각 성향의 추천은 종료 시점 총 가치로 결정한다.
+        for (RiskProfile profile : RiskProfile.values()) {
+            SimulationResponse.Recommendation recommendation = response.recommendations().stream()
+                    .filter(item -> item.portfolioType() == profile)
+                    .findFirst()
+                    .orElseThrow();
+            SimulationResponse.Result expected = response.results().stream()
+                    .max(Comparator.<SimulationResponse.Result>comparingLong(
+                                    item -> scenarioEndValue(item, profile))
+                            .thenComparingLong(item -> -item.giftTax()))
+                    .orElseThrow();
+
+            assertEquals(expected.scenarioType(), recommendation.scenarioType());
+            assertEquals(expected.resultId(), recommendation.resultId());
+        }
+    }
+
+    @Test
+    @DisplayName("모든 회차가 최소 가입기간보다 짧으면 해당 예적금 후보를 사용할 수 없다")
+    void rejectCandidateWhenEveryTrancheIsTooShort() {
+        LocalDate giftDate = futureDate();
+        Fixture fixture = adultFixture(giftDate);
+        fixture.useSafeAssetTerms(13, 36);
+
+        SimulationException exception = assertThrows(
+                SimulationException.class,
+                () -> fixture.execute(40_000_000L, 12, giftDate)
+        );
+
+        // 회귀 방지: 수익을 낼 수 있는 회차가 하나도 없는데 대기 자금만으로 추천하지 않는다.
+        assertEquals(SimulationError.PRODUCT_CANDIDATE_NOT_FOUND, exception.getError());
+        assertEquals(0, fixture.insertSimulationCount);
+    }
+
+    @Test
     @DisplayName("과거 증여가 있고 남은 공제가 있으면 과거·계획 회차의 해제일을 모두 반영한다")
     void splitWithGiftHistoryAndRemainingDeduction() {
         LocalDate giftDate = futureDate();
@@ -537,6 +665,10 @@ class SimulationServiceExecuteTest {
         private boolean depositCandidatesAvailable = true;
         private List<ProductCandidate> depositCandidates = List.of(candidate(
                 ProductType.DEPOSIT, 101L, new BigDecimal("3.40")));
+        private List<ProductCandidate> savingsCandidates = List.of(candidate(
+                ProductType.SAVINGS, 201L, new BigDecimal("3.10")));
+        private int baseRateMinimumMonths = 1;
+        private int baseRateMaximumMonths = 240;
         private Set<Long> missingBaseRateProductVersionIds = Set.of();
         private int insertSimulationCount;
         private long resultSequence = 9_100L;
@@ -558,6 +690,27 @@ class SimulationServiceExecuteTest {
             gift.setAmount(amount);
             gift.setGiftDate(giftDate);
             completedGifts.add(gift);
+        }
+
+        private void useSafeAssetTerms(int minimumMonths, int maximumMonths) {
+            ProductCandidate deposit = candidate(
+                    ProductType.DEPOSIT,
+                    101L,
+                    new BigDecimal("3.40")
+            );
+            deposit.setMinMonth(minimumMonths);
+            deposit.setMaxMonth(maximumMonths);
+            ProductCandidate savings = candidate(
+                    ProductType.SAVINGS,
+                    201L,
+                    new BigDecimal("3.10")
+            );
+            savings.setMinMonth(minimumMonths);
+            savings.setMaxMonth(maximumMonths);
+            depositCandidates = List.of(deposit);
+            savingsCandidates = List.of(savings);
+            baseRateMinimumMonths = minimumMonths;
+            baseRateMaximumMonths = maximumMonths;
         }
 
         private SimulationResponse execute(long amount, int months, LocalDate giftDate) {
@@ -592,8 +745,7 @@ class SimulationServiceExecuteTest {
                         case "selectDepositCandidates" -> depositCandidatesAvailable
                                 ? depositCandidates
                                 : List.of();
-                        case "selectSavingsCandidates" -> List.of(candidate(
-                                ProductType.SAVINGS, 201L, new BigDecimal("3.10")));
+                        case "selectSavingsCandidates" -> savingsCandidates;
                         case "selectBaseRates" ->
                                 missingBaseRateProductVersionIds.contains((Long) args[0])
                                         ? List.of()
@@ -602,8 +754,8 @@ class SimulationServiceExecuteTest {
                                         (Long) args[0] == 1_101L
                                                 ? new BigDecimal("3.40")
                                                 : new BigDecimal("3.10"),
-                                        1,
-                                        240
+                                        baseRateMinimumMonths,
+                                        baseRateMaximumMonths
                                 ));
                         case "selectEtfCandidates" -> List.of(etfCandidate(
                                 (RiskProfile) args[1]));
