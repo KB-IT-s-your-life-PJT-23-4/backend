@@ -24,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -42,6 +43,7 @@ public class GiftService {
     private final GiftMapper giftMapper;
     private final RecipientService recipientService;
 
+    @Transactional
     public GiftResponse createGift(GiftRequest giftRequest, Long userId) {
         validate(giftRequest);
         recipientService.selectRecipient(giftRequest.getFamilyId(), userId);
@@ -57,6 +59,7 @@ public class GiftService {
         gift.setMemo(giftRequest.getMemo());
 
         giftMapper.insertGift(gift);
+        rescheduleRemainingTranches(gift.getFamilyId(), userId);
 
         return selectGift(gift.getGiftId(), userId);
     }
@@ -114,6 +117,8 @@ public class GiftService {
             giftIds.add(gift.getGiftId());
         }
 
+        rescheduleRemainingTranches(source.getFamilyId(), userId);
+
         return giftIds.stream().map(giftId -> selectGift(giftId, userId)).toList();
     }
 
@@ -135,6 +140,7 @@ public class GiftService {
     }
 
     /** status 와 familyId 는 여기서 바꾸지 않는다. 상태 전이는 updateGiftStatus 한 곳에서만 검증한다. */
+    @Transactional
     public GiftResponse updateGift(Long giftId, GiftRequest giftRequest, Long userId) {
         GiftVO gift = findOwnerGift(giftId, userId);
 
@@ -147,9 +153,16 @@ public class GiftService {
 
         giftMapper.updateGift(giftId, giftRequest.getAmount(), giftRequest.getGiftDate(), giftRequest.getMemo());
 
+        // 사용자가 증여일을 직접 지정했으면 그 뜻을 우선한다. 여기서 재계산을 돌리면
+        // 방금 손으로 고른 날짜를 그 자리에서 되돌려 버린다.
+        if (giftRequest.getGiftDate() == null) {
+            rescheduleRemainingTranches(gift.getFamilyId(), userId);
+        }
+
         return selectGift(giftId, userId);
     }
 
+    @Transactional
     public GiftResponse updateGiftStatus(Long giftId, Status status, Long userId) {
         if (status == null) {
             throw new ServiceException(ResponseCode.VALIDATION_FAILED);
@@ -165,6 +178,7 @@ public class GiftService {
         validateCompletedGiftDate(status, gift.getGiftDate());
 
         giftMapper.updateGiftStatus(giftId, status);
+        rescheduleRemainingTranches(gift.getFamilyId(), userId);
 
         return selectGift(giftId, userId);
     }
@@ -311,9 +325,12 @@ public class GiftService {
      * 그쪽은 사용자가 지우려는 대상이 수증자 하나인데 증여 여러 건이 CASCADE 로 딸려 나가는 경우고,
      * 여기는 사용자가 지목한 증여 한 건만 사라진다.
      */
+    @Transactional
     public void deleteGift(Long giftId, Long userId) {
-        findOwnerGift(giftId, userId);
+        GiftVO gift = findOwnerGift(giftId, userId);
+
         giftMapper.deleteGift(giftId);
+        rescheduleRemainingTranches(gift.getFamilyId(), userId);
     }
 
     /** 한도 갱신 이벤트. 날짜만으로는 부족해서 늘어나는 여력과 알림을 매달 증여까지 함께 담는다. */
@@ -443,6 +460,134 @@ public class GiftService {
                 .sum();
 
         return Math.max(0L, limit - used);
+    }
+
+    /**
+     * 분할 증여의 남은 회차 일정을 실제 증여 이력 기준으로 다시 계산한다.
+     *
+     * <p>회차 날짜는 시뮬레이션 시점에 정해져 {@code gift} 행에 굳는다. 그런데 1회차와 마지막 회차
+     * 사이에 다른 증여가 생기면 그 증여가 10년 창을 점유해, 계획된 날짜에는 공제 여력이 회차 금액에
+     * 못 미치게 된다. 그대로 두면 전액 공제를 전제로 짠 일정이 조용히 과세 일정으로 바뀐다.
+     *
+     * <p>미루기가 아니라 <b>다시 계산</b>이다. 중간 증여가 취소되거나 지워지면 날짜는 도로 당겨진다.
+     *
+     * <p>회차 수와 금액은 건드리지 않는다. 서류 준비 상태와 신고서 OCR 결과가 {@code giftId} 에
+     * 묶여 있어서, 회차를 쪼개거나 합치면 사용자가 이미 해 둔 작업이 사라진다. 더 이른 날에 일부만
+     * 먼저 증여하는 편이 유리한 경우는 있지만, 그건 사용자가 일정을 다시 짜겠다고 할 때 할 일이다.
+     */
+    private void rescheduleRemainingTranches(Long familyId, Long userId) {
+        if (familyId == null) {
+            return;
+        }
+
+        LocalDate today = LocalDate.now();
+
+        // 이미 날짜가 지난 예정 회차는 손대지 않는다. 확정을 안 했을 뿐 사용자가 아는 날짜이고,
+        // 오늘로 끌어오면 지나간 계획이 말없이 되살아난 것처럼 보인다.
+        List<GiftVO> tranches = giftMapper.selectAllGift(familyId, Status.PLANNED, userId).stream()
+                .filter(gift -> gift.getSimulResultId() != null && gift.getSequenceNo() != null)
+                .filter(gift -> !gift.getGiftDate().isBefore(today))
+                .filter(gift -> giftMapper.countGiftBySimulResultId(gift.getSimulResultId()) > 1)
+                .sorted(Comparator.comparing(GiftVO::getGiftDate)
+                        .thenComparing(GiftVO::getSequenceNo))
+                .toList();
+
+        if (tranches.isEmpty()) {
+            return;
+        }
+
+        List<DeductionVO> deductions = giftMapper.selectDeduction(
+                familyId, userId, today.minusYears(DEDUCTION_WINDOW_YEARS), today, null);
+
+        // 한도 행이 없는 관계면 그 날짜에 얼마가 공제되는지 알 수 없어 일정을 못 고친다.
+        if (deductions.isEmpty() || deductions.get(0).getDeductionLimit() == null) {
+            return;
+        }
+
+        DeductionVO deduction = deductions.get(0);
+        LocalDate adultDate = adultDate(deduction);
+        Long adultLimit = adultDate == null
+                ? null
+                : giftMapper.selectDeductionLimit(deduction.getRelation(), false, adultDate);
+
+        if (adultLimit == null) {
+            adultDate = null;
+        }
+
+        // 여력 계산의 바탕은 확정 이력이다. 다른 예정 증여는 아직 일어나지 않았으므로 넣지 않는다.
+        // 시뮬레이션이 일정을 짤 때 쓰는 기준과 같다.
+        List<GiftVO> history = new ArrayList<>(giftMapper.selectWindowGifts(
+                familyId, userId, today.minusYears(DEDUCTION_WINDOW_YEARS), today));
+
+        LocalDate earliest = today;
+
+        for (GiftVO tranche : tranches) {
+            LocalDate scheduled = earliestFullyDeductibleDate(
+                    tranche, history, earliest, deduction.getDeductionLimit(), adultDate, adultLimit);
+
+            if (!scheduled.equals(tranche.getGiftDate())) {
+                giftMapper.updateGift(tranche.getGiftId(), null, scheduled, null);
+            }
+
+            // 앞 회차는 뒤 회차의 여력을 깎는다. 확정 전이라도 같은 계획 안에서는 순서가 정해져 있다.
+            GiftVO scheduledTranche = new GiftVO();
+            scheduledTranche.setGiftDate(scheduled);
+            scheduledTranche.setAmount(tranche.getAmount());
+            history.add(scheduledTranche);
+
+            earliest = scheduled.plusDays(1);
+        }
+    }
+
+    /**
+     * 회차 금액 전액을 공제받을 수 있는 가장 이른 날.
+     *
+     * <p>여력은 창에서 증여가 빠지는 날과 성년이 되는 날에만 늘어난다. 그 사이 날짜는 확인해도
+     * 결과가 같아서 후보에서 뺀다.
+     *
+     * <p>금액이 한도보다 커서 어느 날에도 전액 공제가 불가능하면 원래 날짜를 그대로 둔다. 시뮬레이션이
+     * 투자 종료일까지 공제 시점을 못 찾으면 남은 금액을 한 회차에 몰아 과세를 감수하는데, 그런 회차를
+     * 여력이 가장 큰 날까지 밀어 봐야 세금은 그대로고 증여만 몇 년 늦어진다.
+     */
+    private LocalDate earliestFullyDeductibleDate(GiftVO tranche,
+                                                  List<GiftVO> history,
+                                                  LocalDate earliest,
+                                                  long currentLimit,
+                                                  LocalDate adultDate,
+                                                  Long adultLimit) {
+        long amount = tranche.getAmount();
+        long maxLimit = adultDate == null ? currentLimit : Math.max(currentLimit, adultLimit);
+
+        if (amount > maxLimit) {
+            return tranche.getGiftDate();
+        }
+
+        List<LocalDate> candidates = new ArrayList<>();
+        candidates.add(earliest);
+
+        for (GiftVO gift : history) {
+            candidates.add(windowExitDate(gift.getGiftDate()));
+        }
+
+        if (adultDate != null) {
+            candidates.add(adultDate);
+        }
+
+        List<LocalDate> ordered = candidates.stream()
+                .filter(candidate -> !candidate.isBefore(earliest))
+                .distinct()
+                .sorted()
+                .toList();
+
+        for (LocalDate candidate : ordered) {
+            long limit = adultDate != null && !candidate.isBefore(adultDate) ? adultLimit : currentLimit;
+
+            if (capacityAt(candidate, history, limit) >= amount) {
+                return candidate;
+            }
+        }
+
+        return ordered.get(ordered.size() - 1);
     }
 
     /**
