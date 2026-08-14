@@ -8,76 +8,14 @@ pipeline {
         timestamps()
     }
 
-    parameters {
-        string(
-            name: 'BACKEND_BRANCH',
-            defaultValue: 'develop',
-            description: '백엔드 빌드 브랜치'
-        )
-
-        string(
-            name: 'FRONTEND_BRANCH',
-            defaultValue: 'develop',
-            description: '프런트엔드 빌드 브랜치'
-        )
-
-        string(
-            name: 'FASTAPI_BRANCH',
-            defaultValue: 'develop',
-            description: 'FastAPI 빌드 브랜치'
-        )
-    }
-
     environment {
-        BACKEND_REPOSITORY =
-            'https://github.com/KB-IT-s-your-life-PJT-23-4/backend.git'
-
-        FRONTEND_REPOSITORY =
-            'https://github.com/KB-IT-s-your-life-PJT-23-4/frontend.git'
-
-        FASTAPI_REPOSITORY =
-            'https://github.com/KB-IT-s-your-life-PJT-23-4/fastapi.git'
-
-        BACKEND_IMAGE = 'wosyh18/mirizoom-backend'
-        FRONTEND_IMAGE = 'wosyh18/mirizoom-frontend'
-        FASTAPI_IMAGE = 'wosyh18/mirizoom-fastapi'
+        IMAGE_NAME = 'wosyh18/mirizoom-backend'
     }
 
     stages {
         stage('Checkout') {
-            parallel {
-                stage('Backend Checkout') {
-                    steps {
-                        dir('backend') {
-                            git(
-                                branch: params.BACKEND_BRANCH,
-                                url: env.BACKEND_REPOSITORY
-                            )
-                        }
-                    }
-                }
-
-                stage('Frontend Checkout') {
-                    steps {
-                        dir('frontend') {
-                            git(
-                                branch: params.FRONTEND_BRANCH,
-                                url: env.FRONTEND_REPOSITORY
-                            )
-                        }
-                    }
-                }
-
-                stage('FastAPI Checkout') {
-                    steps {
-                        dir('fastapi') {
-                            git(
-                                branch: params.FASTAPI_BRANCH,
-                                url: env.FASTAPI_REPOSITORY
-                            )
-                        }
-                    }
-                }
+            steps {
+                checkout scm
             }
         }
 
@@ -87,76 +25,43 @@ pipeline {
                     set -eu
 
                     docker --version
+                    test -f Dockerfile
+                    test -f gradlew
+                    test -f settings.gradle
 
-                    test -f backend/Dockerfile
-                    test -f frontend/Dockerfile
-                    test -f frontend/nginx.conf
-                    test -f fastapi/Dockerfile
-
-                    echo "Backend branch: ${BACKEND_BRANCH}"
-                    echo "Frontend branch: ${FRONTEND_BRANCH}"
-                    echo "FastAPI branch: ${FASTAPI_BRANCH}"
-                    echo "Image tag: ${BUILD_NUMBER}"
+                    echo "Repository: ${GIT_URL}"
+                    echo "Commit: ${GIT_COMMIT}"
+                    echo "Image: ${IMAGE_NAME}:${BUILD_NUMBER}"
                 '''
             }
         }
 
-        stage('Build Images') {
-            parallel {
-                stage('Backend Image') {
-                    steps {
-                        sh '''
-                            set -eu
+        stage('Test') {
+            steps {
+                sh '''
+                    set -eu
 
-                            docker build \
-                                --pull \
-                                --tag "${BACKEND_IMAGE}:${BUILD_NUMBER}" \
-                                --tag "${BACKEND_IMAGE}:latest" \
-                                backend
-                        '''
-                    }
-                }
-
-                stage('Frontend Image') {
-                    steps {
-                        withCredentials([
-                            string(
-                                credentialsId: 'mirizoom-kakao-js-key',
-                                variable: 'VITE_KAKAO_JS_KEY'
-                            )
-                        ]) {
-                            sh '''
-                                set -eu
-
-                                docker build \
-                                    --pull \
-                                    --build-arg VITE_API_BASE_URL=/api \
-                                    --build-arg VITE_KAKAO_JS_KEY="${VITE_KAKAO_JS_KEY}" \
-                                    --tag "${FRONTEND_IMAGE}:${BUILD_NUMBER}" \
-                                    --tag "${FRONTEND_IMAGE}:latest" \
-                                    frontend
-                            '''
-                        }
-                    }
-                }
-
-                stage('FastAPI Image') {
-                    steps {
-                        sh '''
-                            set -eu
-
-                            docker build \
-                                --pull \
-                                --tag "${FASTAPI_IMAGE}:${BUILD_NUMBER}" \
-                                --tag "${FASTAPI_IMAGE}:latest" \
-                                fastapi
-                        '''
-                    }
-                }
+                    chmod +x gradlew
+                    ./gradlew test --no-daemon
+                '''
             }
         }
 
-        stage('Push Images to Docker Hub') {
+        stage('Build Image') {
+            steps {
+                sh '''
+                    set -eu
+
+                    docker build \
+                        --pull \
+                        --tag "${IMAGE_NAME}:${BUILD_NUMBER}" \
+                        --tag "${IMAGE_NAME}:latest" \
+                        .
+                '''
+            }
+        }
+
+        stage('Push Image to Docker Hub') {
             steps {
                 withCredentials([
                     usernamePassword(
@@ -168,7 +73,6 @@ pipeline {
                     sh '''
                         set -eu
 
-                        # Docker Hub 인증정보를 현재 Workspace에서만 사용합니다.
                         export DOCKER_CONFIG="${WORKSPACE}/.docker"
                         mkdir -p "${DOCKER_CONFIG}"
 
@@ -177,17 +81,8 @@ pipeline {
                                 --username "${DOCKERHUB_USERNAME}" \
                                 --password-stdin
 
-                        echo "백엔드 이미지 Push"
-                        docker push "${BACKEND_IMAGE}:${BUILD_NUMBER}"
-                        docker push "${BACKEND_IMAGE}:latest"
-
-                        echo "프런트엔드 이미지 Push"
-                        docker push "${FRONTEND_IMAGE}:${BUILD_NUMBER}"
-                        docker push "${FRONTEND_IMAGE}:latest"
-
-                        echo "FastAPI 이미지 Push"
-                        docker push "${FASTAPI_IMAGE}:${BUILD_NUMBER}"
-                        docker push "${FASTAPI_IMAGE}:latest"
+                        docker push "${IMAGE_NAME}:${BUILD_NUMBER}"
+                        docker push "${IMAGE_NAME}:latest"
                     '''
                 }
             }
@@ -196,22 +91,11 @@ pipeline {
 
     post {
         success {
-            echo """
-                Docker Hub Push 완료
-
-                Backend:
-                ${BACKEND_IMAGE}:${BUILD_NUMBER}
-
-                Frontend:
-                ${FRONTEND_IMAGE}:${BUILD_NUMBER}
-
-                FastAPI:
-                ${FASTAPI_IMAGE}:${BUILD_NUMBER}
-            """
+            echo "Backend 이미지 Push 완료: ${IMAGE_NAME}:${BUILD_NUMBER}"
         }
 
         failure {
-            echo 'Docker 이미지 Build 또는 Push에 실패했습니다.'
+            echo 'Backend 테스트, 이미지 Build 또는 Push에 실패했습니다.'
         }
 
         always {
