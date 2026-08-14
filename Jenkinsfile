@@ -10,6 +10,7 @@ pipeline {
 
     environment {
         IMAGE_NAME = 'wosyh18/mirizoom-backend'
+        REPOSITORY_URL = 'https://github.com/KB-IT-s-your-life-PJT-23-4/backend.git'
     }
 
     stages {
