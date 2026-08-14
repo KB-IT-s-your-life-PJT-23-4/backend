@@ -32,13 +32,9 @@ pipeline {
         FRONTEND_REPOSITORY =
             'https://github.com/KB-IT-s-your-life-PJT-23-4/frontend.git'
 
-        BACKEND_IMAGE = 'mirizoom-backend'
-        FRONTEND_IMAGE = 'mirizoom-frontend'
+        BACKEND_IMAGE = 'wosyh18/mirizoom-backend'
+        FRONTEND_IMAGE = 'wosyh18/mirizoom-frontend'
 
-        BACKEND_CONTAINER = 'backend'
-        FRONTEND_CONTAINER = 'mirizoom-frontend'
-
-        DOCKER_NETWORK = 'mirizoom-network'
     }
 
     stages {
@@ -127,130 +123,59 @@ pipeline {
             }
         }
 
-        stage('Create Docker Network') {
-            steps {
-                sh '''
-                    if ! docker network inspect "${DOCKER_NETWORK}" \
-                        >/dev/null 2>&1
-                    then
-                        docker network create "${DOCKER_NETWORK}"
-                    fi
-                '''
-            }
-        }
-
-        stage('Deploy') {
+        stage('Push Images to Docker Hub') {
             steps {
                 withCredentials([
-                    file(
-                        credentialsId: 'mirizoom-backend-env',
-                        variable: 'BACKEND_ENV_FILE'
+                    usernamePassword(
+                        credentialsId: 'jenkins-back',
+                        usernameVariable: 'DOCKERHUB_USERNAME',
+                        passwordVariable: 'DOCKERHUB_TOKEN'
                     )
                 ]) {
                     sh '''
                         set -eu
 
-                        # Nginx가 기존 backend 컨테이너 IP를 기억할 수 있으므로
-                        # 프런트 컨테이너부터 중지합니다.
-                        docker rm -f "${FRONTEND_CONTAINER}" \
-                            >/dev/null 2>&1 || true
+                        # Jenkins 서버에 Docker Hub 인증정보를 영구 저장하지 않고
+                        # 현재 Workspace 안에서만 사용합니다.
+                        export DOCKER_CONFIG="${WORKSPACE}/.docker"
+                        mkdir -p "${DOCKER_CONFIG}"
 
-                        docker rm -f "${BACKEND_CONTAINER}" \
-                            >/dev/null 2>&1 || true
+                        echo "${DOCKERHUB_TOKEN}" |
+                            docker login \
+                                --username "${DOCKERHUB_USERNAME}" \
+                                --password-stdin
 
-                        docker run -d \
-                            --name "${BACKEND_CONTAINER}" \
-                            --restart unless-stopped \
-                            --network "${DOCKER_NETWORK}" \
-                            --network-alias backend \
-                            --env-file "${BACKEND_ENV_FILE}" \
-                            "${BACKEND_IMAGE}:${BUILD_NUMBER}"
+                        echo "백엔드 이미지 Push"
+                        docker push "${BACKEND_IMAGE}:${BUILD_NUMBER}"
+                        docker push "${BACKEND_IMAGE}:latest"
 
-                        docker run -d \
-                            --name "${FRONTEND_CONTAINER}" \
-                            --restart unless-stopped \
-                            --network "${DOCKER_NETWORK}" \
-                            --publish 80:80 \
-                            "${FRONTEND_IMAGE}:${BUILD_NUMBER}"
+                        echo "프런트엔드 이미지 Push"
+                        docker push "${FRONTEND_IMAGE}:${BUILD_NUMBER}"
+                        docker push "${FRONTEND_IMAGE}:latest"
                     '''
                 }
             }
         }
+        post {
+                    success {
+                        echo """
+                        Docker Hub Push 완료
 
-        stage('Verify') {
-            steps {
-                sh '''
-                    set -eu
+                        Backend:
+                        ${BACKEND_IMAGE}:${BUILD_NUMBER}
 
-                    echo "컨테이너 실행 상태"
-                    docker ps \
-                        --filter "name=${BACKEND_CONTAINER}" \
-                        --filter "name=${FRONTEND_CONTAINER}"
+                        Frontend:
+                        ${FRONTEND_IMAGE}:${BUILD_NUMBER}
+                        """
+                    }
 
-                    echo "프런트엔드 응답 확인"
+                    failure {
+                        echo 'Docker 이미지 Build 또는 Push에 실패했습니다.'
+                    }
 
-                    SUCCESS=false
-
-                    for COUNT in $(seq 1 20)
-                    do
-                        if curl --fail --silent \
-                            --show-error \
-                            http://127.0.0.1/ \
-                            >/dev/null
-                        then
-                            SUCCESS=true
-                            break
-                        fi
-
-                        echo "서비스 시작 대기: ${COUNT}/20"
-                        sleep 3
-                    done
-
-                    if [ "${SUCCESS}" != "true" ]
-                    then
-                        echo "프런트엔드 응답 확인 실패"
-
-                        docker logs \
-                            --tail 100 \
-                            "${FRONTEND_CONTAINER}" || true
-
-                        docker logs \
-                            --tail 100 \
-                            "${BACKEND_CONTAINER}" || true
-
-                        exit 1
-                    fi
-                '''
-            }
-        }
-    }
-
-    post {
-        success {
-            echo "MiriZoom 배포가 완료되었습니다."
-        }
-
-        failure {
-            echo "파이프라인이 실패했습니다."
-
-            sh '''
-                docker ps -a \
-                    --filter "name=${BACKEND_CONTAINER}" \
-                    --filter "name=${FRONTEND_CONTAINER}" \
-                    || true
-
-                docker logs \
-                    --tail 100 \
-                    "${BACKEND_CONTAINER}" || true
-
-                docker logs \
-                    --tail 100 \
-                    "${FRONTEND_CONTAINER}" || true
-            '''
-        }
-
-        always {
-            deleteDir()
-        }
+                    always {
+                        deleteDir()
+                    }
+                }
     }
 }
