@@ -235,6 +235,43 @@ public class SimulationCalculator {
         return List.copyOf(periods);
     }
 
+    /**
+     * Builds the longest valid sequence of fixed-term contracts that does not
+     * pass the evaluation date. Any period shorter than the product's minimum
+     * term remains as cash instead of invalidating the whole simulation.
+     */
+    public ReinvestmentPlan reinvestmentPlan(
+            int totalMonths,
+            Integer minimumContractMonths,
+            Integer maximumContractMonths
+    ) {
+        int safeTotalMonths = Math.max(0, totalMonths);
+        if (safeTotalMonths == 0
+                || minimumContractMonths == null
+                || maximumContractMonths == null
+                || minimumContractMonths <= 0
+                || maximumContractMonths < minimumContractMonths) {
+            return new ReinvestmentPlan(List.of(), safeTotalMonths);
+        }
+
+        for (int coveredMonths = safeTotalMonths;
+             coveredMonths >= minimumContractMonths;
+             coveredMonths--) {
+            List<Integer> periods = reinvestmentPeriods(
+                    coveredMonths,
+                    minimumContractMonths,
+                    maximumContractMonths
+            );
+            if (!periods.isEmpty()) {
+                return new ReinvestmentPlan(
+                        periods,
+                        safeTotalMonths - coveredMonths
+                );
+            }
+        }
+        return new ReinvestmentPlan(List.of(), safeTotalMonths);
+    }
+
     public long calculateReinvestedProductFutureValue(
             CalculationType calculationType,
             long principal,
@@ -270,14 +307,11 @@ public class SimulationCalculator {
             );
         }
 
-        List<Integer> periods = reinvestmentPeriods(
+        List<Integer> periods = reinvestmentPlan(
                 totalMonths,
                 minimumContractMonths,
                 maximumContractMonths
-        );
-        if (periods.isEmpty()) {
-            throw new SimulationException(SimulationError.PRODUCT_LIMIT_EXCEEDED);
-        }
+        ).contractPeriods();
 
         long maturityValue = principal;
         for (Integer period : periods) {
@@ -289,6 +323,18 @@ public class SimulationCalculator {
             );
         }
         return maturityValue;
+    }
+
+    public List<Long> splitAllocatedAmountAcrossTranches(
+            long allocatedAmount,
+            List<SimulationTrancheRecord> tranches,
+            long investmentPrincipal
+    ) {
+        return List.copyOf(splitAcrossTranches(
+                allocatedAmount,
+                tranches,
+                investmentPrincipal
+        ));
     }
 
     public long calculateSelectedProductValue(
@@ -393,6 +439,23 @@ public class SimulationCalculator {
             return 0;
         }
         return Math.max(0, Math.toIntExact(ChronoUnit.MONTHS.between(startDate, evaluationDate)));
+    }
+
+    public record ReinvestmentPlan(
+            List<Integer> contractPeriods,
+            int cashHoldingMonths
+    ) {
+        public ReinvestmentPlan {
+            contractPeriods = List.copyOf(contractPeriods);
+        }
+
+        public int investedMonths() {
+            return contractPeriods.stream().mapToInt(Integer::intValue).sum();
+        }
+
+        public boolean hasInvestmentContract() {
+            return !contractPeriods.isEmpty();
+        }
     }
 
     private long calculateDeposit(long principal, BigDecimal annualRatePercent, int months) {
