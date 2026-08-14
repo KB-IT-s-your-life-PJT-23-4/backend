@@ -2,12 +2,9 @@ pipeline {
     agent any
 
     options {
-        // Pipeline 플러그인 기본 기능
         skipDefaultCheckout(true)
         disableConcurrentBuilds()
         timeout(time: 30, unit: 'MINUTES')
-
-        // Timestamper 플러그인을 설치한 경우에만 사용
         timestamps()
     }
 
@@ -23,6 +20,12 @@ pipeline {
             defaultValue: 'develop',
             description: '프런트엔드 빌드 브랜치'
         )
+
+        string(
+            name: 'FASTAPI_BRANCH',
+            defaultValue: 'develop',
+            description: 'FastAPI 빌드 브랜치'
+        )
     }
 
     environment {
@@ -32,8 +35,12 @@ pipeline {
         FRONTEND_REPOSITORY =
             'https://github.com/KB-IT-s-your-life-PJT-23-4/frontend.git'
 
+        FASTAPI_REPOSITORY =
+            'https://github.com/KB-IT-s-your-life-PJT-23-4/fastapi.git'
+
         BACKEND_IMAGE = 'wosyh18/mirizoom-backend'
         FRONTEND_IMAGE = 'wosyh18/mirizoom-frontend'
+        FASTAPI_IMAGE = 'wosyh18/mirizoom-fastapi'
     }
 
     stages {
@@ -60,6 +67,17 @@ pipeline {
                         }
                     }
                 }
+
+                stage('FastAPI Checkout') {
+                    steps {
+                        dir('fastapi') {
+                            git(
+                                branch: params.FASTAPI_BRANCH,
+                                url: env.FASTAPI_REPOSITORY
+                            )
+                        }
+                    }
+                }
             }
         }
 
@@ -73,9 +91,11 @@ pipeline {
                     test -f backend/Dockerfile
                     test -f frontend/Dockerfile
                     test -f frontend/nginx.conf
+                    test -f fastapi/Dockerfile
 
                     echo "Backend branch: ${BACKEND_BRANCH}"
                     echo "Frontend branch: ${FRONTEND_BRANCH}"
+                    echo "FastAPI branch: ${FASTAPI_BRANCH}"
                     echo "Image tag: ${BUILD_NUMBER}"
                 '''
             }
@@ -119,6 +139,20 @@ pipeline {
                         }
                     }
                 }
+
+                stage('FastAPI Image') {
+                    steps {
+                        sh '''
+                            set -eu
+
+                            docker build \
+                                --pull \
+                                --tag "${FASTAPI_IMAGE}:${BUILD_NUMBER}" \
+                                --tag "${FASTAPI_IMAGE}:latest" \
+                                fastapi
+                        '''
+                    }
+                }
             }
         }
 
@@ -134,8 +168,7 @@ pipeline {
                     sh '''
                         set -eu
 
-                        # Jenkins 서버에 Docker Hub 인증정보를 영구 저장하지 않고
-                        # 현재 Workspace 안에서만 사용합니다.
+                        # Docker Hub 인증정보를 현재 Workspace에서만 사용합니다.
                         export DOCKER_CONFIG="${WORKSPACE}/.docker"
                         mkdir -p "${DOCKER_CONFIG}"
 
@@ -151,29 +184,37 @@ pipeline {
                         echo "프런트엔드 이미지 Push"
                         docker push "${FRONTEND_IMAGE}:${BUILD_NUMBER}"
                         docker push "${FRONTEND_IMAGE}:latest"
+
+                        echo "FastAPI 이미지 Push"
+                        docker push "${FASTAPI_IMAGE}:${BUILD_NUMBER}"
+                        docker push "${FASTAPI_IMAGE}:latest"
                     '''
                 }
             }
         }
     }
+
     post {
-        success{
+        success {
             echo """
-                            Docker Hub Push 완료
+                Docker Hub Push 완료
 
-                            Backend:
-                            ${BACKEND_IMAGE}:${BUILD_NUMBER}
+                Backend:
+                ${BACKEND_IMAGE}:${BUILD_NUMBER}
 
-                            Frontend:
-                            ${FRONTEND_IMAGE}:${BUILD_NUMBER}
-                         """
+                Frontend:
+                ${FRONTEND_IMAGE}:${BUILD_NUMBER}
+
+                FastAPI:
+                ${FASTAPI_IMAGE}:${BUILD_NUMBER}
+            """
         }
 
         failure {
-           echo 'Docker 이미지 Build 또는 Push에 실패했습니다.'
+            echo 'Docker 이미지 Build 또는 Push에 실패했습니다.'
         }
 
-        always{
+        always {
             deleteDir()
         }
     }
