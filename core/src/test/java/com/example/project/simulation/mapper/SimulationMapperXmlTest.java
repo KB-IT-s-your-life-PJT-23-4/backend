@@ -247,11 +247,13 @@ class SimulationMapperXmlTest {
 
         // 재가입 조합이 가능한 상품을 먼저 거르고, 서비스 검증 전에 후보 수를 잘라내지 않는다.
         assertTrue(depositQuery.contains(
-                "CEIL(#{investmentPeriodMonths} / d.max_month)"
+                "#{investmentPeriodMonths} &gt;= d.min_month"
         ));
         assertTrue(savingsQuery.contains(
-                "CEIL(#{investmentPeriodMonths} / s.max_month)"
+                "#{investmentPeriodMonths} &gt;= s.min_month"
         ));
+        assertFalse(depositQuery.contains("CEIL(#{investmentPeriodMonths}"));
+        assertFalse(savingsQuery.contains("CEIL(#{investmentPeriodMonths}"));
         assertFalse(depositQuery.contains("LIMIT"));
         assertFalse(savingsQuery.contains("LIMIT"));
         assertTrue(xml.contains(

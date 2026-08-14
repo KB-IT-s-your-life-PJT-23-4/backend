@@ -131,6 +131,54 @@ class SimulationCalculatorTest {
     }
 
     @Test
+    @DisplayName("고정 12개월 상품은 37개월 중 36개월을 운용하고 1개월은 대기한다")
+    void keepUncoveredRemainderAsCash() {
+        SimulationCalculator.ReinvestmentPlan plan = calculator.reinvestmentPlan(
+                37,
+                12,
+                12
+        );
+
+        // 회귀 방지: 전체 기간을 정확히 채우지 못한다는 이유로 상품을 제외하지 않는다.
+        assertEquals(List.of(12, 12, 12), plan.contractPeriods());
+        assertEquals(1, plan.cashHoldingMonths());
+        assertEquals(36, plan.investedMonths());
+    }
+
+    @Test
+    @DisplayName("최소 가입기간보다 짧은 예금 회차는 원금을 그대로 유지한다")
+    void keepPrincipalWhenNoContractCanBeOpened() {
+        long result = calculator.calculateReinvestedProductFutureValue(
+                CalculationType.SIMPLE_INTEREST,
+                30_000_000L,
+                new BigDecimal("3.4"),
+                11,
+                12,
+                36
+        );
+
+        // 회귀 방지: 가입할 수 없는 회차를 0원으로 만들거나 예외로 중단하지 않는다.
+        assertEquals(30_000_000L, result);
+        assertEquals(11, calculator.reinvestmentPlan(11, 12, 36).cashHoldingMonths());
+    }
+
+    @Test
+    @DisplayName("ETF는 11개월의 짧은 회차도 남은 기간만큼 복리 운용한다")
+    void calculateEtfForShortRemainingPeriod() {
+        long result = calculator.calculateReinvestedProductFutureValue(
+                CalculationType.COMPOUND_RETURN,
+                30_000_000L,
+                new BigDecimal("6.0"),
+                11,
+                null,
+                null
+        );
+
+        // 회귀 방지: 예적금의 최소 가입기간 정책이 ETF 계산까지 막지 않는다.
+        assertTrue(result > 30_000_000L);
+    }
+
+    @Test
     @DisplayName("표시 금리가 높아도 월 적립식 실수익이 예금 단리보다 낮을 수 있다")
     void compareEffectiveReturnsUsingProductSpecificFormula() {
         long depositValue = calculator.calculateProductFutureValue(
