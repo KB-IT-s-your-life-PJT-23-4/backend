@@ -34,7 +34,6 @@ pipeline {
 
         BACKEND_IMAGE = 'wosyh18/mirizoom-backend'
         FRONTEND_IMAGE = 'wosyh18/mirizoom-frontend'
-
     }
 
     stages {
@@ -156,26 +155,26 @@ pipeline {
                 }
             }
         }
-        post {
-                    success {
-                        echo """
-                        Docker Hub Push 완료
+    }
+    post {
+        success{
+            echo """
+                            Docker Hub Push 완료
 
-                        Backend:
-                        ${BACKEND_IMAGE}:${BUILD_NUMBER}
+                            Backend:
+                            ${BACKEND_IMAGE}:${BUILD_NUMBER}
 
-                        Frontend:
-                        ${FRONTEND_IMAGE}:${BUILD_NUMBER}
-                        """
-                    }
+                            Frontend:
+                            ${FRONTEND_IMAGE}:${BUILD_NUMBER}
+                         """
+        }
 
-                    failure {
-                        echo 'Docker 이미지 Build 또는 Push에 실패했습니다.'
-                    }
+        failure {
+           echo 'Docker 이미지 Build 또는 Push에 실패했습니다.'
+        }
 
-                    always {
-                        deleteDir()
-                    }
-                }
+        always{
+            deleteDir()
+        }
     }
 }
