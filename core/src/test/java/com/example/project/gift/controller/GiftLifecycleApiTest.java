@@ -15,6 +15,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
@@ -45,6 +46,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  * API 명세서에 적을 값을 추측하지 않기 위한 테스트. 데이터는 롤백된다.
  */
 @ExtendWith(SpringExtension.class)
+@EnabledIfEnvironmentVariable(named = "MIRIZOOM_INTEGRATION", matches = "true")
 @WebAppConfiguration
 @ContextHierarchy({
         @ContextConfiguration(classes = {

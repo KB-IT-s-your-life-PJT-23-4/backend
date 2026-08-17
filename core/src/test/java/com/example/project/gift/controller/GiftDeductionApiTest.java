@@ -15,6 +15,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -47,6 +48,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * 실행에는 로컬 MySQL(miriZoom)이 떠 있어야 한다.
  */
 @ExtendWith(SpringExtension.class)
+@EnabledIfEnvironmentVariable(named = "MIRIZOOM_INTEGRATION", matches = "true")
 @WebAppConfiguration
 @ContextHierarchy({
         // WebConfig.getRootConfigClasses() 와 동일하게 맞춘다. SecurityConfig 에 PasswordEncoder 가 있다.
