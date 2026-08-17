@@ -30,8 +30,8 @@ pipeline {
                     test -f gradlew
                     test -f settings.gradle
 
-                    echo "Repository: ${GIT_URL}"
-                    echo "Commit: ${GIT_COMMIT}"
+                    echo "Repository: ${REPOSITORY_URL}"
+                    echo "Commit: $(git rev-parse HEAD)"
                     echo "Image: ${IMAGE_NAME}:${BUILD_NUMBER}"
                 '''
             }
