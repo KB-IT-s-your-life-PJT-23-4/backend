@@ -13,4 +13,9 @@ public class ServiceException extends RuntimeException{
         super(responseCode.getMessage());
         this.responseCode = responseCode;
     }
+
+    public ServiceException(ResponseCode responseCode, Throwable cause) {
+        super(responseCode.getMessage(), cause);
+        this.responseCode = responseCode;
+    }
 }

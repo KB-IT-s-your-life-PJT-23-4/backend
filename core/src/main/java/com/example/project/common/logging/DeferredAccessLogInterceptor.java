@@ -11,6 +11,7 @@ public class DeferredAccessLogInterceptor implements DeferredResultProcessingInt
             NativeWebRequest request,
             DeferredResult<T> deferredResult
     ) {
+        ApiErrorTrackingContext.markTimeout(request);
         complete(request, "ERROR", "TimeoutException");
         return true;
     }
@@ -21,6 +22,7 @@ public class DeferredAccessLogInterceptor implements DeferredResultProcessingInt
             DeferredResult<T> deferredResult,
             Throwable throwable
     ) {
+        ApiErrorTrackingContext.markIfTimeout(request, throwable);
         complete(request, "ERROR", throwable.getClass().getSimpleName());
         return true;
     }
@@ -32,6 +34,9 @@ public class DeferredAccessLogInterceptor implements DeferredResultProcessingInt
     ) {
         Object asyncResult = deferredResult.getResult();
         boolean failed = asyncResult instanceof Throwable;
+        if (failed) {
+            ApiErrorTrackingContext.markIfTimeout(request, (Throwable) asyncResult);
+        }
 
         complete(
                 request,

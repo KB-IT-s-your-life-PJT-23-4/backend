@@ -1,6 +1,8 @@
 package com.example.project.config;
 
 import com.example.project.admin.access.service.AdminAccessSseService;
+import com.example.project.admin.dashboard.service.AdminDashboardErrorRecorder;
+import com.example.project.common.logging.AdminDashboardErrorInterceptor;
 import com.example.project.common.logging.RequestLoggingAspect;
 import com.example.project.common.logging.DeferredAccessLogInterceptor;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -35,12 +37,21 @@ import java.util.List;
 public class ServletConfig implements WebMvcConfigurer {
 
     private final AsyncTaskExecutor adminAccessSseExecutor;
+    private final AdminDashboardErrorRecorder adminDashboardErrorRecorder;
 
     public ServletConfig(
-            @Qualifier("adminAccessSseExecutor")
-            AsyncTaskExecutor adminAccessSseExecutor
+            @Qualifier("adminAccessSseExecutor") AsyncTaskExecutor adminAccessSseExecutor,
+            AdminDashboardErrorRecorder adminDashboardErrorRecorder
     ){
         this.adminAccessSseExecutor = adminAccessSseExecutor;
+        this.adminDashboardErrorRecorder = adminDashboardErrorRecorder;
+    }
+
+    @Override
+    public void addInterceptors(InterceptorRegistry registry) {
+        registry.addInterceptor(
+                new AdminDashboardErrorInterceptor(adminDashboardErrorRecorder)
+        );
     }
 
     @Override

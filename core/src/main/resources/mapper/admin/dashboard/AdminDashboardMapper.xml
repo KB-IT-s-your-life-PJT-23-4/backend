@@ -31,6 +31,13 @@
         <result property="etfs" column="etf_count"/>
     </resultMap>
 
+    <resultMap id="adminDashboardErrorCountMap"
+               type="com.example.project.admin.dashboard.domain.AdminDashboardErrorCount">
+        <result property="http422" column="http_422_count"/>
+        <result property="http500" column="http_500_count"/>
+        <result property="timeout" column="timeout_count"/>
+    </resultMap>
+
     <select id="selectDailySignupCounts" resultMap="dailySignupCountMap">
         SELECT DATE(created_at) AS signup_date,
                COUNT(*) AS signup_count
@@ -71,5 +78,37 @@
         JOIN kb_product p ON p.product_id = pv.product_id
         WHERE pv.kb_product_data_version_id = #{productDataVersionId}
     </select>
+
+    <select id="selectErrorCounts" resultMap="adminDashboardErrorCountMap">
+        SELECT COUNT(CASE WHEN response_status = 422 THEN 1 END) AS http_422_count,
+               COUNT(CASE WHEN response_status = 500 THEN 1 END) AS http_500_count,
+               COUNT(CASE WHEN result = 'TIMEOUT' THEN 1 END) AS timeout_count
+        FROM admin_access_log
+        WHERE occurred_at &gt;= #{startDateTime}
+          AND occurred_at &lt; #{endDateTime}
+          AND request_uri LIKE '/api/%'
+          AND request_uri != '/api/admin'
+          AND request_uri NOT LIKE '/api/admin/%'
+          AND request_uri != '/api/health'
+          AND request_uri NOT LIKE '/api/health/%'
+    </select>
+
+    <insert id="insertApiErrorLog">
+        INSERT INTO admin_access_log (
+            http_method,
+            request_uri,
+            response_status,
+            result,
+            elapsed_ms,
+            occurred_at
+        ) VALUES (
+            #{httpMethod},
+            #{requestUri},
+            #{responseStatus},
+            #{result},
+            #{elapsedMs},
+            #{occurredAt}
+        )
+    </insert>
 
 </mapper>
