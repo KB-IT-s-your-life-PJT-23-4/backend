@@ -90,6 +90,17 @@ pipeline {
         }
     }
 
+    stage('Trigger Deploy') {
+        steps {
+            build job: 'deploy(pull ec2)',
+                wait: true,
+                parameters: [
+                    string(name: 'SERVICE', value: 'backend'),
+                    string(name: 'IMAGE_TAG', value: "${BUILD_NUMBER}")
+                ]
+        }
+    }
+
     post {
         success {
             echo "Backend 이미지 Push 완료: ${IMAGE_NAME}:${BUILD_NUMBER}"
