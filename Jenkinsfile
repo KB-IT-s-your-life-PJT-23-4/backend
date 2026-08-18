@@ -88,28 +88,39 @@ pipeline {
                 }
             }
         }
+
         stage('Trigger Deploy') {
-                steps {
-                    build job: 'deploy(pull ec2)',
-                        wait: true,
-                        parameters: [
-                            string(name: 'SERVICE', value: 'backend'),
-                            string(name: 'IMAGE_TAG', value: "${BUILD_NUMBER}")
-                        ]
-                }
+            steps {
+                build(
+                    job: 'deploy(pull ec2)',
+                    wait: true,
+                    propagate: true,
+                    parameters: [
+                        string(name: 'SERVICE', value: 'backend'),
+                        string(name: 'IMAGE_TAG', value: "${BUILD_NUMBER}")
+                    ]
+                )
+            }
         }
     }
 
     post {
         success {
-            echo "Backend 이미지 Push 완료: ${IMAGE_NAME}:${BUILD_NUMBER}"
+            echo "Backend 이미지 Push 및 배포 완료: ${IMAGE_NAME}:${BUILD_NUMBER}"
         }
 
         failure {
-            echo 'Backend 테스트, 이미지 Build 또는 Push에 실패했습니다.'
+            echo 'Backend CI/CD 파이프라인 실행 중 실패했습니다.'
         }
 
         always {
+            sh '''
+                docker image rm \
+                    "${IMAGE_NAME}:${BUILD_NUMBER}" \
+                    "${IMAGE_NAME}:latest" \
+                    >/dev/null 2>&1 || true
+            '''
+
             deleteDir()
         }
     }
