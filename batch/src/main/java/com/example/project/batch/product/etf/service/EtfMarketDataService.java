@@ -91,7 +91,18 @@ public class EtfMarketDataService {
             fscPrices.forEach(price -> putPrice(priceByKey, target, price));
         }
 
-        supplementRecentKrxPrices(asOfDate, targetByStockCode, priceByKey);
+        // 금융위원회 시세가 과거 시작 구간 또는 최근 거래일 일부를 제공하지 않는 경우,
+        // KRX 일별매매정보로 CAGR 계산의 양 끝 구간을 보완한다.
+        supplementKrxPrices(
+                historyFrom,
+                historyFrom.plusDays(startWindowDays),
+                targetByStockCode,
+                priceByKey);
+        supplementKrxPrices(
+                asOfDate.minusDays(Math.max(0, krxRecentDays - 1L)),
+                asOfDate,
+                targetByStockCode,
+                priceByKey);
 
         List<EtfHistoryPrice> prices = priceByKey.values().stream()
                 .sorted(Comparator.comparing(EtfHistoryPrice::getProductId)
@@ -128,13 +139,13 @@ public class EtfMarketDataService {
         });
     }
 
-    private void supplementRecentKrxPrices(
-            LocalDate asOfDate,
+    private void supplementKrxPrices(
+            LocalDate from,
+            LocalDate to,
             Map<String, EtfProductTarget> targetByStockCode,
             Map<PriceKey, EtfHistoryPrice> priceByKey
     ) {
-        LocalDate from = asOfDate.minusDays(Math.max(0, krxRecentDays - 1L));
-        for (LocalDate date = from; !date.isAfter(asOfDate); date = date.plusDays(1)) {
+        for (LocalDate date = from; !date.isAfter(to); date = date.plusDays(1)) {
             try {
                 for (ExternalEtfPrice price : krxClient.fetchPrices(date)) {
                     EtfProductTarget target = targetByStockCode.get(price.getStockCode());
