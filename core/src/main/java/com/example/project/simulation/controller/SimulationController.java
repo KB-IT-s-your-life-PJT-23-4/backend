@@ -6,6 +6,8 @@ import com.example.project.security.JwtProvider;
 import com.example.project.security.JwtUtil;
 import com.example.project.simulation.dto.request.SimulationExecuteRequest;
 import com.example.project.simulation.dto.request.SimulationSaveRequest;
+import com.example.project.simulation.dto.request.CustomPortfolioRequest;
+import com.example.project.simulation.dto.response.CustomPortfolioResponse;
 import com.example.project.simulation.dto.response.ProductDetailResponse;
 import com.example.project.simulation.dto.response.SimulationHistoryResponse;
 import com.example.project.simulation.dto.response.SimulationResponse;
@@ -28,6 +30,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -185,6 +188,29 @@ public class SimulationController {
                         response,
                         message
                 ));
+    }
+
+    @PutMapping("/{simulationId}/portfolios/custom")
+    public ApiResponse<CustomPortfolioResponse> customizePortfolio(
+            @PathVariable String simulationId,
+            @Valid @RequestBody CustomPortfolioRequest request,
+            @RequestHeader(name = AUTHORIZATION, required = false) String authorization,
+            @AuthenticationPrincipal String principal,
+            HttpServletRequest httpRequest
+    ) {
+        Long userId = resolveUserId(principal, authorization);
+        accountAccessService.requireRestrictedFeatureAccess(userId);
+        CustomPortfolioResponse response = simulationService.customizePortfolio(
+                parsePositiveId(simulationId, SimulationError.INVALID_SIMULATION_ID),
+                request,
+                userId
+        );
+        return ApiResponse.success(
+                HttpStatus.OK.value(),
+                httpRequest.getRequestURI(),
+                response,
+                "커스텀 포트폴리오 비율을 적용했습니다."
+        );
     }
 
     @PatchMapping("/{simulationId}/save")

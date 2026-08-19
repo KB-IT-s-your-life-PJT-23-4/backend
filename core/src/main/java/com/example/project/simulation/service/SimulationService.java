@@ -21,6 +21,8 @@ import com.example.project.simulation.domain.TaxBracket;
 import com.example.project.simulation.domain.TaxPaymentMethod;
 import com.example.project.simulation.dto.request.SimulationExecuteRequest;
 import com.example.project.simulation.dto.request.SimulationSaveRequest;
+import com.example.project.simulation.dto.request.CustomPortfolioRequest;
+import com.example.project.simulation.dto.response.CustomPortfolioResponse;
 import com.example.project.simulation.dto.response.SimulationResponse;
 import com.example.project.simulation.dto.response.EtfVolatilityResponse;
 import com.example.project.simulation.dto.response.SimulationSaveResponse;
@@ -250,6 +252,186 @@ public class SimulationService {
         } catch (RuntimeException exception) {
             log.error("Simulation read failed. simulationId={}", simulationId, exception);
             throw new SimulationException(SimulationError.SIMULATION_READ_FAILED, exception);
+        }
+    }
+
+    @Transactional
+    public CustomPortfolioResponse customizePortfolio(
+            Long simulationId,
+            CustomPortfolioRequest request,
+            Long userId
+    ) {
+        try {
+            validateUser(userId);
+            validateSimulationId(simulationId);
+            validateCustomPortfolioRequest(request);
+
+            SimulationRecord simulation = requireSimulation(simulationId, userId);
+            if (simulation.getStatus() != SimulationStatus.DRAFT) {
+                throw new SimulationException(SimulationError.INVALID_CUSTOM_PORTFOLIO_STATUS);
+            }
+            if (!Objects.equals(simulation.getVersion(), request.getVersion())) {
+                throw new SimulationException(
+                        SimulationError.SIMULATION_VERSION_CONFLICT,
+                        versionConflictData(request.getVersion(), simulation.getVersion())
+                );
+            }
+
+            List<SimulationResultRecord> results = safeList(
+                    simulationMapper.selectResults(simulationId));
+            SimulationResultRecord result = results.stream()
+                    .filter(item -> Objects.equals(item.getResultId(), request.getResultId()))
+                    .findFirst()
+                    .orElseThrow(() -> new SimulationException(
+                            SimulationError.SIMULATION_RESULT_INCOMPLETE));
+            List<SimulationPortfolioRecord> portfolios = safeList(
+                    simulationMapper.selectPortfolios(simulationId));
+            SimulationPortfolioRecord basePortfolio = portfolios.stream()
+                    .filter(item -> Objects.equals(item.getResultId(), result.getResultId()))
+                    .filter(item -> item.getPortfolioType() == request.getBasePortfolioType())
+                    .filter(SimulationPortfolioRecord::isRecommended)
+                    .findFirst()
+                    .orElseThrow(() -> new SimulationException(
+                            SimulationError.CUSTOM_PORTFOLIO_BASE_MISMATCH));
+
+            List<SimulationTrancheRecord> allTranches = safeList(
+                    simulationMapper.selectTranches(simulationId));
+            List<SimulationTrancheRecord> resultTranches = allTranches.stream()
+                    .filter(item -> Objects.equals(item.getResultId(), result.getResultId()))
+                    .toList();
+            LocalDate evaluationDate = resolveEvaluationDate(
+                    simulation,
+                    results,
+                    allTranches
+            );
+            Map<ProductType, Long> amounts = customAllocationAmounts(
+                    result.getInvestmentPrincipal(),
+                    request.getAllocation()
+            );
+
+            Map<ProductType, List<ProductCandidate>> safeCandidates =
+                    loadSafeAssetCandidates(
+                            simulation.getProductDataVersionId(),
+                            simulation.getInvestmentPeriodMonths()
+                    );
+            List<ProductCandidate> depositCandidates = eligibleCandidatesForScenario(
+                    safeCandidates.get(ProductType.DEPOSIT),
+                    resultTranches,
+                    evaluationDate
+            ).stream()
+                    .filter(candidate -> supportsDepositAllocation(
+                            candidate,
+                            amounts.get(ProductType.DEPOSIT)
+                    ))
+                    .limit(MAX_PRODUCT_CANDIDATES)
+                    .toList();
+            List<ProductCandidate> savingsCandidates = eligibleCandidatesForScenario(
+                    safeCandidates.get(ProductType.SAVINGS),
+                    resultTranches,
+                    evaluationDate
+            ).stream()
+                    .filter(candidate -> supportsSavingsAllocation(
+                            candidate,
+                            amounts.get(ProductType.SAVINGS),
+                            resultTranches,
+                            evaluationDate
+                    ))
+                    .limit(MAX_PRODUCT_CANDIDATES)
+                    .toList();
+            List<ProductCandidate> etfCandidates = requireCandidates(
+                    simulationMapper.selectEtfCandidates(
+                            simulation.getProductDataVersionId(),
+                            request.getBasePortfolioType(),
+                            MAX_PRODUCT_CANDIDATES
+                    )
+            );
+            requireCustomCandidates(amounts, depositCandidates, savingsCandidates, etfCandidates);
+
+            long savingsMaximumAmount = savingsMaximumAmount(
+                    eligibleCandidatesForScenario(
+                            safeCandidates.get(ProductType.SAVINGS),
+                            resultTranches,
+                            evaluationDate
+                    ),
+                    resultTranches,
+                    evaluationDate,
+                    result.getInvestmentPrincipal()
+            );
+
+            LocalDateTime now = LocalDateTime.now();
+            int versionUpdated = simulationMapper.updateDraftVersion(
+                    simulationId,
+                    request.getVersion(),
+                    now
+            );
+            if (versionUpdated != 1) {
+                SimulationRecord current = simulationMapper.selectSimulation(simulationId);
+                throw new SimulationException(
+                        SimulationError.SIMULATION_VERSION_CONFLICT,
+                        versionConflictData(
+                                request.getVersion(),
+                                current == null ? null : current.getVersion()
+                        )
+                );
+            }
+            for (SimulationPortfolioRecord existing : portfolios) {
+                if (existing.getPortfolioType() == RiskProfile.CUSTOM
+                        && simulationMapper.deletePortfolio(existing.getPortfolioId()) != 1) {
+                    throw new SimulationException(
+                            SimulationError.CUSTOM_PORTFOLIO_UPDATE_FAILED);
+                }
+            }
+
+            SimulationPortfolioRecord custom = new SimulationPortfolioRecord();
+            custom.setResultId(result.getResultId());
+            custom.setPortfolioType(RiskProfile.CUSTOM);
+            custom.setDepositAmount(amounts.get(ProductType.DEPOSIT));
+            custom.setSavingsAmount(amounts.get(ProductType.SAVINGS));
+            custom.setEtfAmount(amounts.get(ProductType.ETF));
+            custom.setExpectedFutureValue(0L);
+            custom.setRecommended(true);
+            custom.setCreatedAt(now);
+            custom.setUpdatedAt(now);
+            simulationMapper.insertPortfolio(custom);
+
+            Map<ProductType, List<ProductCandidate>> candidates = new EnumMap<>(ProductType.class);
+            candidates.put(ProductType.DEPOSIT, depositCandidates);
+            candidates.put(ProductType.SAVINGS, savingsCandidates);
+            candidates.put(ProductType.ETF, etfCandidates);
+            long expectedFutureValue = persistCustomProducts(
+                    custom.getPortfolioId(),
+                    amounts,
+                    candidates,
+                    resultTranches,
+                    result.getInvestmentPrincipal(),
+                    evaluationDate
+            );
+            custom.setExpectedFutureValue(expectedFutureValue);
+            updatePortfolioValue(custom);
+
+            simulation.setVersion(simulation.getVersion() + 1);
+            simulation.setUpdatedAt(now);
+            SimulationResponse response = buildResponse(simulation);
+            BigDecimal maximumRatio = BigDecimal.valueOf(savingsMaximumAmount)
+                    .multiply(ONE_HUNDRED)
+                    .divide(
+                            BigDecimal.valueOf(result.getInvestmentPrincipal()),
+                            2,
+                            RoundingMode.DOWN
+                    );
+            return new CustomPortfolioResponse(
+                    response,
+                    savingsMaximumAmount,
+                    maximumRatio
+            );
+        } catch (SimulationException exception) {
+            throw exception;
+        } catch (RuntimeException exception) {
+            log.error("Custom portfolio update failed. simulationId={}", simulationId, exception);
+            throw new SimulationException(
+                    SimulationError.CUSTOM_PORTFOLIO_UPDATE_FAILED,
+                    exception
+            );
         }
     }
 
@@ -567,10 +749,14 @@ public class SimulationService {
                         item.getPortfolioId()
                 ))
                 .toList();
-        if (recommendations.size() != RiskProfile.values().length
+        long presetRecommendationCount = recommendations.stream()
+                .filter(item -> item.portfolioType().isPreset())
+                .count();
+        if (presetRecommendationCount != RiskProfile.presetValues().length
                 || recommendations.stream()
+                .filter(item -> item.portfolioType().isPreset())
                 .map(SimulationResponse.Recommendation::portfolioType)
-                .distinct().count() != RiskProfile.values().length) {
+                .distinct().count() != RiskProfile.presetValues().length) {
             throw new SimulationException(
                     SimulationError.SIMULATION_RECOMMENDATION_INCOMPLETE);
         }
@@ -743,7 +929,7 @@ public class SimulationService {
 
         Map<RiskProfile, SimulationPortfolioRecord> persisted =
                 new EnumMap<>(RiskProfile.class);
-        for (RiskProfile profile : RiskProfile.values()) {
+        for (RiskProfile profile : RiskProfile.presetValues()) {
             Map<ProductType, BigDecimal> ratios =
                     PortfolioPolicy.allocations(investmentPeriodMonths).get(profile);
             Map<ProductType, Long> amounts = allocationAmounts(
@@ -837,6 +1023,16 @@ public class SimulationService {
             List<SimulationTrancheRecord> tranches,
             LocalDate evaluationDate
     ) {
+        return eligibleCandidatesForScenario(candidates, tranches, evaluationDate).stream()
+                .limit(MAX_PRODUCT_CANDIDATES)
+                .toList();
+    }
+
+    private List<ProductCandidate> eligibleCandidatesForScenario(
+            List<ProductCandidate> candidates,
+            List<SimulationTrancheRecord> tranches,
+            LocalDate evaluationDate
+    ) {
         List<Integer> investmentPeriods = safeList(tranches).stream()
                 .filter(tranche -> tranche.getGiftDate() != null
                         && !tranche.getGiftDate().isAfter(evaluationDate)
@@ -853,13 +1049,160 @@ public class SimulationService {
                         candidate,
                         investmentPeriods
                 ))
-                .limit(MAX_PRODUCT_CANDIDATES)
                 .toList();
         if (eligible.isEmpty()) {
             throw new SimulationException(
                     SimulationError.PRODUCT_CANDIDATE_NOT_FOUND);
         }
         return eligible;
+    }
+
+    private void validateCustomPortfolioRequest(CustomPortfolioRequest request) {
+        if (request == null
+                || request.getVersion() == null
+                || request.getVersion() <= 0
+                || request.getResultId() == null
+                || request.getResultId() <= 0
+                || request.getBasePortfolioType() == null
+                || !request.getBasePortfolioType().isPreset()
+                || request.getAllocation() == null) {
+            throw new SimulationException(SimulationError.INVALID_CUSTOM_PORTFOLIO_REQUEST);
+        }
+        Integer depositRatio = request.getAllocation().getDepositRatio();
+        Integer savingsRatio = request.getAllocation().getSavingsRatio();
+        Integer etfRatio = request.getAllocation().getEtfRatio();
+        if (depositRatio == null || savingsRatio == null || etfRatio == null
+                || depositRatio < 0 || depositRatio > 100
+                || savingsRatio < 0 || savingsRatio > 100
+                || etfRatio < 0 || etfRatio > 100
+                || depositRatio % 5 != 0
+                || savingsRatio % 5 != 0
+                || etfRatio % 5 != 0
+                || depositRatio + savingsRatio + etfRatio != 100) {
+            throw new SimulationException(SimulationError.INVALID_CUSTOM_PORTFOLIO_ALLOCATION);
+        }
+    }
+
+    private Map<ProductType, Long> customAllocationAmounts(
+            long investmentPrincipal,
+            CustomPortfolioRequest.Allocation allocation
+    ) {
+        if (investmentPrincipal <= 0) {
+            throw new SimulationException(SimulationError.PORTFOLIO_ALLOCATION_MISMATCH);
+        }
+        long depositAmount = ratioAmount(
+                investmentPrincipal,
+                allocation.getDepositRatio()
+        );
+        long savingsAmount = ratioAmount(
+                investmentPrincipal,
+                allocation.getSavingsRatio()
+        );
+        long etfAmount = investmentPrincipal - depositAmount - savingsAmount;
+        if (etfAmount < 0) {
+            throw new SimulationException(SimulationError.INVALID_CUSTOM_PORTFOLIO_ALLOCATION);
+        }
+        Map<ProductType, Long> amounts = new EnumMap<>(ProductType.class);
+        amounts.put(ProductType.DEPOSIT, depositAmount);
+        amounts.put(ProductType.SAVINGS, savingsAmount);
+        amounts.put(ProductType.ETF, etfAmount);
+        return amounts;
+    }
+
+    private long ratioAmount(long principal, int ratio) {
+        return BigDecimal.valueOf(principal)
+                .multiply(BigDecimal.valueOf(ratio))
+                .divide(ONE_HUNDRED, 0, RoundingMode.HALF_UP)
+                .longValueExact();
+    }
+
+    private boolean supportsDepositAllocation(
+            ProductCandidate candidate,
+            long allocatedAmount
+    ) {
+        if (allocatedAmount <= 0) {
+            return true;
+        }
+        return (candidate.getMinAmount() == null
+                || allocatedAmount >= candidate.getMinAmount())
+                && (candidate.getMaxAmount() == null
+                || allocatedAmount <= candidate.getMaxAmount());
+    }
+
+    private void requireCustomCandidates(
+            Map<ProductType, Long> amounts,
+            List<ProductCandidate> depositCandidates,
+            List<ProductCandidate> savingsCandidates,
+            List<ProductCandidate> etfCandidates
+    ) {
+        if (amounts.get(ProductType.DEPOSIT) > 0 && depositCandidates.isEmpty()
+                || amounts.get(ProductType.SAVINGS) > 0 && savingsCandidates.isEmpty()) {
+            throw new SimulationException(SimulationError.PRODUCT_LIMIT_EXCEEDED);
+        }
+        if (amounts.get(ProductType.ETF) > 0 && etfCandidates.isEmpty()) {
+            throw new SimulationException(SimulationError.PRODUCT_CANDIDATE_NOT_FOUND);
+        }
+    }
+
+    private long savingsMaximumAmount(
+            List<ProductCandidate> candidates,
+            List<SimulationTrancheRecord> tranches,
+            LocalDate evaluationDate,
+            long investmentPrincipal
+    ) {
+        return safeList(candidates).stream()
+                .mapToLong(candidate -> {
+                    if (candidate.getMonthlyMaxAmount() == null) {
+                        return investmentPrincipal;
+                    }
+                    int months = savingsContributionMonths(
+                            tranches,
+                            evaluationDate,
+                            candidate.getMinMonth(),
+                            candidate.getMaxMonth()
+                    );
+                    return Math.min(
+                            investmentPrincipal,
+                            safeMultiply(candidate.getMonthlyMaxAmount(), months)
+                    );
+                })
+                .max()
+                .orElse(0L);
+    }
+
+    private long persistCustomProducts(
+            Long portfolioId,
+            Map<ProductType, Long> amounts,
+            Map<ProductType, List<ProductCandidate>> candidates,
+            List<SimulationTrancheRecord> tranches,
+            long investmentPrincipal,
+            LocalDate evaluationDate
+    ) {
+        long portfolioFutureValue = 0;
+        for (ProductType type : ProductType.values()) {
+            long allocatedAmount = amounts.getOrDefault(type, 0L);
+            if (allocatedAmount <= 0) {
+                continue;
+            }
+            long bestFutureValue = 0;
+            for (ProductCandidate candidate : safeList(candidates.get(type))) {
+                SimulationProductRecord product = toSnapshot(
+                        portfolioId,
+                        candidate,
+                        allocatedAmount,
+                        tranches,
+                        investmentPrincipal,
+                        evaluationDate
+                );
+                simulationMapper.insertProductSnapshot(product);
+                bestFutureValue = Math.max(
+                        bestFutureValue,
+                        product.getExpectedFutureValue()
+                );
+            }
+            portfolioFutureValue += bestFutureValue;
+        }
+        return portfolioFutureValue;
     }
 
     private boolean candidateSupportsAnyTranche(
@@ -906,7 +1249,7 @@ public class SimulationService {
             PersistedScenario immediate,
             PersistedScenario optimized
     ) {
-        for (RiskProfile profile : RiskProfile.values()) {
+        for (RiskProfile profile : RiskProfile.presetValues()) {
             SimulationPortfolioRecord first = immediate.portfolios().get(profile);
             SimulationPortfolioRecord second = optimized.portfolios().get(profile);
             SimulationPortfolioRecord selected;
@@ -1982,7 +2325,16 @@ public class SimulationService {
                     .toList();
             Set<RiskProfile> profiles = resultPortfolios.stream()
                     .map(SimulationPortfolioRecord::getPortfolioType)
+                    .filter(Objects::nonNull)
+                    .filter(RiskProfile::isPreset)
                     .collect(Collectors.toSet());
+            long presetPortfolioCount = resultPortfolios.stream()
+                    .filter(item -> item.getPortfolioType() != null
+                            && item.getPortfolioType().isPreset())
+                    .count();
+            long customPortfolioCount = resultPortfolios.stream()
+                    .filter(item -> item.getPortfolioType() == RiskProfile.CUSTOM)
+                    .count();
             boolean allocationMismatch = resultPortfolios.stream()
                     .anyMatch(item -> item.getDepositAmount() == null
                             || item.getSavingsAmount() == null
@@ -1995,8 +2347,13 @@ public class SimulationService {
                             + item.getEtfAmount()
                             != value(result.getInvestmentPrincipal()));
             if (!validTranches(simulation, result, resultTranches)
-                    || !profiles.equals(EnumSet.allOf(RiskProfile.class))
-                    || resultPortfolios.size() != RiskProfile.values().length
+                    || !profiles.equals(EnumSet.of(
+                    RiskProfile.CONSERVATIVE,
+                    RiskProfile.BALANCED,
+                    RiskProfile.AGGRESSIVE
+            ))
+                    || presetPortfolioCount != RiskProfile.presetValues().length
+                    || customPortfolioCount > 1
                     || resultPortfolios.stream().anyMatch(item ->
                     item.getScenarioType() != result.getScenarioType())
                     || allocationMismatch) {
@@ -2013,7 +2370,7 @@ public class SimulationService {
             }
         }
 
-        for (RiskProfile profile : RiskProfile.values()) {
+        for (RiskProfile profile : RiskProfile.presetValues()) {
             long recommendedCount = portfolios.stream()
                     .filter(item -> item.getPortfolioType() == profile)
                     .filter(SimulationPortfolioRecord::isRecommended)
@@ -2287,7 +2644,7 @@ public class SimulationService {
     ) {
         Map<RiskProfile, List<ProductCandidate>> result =
                 new EnumMap<>(RiskProfile.class);
-        for (RiskProfile profile : RiskProfile.values()) {
+        for (RiskProfile profile : RiskProfile.presetValues()) {
             result.put(
                     profile,
                     requireCandidates(simulationMapper.selectEtfCandidates(

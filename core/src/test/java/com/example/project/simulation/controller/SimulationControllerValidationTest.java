@@ -32,6 +32,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.setup.MockMvcBuilders.standaloneSetup;
 
@@ -179,6 +180,34 @@ class SimulationControllerValidationTest {
 
         assertEquals(
                 "INVALID_SAVE_REQUEST",
+                body(result).get("error").asText()
+        );
+    }
+
+    @Test
+    @DisplayName("커스텀 포트폴리오 비율 합계가 올바르지 않으면 전용 오류를 반환한다")
+    void invalidCustomPortfolioRequest() throws Exception {
+        authenticate();
+
+        MvcResult result = mockMvc.perform(put("/api/gs/1/portfolios/custom")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "version": 1,
+                                  "resultId": 101,
+                                  "basePortfolioType": "BALANCED",
+                                  "allocation": {
+                                    "depositRatio": 30,
+                                    "savingsRatio": 30,
+                                    "etfRatio": 105
+                                  }
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andReturn();
+
+        assertEquals(
+                "INVALID_CUSTOM_PORTFOLIO_REQUEST",
                 body(result).get("error").asText()
         );
     }
