@@ -93,6 +93,14 @@ public interface AdminProductMapper {
             @Param("productCode") String productCode,
             @Param("productType") String productType);
 
+    Long selectProductIdByCode(@Param("productCode") String productCode);
+
+    String selectProductTypeByCode(@Param("productCode") String productCode);
+
+    int countProductVersionInDataVersion(
+            @Param("productDataVersionId") Long productDataVersionId,
+            @Param("productId") Long productId);
+
     int insertProductVersion(
             @Param("productDataVersionId") Long productDataVersionId,
             @Param("productId") Long productId,

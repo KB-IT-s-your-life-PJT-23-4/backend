@@ -15,6 +15,12 @@ public interface EtfMarketDataMapper {
 
     List<EtfProductTarget> selectCurrentEtfTargets();
 
+    Long selectProductIdByEtfStockCode(@Param("stockCode") String stockCode);
+
+    String selectProductTypeByCode(@Param("productCode") String productCode);
+
+    int insertEtfProductMaster(@Param("productCode") String productCode);
+
     int upsertHistoryPrices(@Param("prices") List<EtfHistoryPrice> prices);
 
     EtfPricePoint selectFirstPriceInWindow(

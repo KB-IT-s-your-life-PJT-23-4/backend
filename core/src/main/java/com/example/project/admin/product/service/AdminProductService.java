@@ -157,12 +157,22 @@ public class AdminProductService {
         }
         validateRiseEtf(type, request.getProductName());
 
-        try {
-            adminProductMapper.insertProduct(request.getProductCode(), type);
-        } catch (DuplicateKeyException exception) {
-            throw new ServiceException(ResponseCode.DUPLICATE_DATA);
+        Long productId = adminProductMapper.selectProductIdByCode(request.getProductCode());
+        if (productId == null) {
+            try {
+                adminProductMapper.insertProduct(request.getProductCode(), type);
+            } catch (DuplicateKeyException exception) {
+                throw new ServiceException(ResponseCode.DUPLICATE_DATA);
+            }
+            productId = adminProductMapper.selectLastInsertedId();
+        } else {
+            String existingType = adminProductMapper.selectProductTypeByCode(request.getProductCode());
+            if (!type.equals(existingType)
+                    || adminProductMapper.countProductVersionInDataVersion(
+                    productDataVersionId, productId) > 0) {
+                throw new ServiceException(ResponseCode.DUPLICATE_DATA);
+            }
         }
-        Long productId = adminProductMapper.selectLastInsertedId();
 
         adminProductMapper.insertProductVersion(
                 productDataVersionId, productId, request.getProductName(),

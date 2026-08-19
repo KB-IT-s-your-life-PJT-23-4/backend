@@ -1,6 +1,7 @@
 package com.example.project.batch.product.etf.service;
 
 import com.example.project.batch.product.etf.client.FscEtfPriceClient;
+import com.example.project.batch.product.etf.client.FscEtfProductMasterClient;
 import com.example.project.batch.product.etf.client.KrxEtfPriceClient;
 import com.example.project.batch.product.etf.domain.EtfHistoryPrice;
 import com.example.project.batch.product.etf.domain.EtfMarketDataRefreshResult;
@@ -33,10 +34,12 @@ public class EtfMarketDataService {
     private static final DateTimeFormatter VERSION_TIME = DateTimeFormatter.ofPattern("yyyyMMdd");
 
     private final FscEtfPriceClient fscClient;
+    private final FscEtfProductMasterClient productMasterClient;
     private final KrxEtfPriceClient krxClient;
     private final EtfMarketDataMapper mapper;
     private final EtfMarketDataPersistenceService persistenceService;
     private final EtfAnnualizedReturnCalculator returnCalculator;
+    private final EtfProductMasterRegistrationService productMasterRegistrationService;
 
     @Value("${etf.history.lookback-years:10}")
     private int lookbackYears;
@@ -51,6 +54,9 @@ public class EtfMarketDataService {
     private boolean publishEnabled;
 
     public EtfMarketDataRefreshResult refresh(LocalDate asOfDate) {
+        int registeredMasterCount = productMasterRegistrationService.registerVerifiedRiseProducts(
+                productMasterClient.fetchRiseCandidates());
+
         Long sourceDataVersionId = mapper.selectLatestCompletedDataVersionId();
         if (sourceDataVersionId == null) {
             throw new IllegalStateException("ETF 수집 기준이 될 COMPLETED 상품 데이터 버전이 없습니다.");
@@ -100,7 +106,8 @@ public class EtfMarketDataService {
 
         log.info("ETF 시세 갱신 완료: 기준일={}, 상품={}건, 종가={}건, 발행버전={}",
                 asOfDate, targets.size(), prices.size(), publishedDataVersionId);
-        return new EtfMarketDataRefreshResult(targets.size(), prices.size(), publishedDataVersionId);
+        return new EtfMarketDataRefreshResult(
+                registeredMasterCount, targets.size(), prices.size(), publishedDataVersionId);
     }
 
     private boolean hasReturnChanges(

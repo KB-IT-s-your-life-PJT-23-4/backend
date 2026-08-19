@@ -29,6 +29,8 @@ public class EtfMarketDataTasklet implements Tasklet {
                 : LocalDate.parse(parameter.toString());
 
         EtfMarketDataRefreshResult result = marketDataService.refresh(asOfDate);
+        log.info("외부 API에서 자동 등록한 RISE ETF 상품 마스터: {}건",
+                result.getRegisteredMasterCount());
         log.info("ETF 배치 결과: 대상={}건, 저장 종가={}건, 상품데이터버전={}",
                 result.getTargetCount(),
                 result.getStoredPriceCount(),

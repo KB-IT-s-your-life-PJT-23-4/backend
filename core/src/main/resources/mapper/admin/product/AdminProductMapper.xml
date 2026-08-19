@@ -239,6 +239,25 @@
         VALUES (#{productCode}, #{productType})
     </insert>
 
+    <select id="selectProductIdByCode" resultType="long">
+        SELECT product_id
+        FROM kb_product
+        WHERE product_code = #{productCode}
+    </select>
+
+    <select id="selectProductTypeByCode" resultType="string">
+        SELECT product_type
+        FROM kb_product
+        WHERE product_code = #{productCode}
+    </select>
+
+    <select id="countProductVersionInDataVersion" resultType="int">
+        SELECT COUNT(*)
+        FROM kb_product_version
+        WHERE kb_product_data_version_id = #{productDataVersionId}
+          AND product_id = #{productId}
+    </select>
+
     <insert id="insertProductVersion">
         INSERT INTO kb_product_version
         (kb_product_data_version_id, product_id, product_name, description, product_url, sales_status)

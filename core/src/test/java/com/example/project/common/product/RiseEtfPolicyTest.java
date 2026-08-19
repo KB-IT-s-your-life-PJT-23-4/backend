@@ -19,4 +19,17 @@ class RiseEtfPolicyTest {
         assertFalse(RiseEtfPolicy.isRiseProductName("RISEPLUS ETF"));
         assertFalse(RiseEtfPolicy.isRiseProductName(null));
     }
+
+    @Test
+    @DisplayName("RISE 상품명과 KB자산운용 운용사가 모두 일치해야 한다")
+    void verifiesBrandAndIssuerTogether() {
+        assertTrue(RiseEtfPolicy.isVerifiedRiseEtf("RISE 코리아200", "KB자산운용"));
+        assertTrue(RiseEtfPolicy.isVerifiedRiseEtf(
+                "RISE 미국S&P500", "KB Asset Management Co., Ltd."));
+        assertTrue(RiseEtfPolicy.isVerifiedRiseEtf("RISE 채권혼합", "(주)케이비자산운용"));
+
+        assertFalse(RiseEtfPolicy.isVerifiedRiseEtf("RISE 코리아200", "다른자산운용"));
+        assertFalse(RiseEtfPolicy.isVerifiedRiseEtf("다른 ETF", "KB자산운용"));
+        assertFalse(RiseEtfPolicy.isVerifiedRiseEtf("RISE 코리아200", null));
+    }
 }

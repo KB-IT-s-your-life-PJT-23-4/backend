@@ -29,6 +29,27 @@
         ORDER BY p.product_id
     </select>
 
+    <select id="selectProductIdByEtfStockCode" resultType="long">
+        SELECT pv.product_id
+        FROM etf e
+        JOIN kb_product_version pv
+          ON pv.kb_product_version_id = e.kb_product_version_id
+        WHERE e.stock_code = #{stockCode}
+        ORDER BY pv.kb_product_version_id DESC
+        LIMIT 1
+    </select>
+
+    <select id="selectProductTypeByCode" resultType="string">
+        SELECT product_type
+        FROM kb_product
+        WHERE product_code = #{productCode}
+    </select>
+
+    <insert id="insertEtfProductMaster">
+        INSERT IGNORE INTO kb_product (product_code, product_type)
+        VALUES (#{productCode}, 'ETF')
+    </insert>
+
     <insert id="upsertHistoryPrices">
         INSERT INTO etf_history_price
             (product_id, base_date, close_price, data_source)
