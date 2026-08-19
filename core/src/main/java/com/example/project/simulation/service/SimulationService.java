@@ -59,7 +59,7 @@ import java.util.stream.Collectors;
 @Log4j2
 public class SimulationService {
 
-    public static final String FORMULA_VERSION = "INVESTMENT_V5";
+    public static final String FORMULA_VERSION = "INVESTMENT_V6";
     public static final String CALCULATION_VERSION = "GIFT_SIM_V7";
 
     private static final int DEDUCTION_WINDOW_YEARS = 10;
@@ -318,12 +318,6 @@ public class SimulationService {
 
             List<SimulationProductRecord> portfolioProducts =
                     safeList(simulationMapper.selectPortfolioProducts(selectedPortfolio.getPortfolioId()));
-            ProductSelectionPlan selectionPlan = validateProductSelections(
-                    request,
-                    target,
-                    selectedPortfolio,
-                    portfolioProducts
-            );
 
             if (request.getClientCalculation() != null
                     && !FORMULA_VERSION.equals(
@@ -361,6 +355,14 @@ public class SimulationService {
                 throw new SimulationException(
                         SimulationError.PORTFOLIO_ALLOCATION_MISMATCH);
             }
+            ProductSelectionPlan selectionPlan = validateProductSelections(
+                    request,
+                    target,
+                    selectedPortfolio,
+                    portfolioProducts,
+                    selectedTranches,
+                    evaluationDate
+            );
 
             SimulationSaveResponse.PreviousSimulation previousSimulation = null;
             LocalDateTime now = LocalDateTime.now();
@@ -752,6 +754,24 @@ public class SimulationService {
                     scenarioSafeCandidates.get(ProductType.SAVINGS).get(0),
                     investmentEndDate
             );
+            List<ProductCandidate> savingsCandidatesForAllocation =
+                    scenarioSafeCandidates.get(ProductType.SAVINGS).stream()
+                            .filter(candidate -> supportsSavingsAllocation(
+                                    candidate,
+                                    amounts.getOrDefault(ProductType.SAVINGS, 0L),
+                                    aggregate.tranches(),
+                                    investmentEndDate
+                            ))
+                            .toList();
+            if (amounts.getOrDefault(ProductType.SAVINGS, 0L) > 0
+                    && savingsCandidatesForAllocation.isEmpty()) {
+                long savingsAmount = amounts.get(ProductType.SAVINGS);
+                amounts.put(
+                        ProductType.DEPOSIT,
+                        amounts.getOrDefault(ProductType.DEPOSIT, 0L) + savingsAmount
+                );
+                amounts.put(ProductType.SAVINGS, 0L);
+            }
             Map<ProductType, List<ProductCandidate>> candidates =
                     new EnumMap<>(ProductType.class);
             candidates.put(
@@ -760,7 +780,7 @@ public class SimulationService {
             );
             candidates.put(
                     ProductType.SAVINGS,
-                    scenarioSafeCandidates.get(ProductType.SAVINGS)
+                    savingsCandidatesForAllocation
             );
             candidates.put(ProductType.ETF, etfCandidates.get(profile));
 
@@ -1101,20 +1121,16 @@ public class SimulationService {
     ) {
         long savingsCapacity = Long.MAX_VALUE;
         if (savingsCandidate.getMonthlyMaxAmount() != null) {
-            savingsCapacity = tranches.stream()
-                    .filter(item -> item.getInvestmentAmount() > 0)
-                    .mapToLong(item -> safeMultiply(
-                             savingsCandidate.getMonthlyMaxAmount(),
-                            calculator.reinvestmentPlan(
-                                    calculator.remainingMonths(
-                                            item.getGiftDate(),
-                                            evaluationDate
-                                    ),
-                                    savingsCandidate.getMinMonth(),
-                                    savingsCandidate.getMaxMonth()
-                            ).investedMonths()
-                    ))
-                    .sum();
+            int contributionMonths = savingsContributionMonths(
+                    tranches,
+                    evaluationDate,
+                    savingsCandidate.getMinMonth(),
+                    savingsCandidate.getMaxMonth()
+            );
+            savingsCapacity = safeMultiply(
+                    savingsCandidate.getMonthlyMaxAmount(),
+                    contributionMonths
+            );
         }
         long depositProjectedValue = projectedCandidateValue(
                 depositCandidate,
@@ -1135,6 +1151,69 @@ public class SimulationService {
                 depositProjectedValue,
                 savingsProjectedValue
         );
+    }
+
+    /**
+     * 적금 배분액을 월 납입액으로 환산할 때 사용하는 총 납입 개월 수다.
+     * 각 증여 회차에서 최초로 가입하는 적금 계약기간만 합산한다.
+     * 재가입은 첫 계약의 만기금으로 운용하므로 신규 원금의 납입 한도를
+     * 늘리는 기간으로 중복 계산하지 않는다.
+     */
+    private int savingsContributionMonths(
+            List<SimulationTrancheRecord> tranches,
+            LocalDate evaluationDate,
+            Integer minimumContractMonths,
+            Integer maximumContractMonths
+    ) {
+        long totalMonths = 0;
+        for (SimulationTrancheRecord tranche : safeList(tranches)) {
+            if (tranche.getGiftDate() == null
+                    || tranche.getGiftDate().isAfter(evaluationDate)
+                    || value(tranche.getInvestmentAmount()) <= 0) {
+                continue;
+            }
+            int remainingMonths = calculator.remainingMonths(
+                    tranche.getGiftDate(),
+                    evaluationDate
+            );
+            int firstContractMonths = calculator.reinvestmentPlan(
+                            remainingMonths,
+                            minimumContractMonths,
+                            maximumContractMonths
+                    ).contractPeriods().stream()
+                    .findFirst()
+                    .orElse(0);
+            totalMonths += firstContractMonths;
+        }
+        return (int) Math.min(Integer.MAX_VALUE, totalMonths);
+    }
+
+    private boolean supportsSavingsAllocation(
+            ProductCandidate candidate,
+            long allocatedAmount,
+            List<SimulationTrancheRecord> tranches,
+            LocalDate evaluationDate
+    ) {
+        if (allocatedAmount <= 0) {
+            return true;
+        }
+        int contributionMonths = savingsContributionMonths(
+                tranches,
+                evaluationDate,
+                candidate.getMinMonth(),
+                candidate.getMaxMonth()
+        );
+        if (contributionMonths <= 0) {
+            return false;
+        }
+        long monthlyContribution = divideCeiling(
+                allocatedAmount,
+                contributionMonths
+        );
+        return (candidate.getMonthlyMinAmount() == null
+                || monthlyContribution >= candidate.getMonthlyMinAmount())
+                && (candidate.getMonthlyMaxAmount() == null
+                || monthlyContribution <= candidate.getMonthlyMaxAmount());
     }
 
     private long projectedCandidateValue(
@@ -1200,7 +1279,9 @@ public class SimulationService {
             SimulationSaveRequest request,
             SimulationRecord simulation,
             SimulationPortfolioRecord portfolio,
-            List<SimulationProductRecord> candidates
+            List<SimulationProductRecord> candidates,
+            List<SimulationTrancheRecord> tranches,
+            LocalDate evaluationDate
     ) {
         Map<Long, SimulationProductRecord> byId = candidates.stream()
                 .collect(Collectors.toMap(
@@ -1250,7 +1331,9 @@ public class SimulationService {
             validateProductLimits(
                     product,
                     simulation.getProductDataVersionId(),
-                    simulation.getInvestmentPeriodMonths()
+                    simulation.getInvestmentPeriodMonths(),
+                    tranches,
+                    evaluationDate
             );
             plans.add(new SelectedProductPlan(product, rates));
         }
@@ -1286,7 +1369,9 @@ public class SimulationService {
     private void validateProductLimits(
             SimulationProductRecord product,
             Long productDataVersionId,
-            int investmentPeriodMonths
+            int investmentPeriodMonths,
+            List<SimulationTrancheRecord> tranches,
+            LocalDate evaluationDate
     ) {
         ProductVersionDetailRecord detail =
                 simulationMapper.selectProductVersionDetail(product.getProductVersionId());
@@ -1314,17 +1399,18 @@ public class SimulationService {
             }
         }
         if (product.getProductType() == ProductType.SAVINGS) {
-            int firstContractMonths = calculator.reinvestmentPlan(
-                            investmentPeriodMonths,
-                            detail.getMinimumMonths(),
-                            detail.getMaximumMonths()
-                    ).contractPeriods().stream()
-                    .findFirst()
-                    .orElseThrow(() -> new SimulationException(
-                            SimulationError.PRODUCT_LIMIT_EXCEEDED));
+            int contributionMonths = savingsContributionMonths(
+                    tranches,
+                    evaluationDate,
+                    detail.getMinimumMonths(),
+                    detail.getMaximumMonths()
+            );
+            if (contributionMonths <= 0) {
+                throw new SimulationException(SimulationError.PRODUCT_LIMIT_EXCEEDED);
+            }
             long monthly = divideCeiling(
                     product.getAllocatedAmount(),
-                    firstContractMonths
+                    contributionMonths
             );
             if (detail.getMonthlyMinimumAmount() != null
                     && monthly < detail.getMonthlyMinimumAmount()) {
@@ -1571,13 +1657,12 @@ public class SimulationService {
         Long monthlyContribution = product.getProductType() == ProductType.SAVINGS
                 ? divideCeiling(
                 product.getAllocatedAmount(),
-                calculator.reinvestmentPlan(
-                                simulation.getInvestmentPeriodMonths(),
-                                product.getMinimumContractMonths(),
-                                product.getMaximumContractMonths()
-                        ).contractPeriods().stream()
-                        .findFirst()
-                        .orElse(Math.max(1, simulation.getInvestmentPeriodMonths()))
+                Math.max(1, savingsContributionMonths(
+                        tranches,
+                        evaluationDate,
+                        product.getMinimumContractMonths(),
+                        product.getMaximumContractMonths()
+                ))
         ) : null;
         SimulationResponse.ReturnMetric metric =
                 product.getProductType() == ProductType.ETF

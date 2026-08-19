@@ -419,6 +419,48 @@ class SimulationServiceSaveTest {
     }
 
     @Test
+    @DisplayName("실행 단계에서 산정한 첫 적금 계약 한도까지는 최종 저장할 수 있다")
+    void saveSavingsAllocationAtFirstContractLimit() {
+        Fixture fixture = new Fixture();
+        fixture.configureLongTermSavings(36_000_000L);
+
+        SimulationSaveResponse response = fixture.service().save(
+                SIMULATION_ID,
+                fixture.request(),
+                USER_ID,
+                null
+        );
+
+        // 회귀 방지: 60개월 전체가 아닌 첫 계약 36개월 × 월 100만원을 동일 기준으로 검증한다.
+        assertEquals(1, fixture.saveCount.get());
+        assertEquals(1_000_000L,
+                response.selection().selectedProducts().get(0)
+                        .monthlyContributionAmount());
+    }
+
+    @Test
+    @DisplayName("첫 적금 계약의 월 납입 한도를 초과하면 최종 저장을 거부한다")
+    void rejectSavingsAllocationAboveFirstContractLimit() {
+        Fixture fixture = new Fixture();
+        fixture.configureLongTermSavings(36_000_001L);
+
+        SimulationException exception = assertThrows(
+                SimulationException.class,
+                () -> fixture.service().save(
+                        SIMULATION_ID,
+                        fixture.request(),
+                        USER_ID,
+                        null
+                )
+        );
+
+        // 회귀 방지: 재가입 24개월을 신규 원금의 추가 납입 한도로 중복 계산하지 않는다.
+        assertEquals(SimulationError.PRODUCT_LIMIT_EXCEEDED,
+                exception.getError());
+        assertEquals(0, fixture.saveCount.get());
+    }
+
+    @Test
     @DisplayName("기존 SAVED의 DRAFT 전환이 실패하면 새 결과 저장도 중단한다")
     void stopReplacementWhenPreviousSavedResetFails() {
         Fixture fixture = new Fixture();
@@ -471,6 +513,32 @@ class SimulationServiceSaveTest {
         private int markSelectedResult = 1;
         private int saveResult = 1;
         private int resetResult = 1;
+
+        private void configureLongTermSavings(long allocatedAmount) {
+            simulation.setRequestedAmount(allocatedAmount);
+            simulation.setInvestmentPeriodMonths(60);
+            simulation.setInvestmentEndDate(simulation.getGiftDate().plusMonths(60));
+
+            portfolio.setDepositAmount(0L);
+            portfolio.setSavingsAmount(allocatedAmount);
+            portfolio.setEtfAmount(0L);
+
+            result.setInvestmentPrincipal(allocatedAmount);
+            tranche.setInvestmentAmount(allocatedAmount);
+
+            product.setProductType(ProductType.SAVINGS);
+            product.setAllocatedAmount(allocatedAmount);
+            product.setMinimumContractMonths(12);
+            product.setMaximumContractMonths(36);
+
+            detail.setProductType(ProductType.SAVINGS);
+            detail.setMinimumAmount(null);
+            detail.setMaximumAmount(null);
+            detail.setMinimumMonths(12);
+            detail.setMaximumMonths(36);
+            detail.setMonthlyMinimumAmount(10_000L);
+            detail.setMonthlyMaximumAmount(1_000_000L);
+        }
 
         private SimulationSaveRequest request() {
             SimulationSaveRequest request = new SimulationSaveRequest();
