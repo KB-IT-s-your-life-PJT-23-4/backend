@@ -18,13 +18,13 @@ class FscEtfProductMasterClientTest {
                         "item": [
                           {
                             "srtnCd": "069500",
-                            "fndNm": "RISE 코리아200",
-                            "mngCoNm": "KB자산운용"
+                            "itmsNm": "RISE 코리아200",
+                            "corpNm": "KB자산운용"
                           },
                           {
                             "srtnCd": "999999",
-                            "fndNm": "RISE 이름만 같은 상품",
-                            "mngCoNm": "다른자산운용"
+                            "itmsNm": "RISE 이름만 같은 상품",
+                            "corpNm": "다른자산운용"
                           }
                         ]
                       }
@@ -55,7 +55,7 @@ class FscEtfProductMasterClientTest {
                       "items": {
                         "item": {
                           "srtnCd": "379780",
-                          "fndNm": "RISE 미국S&P500",
+                          "itmsNm": "RISE 미국S&P500",
                           "managerDisplayValue": "KB Asset Management Co., Ltd."
                         }
                       }

@@ -19,8 +19,7 @@ import java.util.Map;
 public class FscEtfProductMasterClient {
 
     private static final String[] ISSUER_FIELD_NAMES = {
-            "mngCoNm", "mngCmpyNm", "assetMngCoNm", "assetManagementCompanyName",
-            "oprCmpyNm", "oprtCoNm", "operatorName", "issuerName"
+            "corpNm", "issuerName", "mngCoNm", "mngCmpyNm", "assetMngCoNm"
     };
 
     private final RetryingHttpRequester requester;
@@ -31,8 +30,8 @@ public class FscEtfProductMasterClient {
 
     public FscEtfProductMasterClient(
             RetryingHttpRequester requester,
-            @Value("${fsc.fund-product.base-url}") String baseUrl,
-            @Value("${fsc.fund-product.api-key:${fsc.etf.api-key}}") String apiKey,
+            @Value("${fsc.etf-master.base-url}") String baseUrl,
+            @Value("${fsc.etf-master.api-key:${fsc.etf.api-key}}") String apiKey,
             @Value("${etf.api.page-size:1000}") int pageSize
     ) {
         this.requester = requester;
@@ -47,7 +46,7 @@ public class FscEtfProductMasterClient {
         int page = 1;
         int totalCount;
         do {
-            String body = requester.get(buildUri(page), Map.of(), "금융위원회 펀드상품기본정보");
+            String body = requester.get(buildUri(page), Map.of(), "금융위원회 KRX상장종목정보");
             ParsedPage parsedPage = parsePage(body);
             products.addAll(parsedPage.getItems());
             totalCount = parsedPage.getTotalCount();
@@ -62,7 +61,7 @@ public class FscEtfProductMasterClient {
             JsonNode header = response.path("header");
             String resultCode = header.path("resultCode").asText();
             if (!resultCode.isBlank() && !"00".equals(resultCode)) {
-                throw new IllegalStateException("금융위원회 펀드상품기본정보 API 오류: "
+                throw new IllegalStateException("금융위원회 KRX상장종목정보 API 오류: "
                         + header.path("resultMsg").asText("알 수 없는 오류"));
             }
 
@@ -79,13 +78,13 @@ public class FscEtfProductMasterClient {
         } catch (IllegalStateException exception) {
             throw exception;
         } catch (Exception exception) {
-            throw new IllegalStateException("금융위원회 펀드상품기본정보 응답을 해석할 수 없습니다.", exception);
+            throw new IllegalStateException("금융위원회 KRX상장종목정보 응답을 해석할 수 없습니다.", exception);
         }
     }
 
     private void addItem(List<ExternalEtfProductMaster> items, JsonNode item) {
         String stockCode = text(item, "srtnCd");
-        String productName = firstText(item, "fndNm", "itmsNm", "productName");
+        String productName = firstText(item, "itmsNm", "productName");
         if (stockCode.isBlank() || productName.isBlank()) {
             return;
         }
@@ -118,7 +117,7 @@ public class FscEtfProductMasterClient {
                 + "&resultType=json"
                 + "&numOfRows=" + pageSize
                 + "&pageNo=" + page
-                + "&likeFndNm=" + encode("RISE");
+                + "&likeItmsNm=" + encode("RISE");
         return URI.create(baseUrl + "?" + query);
     }
 
