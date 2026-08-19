@@ -50,6 +50,14 @@ tasks.register('renderPiiMockDataSql', JavaExec) {
     workingDir = rootProject.projectDir
 }
 
+tasks.register('runEtfMarketData', JavaExec) {
+    group = 'application'
+    description = 'Collects 10-year ETF prices and publishes a new product data version.'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'com.example.project.batch.BatchApplication'
+    args '--job=etfMarketDataJob'
+}
+
 // cron 이 부르는 래퍼를 배포본 루트에 함께 넣는다. 스크립트가 자기 위치로 APP_HOME 을 잡기 때문에
 // bin/ 과 같은 레벨에 있어야 한다. git 의 실행 권한에 기대지 않도록 여기서 직접 지정한다.
 distributions {
