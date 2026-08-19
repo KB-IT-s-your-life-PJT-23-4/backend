@@ -3,6 +3,7 @@ package com.example.project.batch.product.etf.service;
 import com.example.project.batch.product.etf.client.FscEtfPriceClient;
 import com.example.project.batch.product.etf.client.FscEtfProductMasterClient;
 import com.example.project.batch.product.etf.client.KrxEtfPriceClient;
+import com.example.project.batch.product.etf.client.RiseOfficialEtfCatalogClient;
 import com.example.project.batch.product.etf.domain.EtfHistoryPrice;
 import com.example.project.batch.product.etf.domain.EtfMarketDataRefreshResult;
 import com.example.project.batch.product.etf.domain.EtfPricePoint;
@@ -35,6 +36,7 @@ public class EtfMarketDataService {
 
     private final FscEtfPriceClient fscClient;
     private final FscEtfProductMasterClient productMasterClient;
+    private final RiseOfficialEtfCatalogClient riseOfficialEtfCatalogClient;
     private final KrxEtfPriceClient krxClient;
     private final EtfMarketDataMapper mapper;
     private final EtfMarketDataPersistenceService persistenceService;
@@ -55,7 +57,8 @@ public class EtfMarketDataService {
 
     public EtfMarketDataRefreshResult refresh(LocalDate asOfDate) {
         int registeredMasterCount = productMasterRegistrationService.registerVerifiedRiseProducts(
-                productMasterClient.fetchRiseCandidates());
+                productMasterClient.fetchRiseCandidates(asOfDate),
+                riseOfficialEtfCatalogClient.fetchVerifiedCatalog());
 
         Long sourceDataVersionId = mapper.selectLatestCompletedDataVersionId();
         if (sourceDataVersionId == null) {

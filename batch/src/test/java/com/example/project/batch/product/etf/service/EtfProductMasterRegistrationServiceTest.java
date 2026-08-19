@@ -14,18 +14,27 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 class EtfProductMasterRegistrationServiceTest {
 
     @Test
-    void registersOnlyRiseProductsOperatedByKbAssetManagement() {
+    void registersOnlyCandidatesThatMatchOfficialRiseCatalog() {
         Map<String, String> productTypes = new HashMap<>();
-        EtfMarketDataMapper mapper = fakeMapper(productTypes, Map.of("069500", 10L));
+        EtfMarketDataMapper mapper = fakeMapper(productTypes, Map.of("148020", 10L));
         EtfProductMasterRegistrationService service =
                 new EtfProductMasterRegistrationService(mapper);
 
-        int registered = service.registerVerifiedRiseProducts(List.of(
-                new ExternalEtfProductMaster("069500", "RISE 코리아200", "KB자산운용"),
-                new ExternalEtfProductMaster("379780", "RISE 미국S&P500", "KB자산운용"),
-                new ExternalEtfProductMaster("999999", "RISE 이름만 같은 ETF", "다른자산운용"),
-                new ExternalEtfProductMaster("888888", "다른 ETF", "KB자산운용")
-        ));
+        int registered = service.registerVerifiedRiseProducts(
+                List.of(
+                        new ExternalEtfProductMaster("148020", "RISE 200", null),
+                        new ExternalEtfProductMaster("379780", "RISE 미국S&P500", null),
+                        new ExternalEtfProductMaster("999999", "RISE 이름만 같은 ETF", null),
+                        new ExternalEtfProductMaster("888888", "RISE 다른 이름", null)
+                ),
+                Map.of(
+                        "148020", new ExternalEtfProductMaster(
+                                "148020", "RISE 200", "KB자산운용"),
+                        "379780", new ExternalEtfProductMaster(
+                                "379780", "RISE 미국S&P500", "KB자산운용"),
+                        "888888", new ExternalEtfProductMaster(
+                                "888888", "RISE 공식 이름", "KB자산운용")
+                ));
 
         assertEquals(1, registered);
         assertEquals("ETF", productTypes.get("379780"));

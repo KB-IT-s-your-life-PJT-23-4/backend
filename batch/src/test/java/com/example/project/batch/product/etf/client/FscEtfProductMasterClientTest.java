@@ -3,29 +3,23 @@ package com.example.project.batch.product.etf.client;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 class FscEtfProductMasterClientTest {
 
     @Test
-    void parsesStockCodeProductNameAndIssuerFromFundMasterResponse() {
+    void parsesRiseCandidatesFromEtfPriceResponseWithoutInventingIssuer() {
         String response = """
                 {
                   "response": {
                     "header": {"resultCode": "00", "resultMsg": "NORMAL SERVICE."},
                     "body": {
-                      "totalCount": 2,
+                      "totalCount": 3,
                       "items": {
                         "item": [
-                          {
-                            "srtnCd": "069500",
-                            "itmsNm": "RISE 코리아200",
-                            "corpNm": "KB자산운용"
-                          },
-                          {
-                            "srtnCd": "999999",
-                            "itmsNm": "RISE 이름만 같은 상품",
-                            "corpNm": "다른자산운용"
-                          }
+                          {"basDt": "20260818", "srtnCd": "148020", "itmsNm": "RISE 200"},
+                          {"basDt": "20260818", "srtnCd": "379780", "itmsNm": "RISE 미국S&P500"},
+                          {"basDt": "20260818", "srtnCd": "069500", "itmsNm": "다른 ETF"}
                         ]
                       }
                     }
@@ -33,41 +27,14 @@ class FscEtfProductMasterClientTest {
                 }
                 """;
         FscEtfProductMasterClient client = new FscEtfProductMasterClient(
-                null, "https://example.test", "key", 1000);
+                null, "https://example.test", "key", 1000, 14);
 
         FscEtfProductMasterClient.ParsedPage page = client.parsePage(response);
 
-        assertEquals(2, page.getTotalCount());
+        assertEquals(3, page.getTotalCount());
         assertEquals(2, page.getItems().size());
-        assertEquals("069500", page.getItems().get(0).getStockCode());
-        assertEquals("RISE 코리아200", page.getItems().get(0).getProductName());
-        assertEquals("KB자산운용", page.getItems().get(0).getIssuerName());
-    }
-
-    @Test
-    void recognizesKbAssetManagementEvenWhenIssuerFieldNameChanges() {
-        String response = """
-                {
-                  "response": {
-                    "header": {"resultCode": "00"},
-                    "body": {
-                      "totalCount": 1,
-                      "items": {
-                        "item": {
-                          "srtnCd": "379780",
-                          "itmsNm": "RISE 미국S&P500",
-                          "managerDisplayValue": "KB Asset Management Co., Ltd."
-                        }
-                      }
-                    }
-                  }
-                }
-                """;
-        FscEtfProductMasterClient client = new FscEtfProductMasterClient(
-                null, "https://example.test", "key", 1000);
-
-        FscEtfProductMasterClient.ParsedPage page = client.parsePage(response);
-
-        assertEquals("KB Asset Management Co., Ltd.", page.getItems().get(0).getIssuerName());
+        assertEquals("148020", page.getItems().get(0).getStockCode());
+        assertEquals("RISE 200", page.getItems().get(0).getProductName());
+        assertNull(page.getItems().get(0).getIssuerName());
     }
 }
