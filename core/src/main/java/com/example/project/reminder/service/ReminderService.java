@@ -7,6 +7,7 @@ import com.example.project.gift.domain.Status;
 import com.example.project.gift.dto.response.DeductionResponse;
 import com.example.project.gift.dto.response.GiftResponse;
 import com.example.project.gift.service.GiftService;
+import com.example.project.reminder.domain.ProductReminderVO;
 import com.example.project.reminder.domain.ReminderReadVO;
 import com.example.project.reminder.domain.ReminderType;
 import com.example.project.reminder.dto.request.ReminderReadRequest;
@@ -20,6 +21,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -49,6 +51,14 @@ public class ReminderService {
      */
     private static final int[] RENEWAL_MILESTONES = {30, 7, 0};
 
+    /**
+     * 상품 만기 알림 시점. 갱신일과 같은 간격을 쓴다.
+     *
+     * <p>만기는 마감이 아니라 재예치·인출을 고를 수 있게 되는 날이라 신고기한만큼 일찍 밀어붙일 이유가 없다.
+     * 한 달 전에 알면 만기 후 처리를 정할 시간은 충분하다.
+     */
+    private static final int[] MATURITY_MILESTONES = {30, 7, 0};
+
     /** 한 마일스톤이 알림함에 머무는 기간. 이후에는 다음 마일스톤까지 사라진다. */
     private static final int MILESTONE_VISIBLE_DAYS = 7;
 
@@ -61,7 +71,7 @@ public class ReminderService {
     private final GiftService giftService;
     private final ReminderMapper reminderMapper;
 
-    /** 신고기한·공제 갱신일 리마인더를 합쳐 가까운 날짜순으로 돌려준다. */
+    /** 신고기한·공제 갱신일·상품 만기 리마인더를 합쳐 가까운 날짜순으로 돌려준다. */
     public List<ReminderResponse> selectReminders(Long userId) {
         LocalDate today = LocalDate.now();
 
@@ -69,9 +79,12 @@ public class ReminderService {
         List<DeductionResponse> deductions = giftService.selectDeduction(null, userId);
         Map<String, LocalDateTime> reads = reads(userId);
 
+        Map<Long, String> familyNames = familyNames(deductions);
+
         List<ReminderResponse> reminders = new ArrayList<>();
         reminders.addAll(renewalReminders(deductions, reads, today));
-        reminders.addAll(filingReminders(userId, familyNames(deductions), reads, today));
+        reminders.addAll(filingReminders(userId, familyNames, reads, today));
+        reminders.addAll(maturityReminders(userId, familyNames, reads, today));
 
         reminders.sort(Comparator
                 .comparing(ReminderResponse::getTargetDate)
@@ -194,6 +207,65 @@ public class ReminderService {
         return reminders;
     }
 
+    /**
+     * 시뮬레이션 투자 상품(예금·적금)의 만기일.
+     *
+     * <p>만기일은 상품이 아니라 시뮬레이션이 갖는다. 예금·적금 상품에는 가입 가능 기간의 범위만 있고
+     * 실제로 고른 기간은 {@code simulation.investment_period_months} 하나뿐이라, 한 포트폴리오의
+     * 상품들이 같은 날 만기가 된다. 그래서 알림은 상품별이 아니라 <b>시뮬레이션당 한 건</b>이고
+     * 만기가 도래하는 상품명들을 함께 내린다.
+     *
+     * <p>ETF 는 만기가 없어 조회에서 빠진다. 선택 상품이 ETF 뿐인 포트폴리오는 알림이 생기지 않는다.
+     *
+     * <p>증여로 등록되지 않은 시뮬레이션은 대상이 아니다. 저장만 해 둔 계획은 상품에 실제로 가입한 것이
+     * 아니라 만기라고 부를 날이 없다.
+     */
+    private List<ReminderResponse> maturityReminders(Long userId,
+                                                     Map<Long, String> familyNames,
+                                                     Map<String, LocalDateTime> reads,
+                                                     LocalDate today) {
+        List<ReminderResponse> reminders = new ArrayList<>();
+
+        for (Map.Entry<Long, List<ProductReminderVO>> entry : maturitiesByGift(userId).entrySet()) {
+            Long giftId = entry.getKey();
+            List<ProductReminderVO> products = entry.getValue();
+
+            // 같은 시뮬레이션이라 만기일과 수증자는 어느 행에서 읽어도 같다.
+            ProductReminderVO first = products.get(0);
+            LocalDate targetDate = first.getMaturityDate();
+
+            LocalDate notifyFrom = activeMilestone(today, targetDate, MATURITY_MILESTONES, false);
+
+            if (notifyFrom == null) {
+                continue;
+            }
+
+            reminders.add(ReminderResponse.ofMaturity(
+                    giftId,
+                    first.getFamilyId(),
+                    familyNames.get(first.getFamilyId()),
+                    targetDate,
+                    notifyFrom,
+                    today,
+                    readAtIn(reads, giftId, ReminderType.PRODUCT_MATURITY, notifyFrom),
+                    products.stream()
+                            .map(ProductReminderVO::getProductName)
+                            .collect(Collectors.toList())
+            ));
+        }
+
+        return reminders;
+    }
+
+    /** 조회는 (증여, 상품) 쌍으로 내려오므로 증여별로 묶어 알림 한 건으로 만든다. */
+    private Map<Long, List<ProductReminderVO>> maturitiesByGift(Long userId) {
+        return reminderMapper.selectProductMaturities(userId, null).stream()
+                .collect(Collectors.groupingBy(
+                        ProductReminderVO::getGiftId,
+                        LinkedHashMap::new,
+                        Collectors.toList()));
+    }
+
     /** 읽음 기록을 (giftId, type) 로 찾을 수 있게 펼친다. */
     private Map<String, LocalDateTime> reads(Long userId) {
         return reminderMapper.selectReads(userId).stream()
@@ -213,6 +285,14 @@ public class ReminderService {
     private LocalDate targetDate(GiftResponse gift, ReminderType type, Long userId) {
         if (type == ReminderType.FILING_DEADLINE) {
             return FilingDeadline.of(gift.getGiftDate());
+        }
+
+        // 만기일은 그 증여가 딸린 시뮬레이션에 있다. 목록이 첫 회차 giftId 를 내려주므로 그대로 되찾힌다.
+        if (type == ReminderType.PRODUCT_MATURITY) {
+            return reminderMapper.selectProductMaturities(userId, gift.getGiftId()).stream()
+                    .findFirst()
+                    .map(ProductReminderVO::getMaturityDate)
+                    .orElseThrow(() -> new ServiceException(ResponseCode.RESOURCE_NOT_FOUND));
         }
 
         return giftService.selectDeduction(gift.getFamilyId(), userId).stream()

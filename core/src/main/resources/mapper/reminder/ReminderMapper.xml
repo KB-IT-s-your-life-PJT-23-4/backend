@@ -38,4 +38,56 @@
         WHERE f.user_id = #{userId}
         AND r.read_at IS NOT NULL
     </select>
+
+    <!--
+      만기 알림 대상. 증여로 등록된 시뮬레이션의 선택 예금·적금만 (증여, 상품) 쌍으로 편다.
+
+      만기일은 상품이 아니라 simulation.investment_end_date 에 있다. 예금·적금 테이블에는
+      가입 가능 기간의 범위만 있고 실제로 고른 기간은 simulation.investment_period_months 하나뿐이라,
+      한 포트폴리오의 상품들은 만기를 공유한다.
+
+      ETF 는 만기 개념이 없어 product_type 으로 뺀다. 포트폴리오가 ETF 뿐이면 행이 없어 알림도 없다.
+
+      수증자 이름은 뽑지 않는다. family_name_encrypted 라 SQL 로는 못 읽고 서비스가 붙인다.
+    -->
+    <select id="selectProductMaturities" resultType="com.example.project.reminder.domain.ProductReminderVO">
+        SELECT g.gift_id,
+        g.family_id,
+        s.investment_end_date AS maturity_date,
+        pv.product_name,
+        p.product_type
+        FROM gift g
+        JOIN family f ON f.family_id = g.family_id
+        JOIN simulation_result sr ON sr.simul_result_id = g.simul_result_id
+        JOIN simulation s ON s.simul_id = sr.simul_id
+        <!-- 저장 시점에 고른 포트폴리오만 본다. is_selected 는 이전 선택이 남아 있을 수 있어 함께 건다. -->
+        JOIN simulation_portfolio sp
+        ON sp.simul_portfolio_id = s.selected_portfolio_id
+        AND sp.simul_result_id = sr.simul_result_id
+        JOIN simulation_product spr
+        ON spr.simul_portfolio_id = sp.simul_portfolio_id
+        AND spr.is_selected = 1
+        JOIN kb_product_version pv ON pv.kb_product_version_id = spr.kb_product_version_id
+        JOIN kb_product p ON p.product_id = pv.product_id
+        WHERE f.user_id = #{userId}
+        AND g.status &lt;&gt; 'CANCELLED'
+        AND p.product_type IN ('DEPOSIT', 'SAVINGS')
+        <!--
+          만기는 시뮬레이션당 하나라 회차마다 매달면 같은 알림이 회차 수만큼 뜬다.
+          살아 있는 회차 중 가장 빠른 한 건에만 붙인다.
+        -->
+        AND g.sequence_no = (
+        SELECT MIN(e.sequence_no)
+        FROM gift e
+        WHERE e.simul_result_id = g.simul_result_id
+        AND e.status &lt;&gt; 'CANCELLED'
+        )
+        <if test="giftId != null">
+            AND g.gift_id = #{giftId}
+        </if>
+        ORDER BY s.investment_end_date,
+        g.gift_id,
+        FIELD(p.product_type, 'DEPOSIT', 'SAVINGS'),
+        pv.product_name
+    </select>
 </mapper>

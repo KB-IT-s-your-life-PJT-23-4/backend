@@ -10,6 +10,7 @@ import lombok.NoArgsConstructor;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 
 @Data
 @NoArgsConstructor
@@ -60,6 +61,14 @@ public class ReminderResponse {
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime readAt;
 
+    /**
+     * 만기가 도래하는 예금·적금 상품명. 만기 알림에만 채워지고 나머지 유형은 null.
+     *
+     * <p>만기일은 시뮬레이션이 갖고 상품들이 공유하므로 알림은 한 건이고 상품은 여러 개다.
+     * 어느 상품이 만기인지는 화면 문구에 필요해 목록으로 내린다.
+     */
+    private List<String> productNames;
+
     public static ReminderResponse of(ReminderType type,
                                       Long giftId,
                                       Long familyId,
@@ -82,7 +91,40 @@ public class ReminderResponse {
                 targetDate,
                 notifyFrom,
                 daysRemaining,
+                readAt,
+                null
+        );
+    }
+
+    /**
+     * 만기 알림. 금액·상태 자리는 비고 상품명 목록이 대신 들어간다.
+     *
+     * <p>만기에는 신고기한처럼 걸린 금액이 없고(원금은 증여액이 아니라 투자 원금이다)
+     * 확정 여부도 무관해 두 필드를 null 로 둔다.
+     */
+    public static ReminderResponse ofMaturity(Long giftId,
+                                              Long familyId,
+                                              String familyName,
+                                              LocalDate targetDate,
+                                              LocalDate notifyFrom,
+                                              LocalDate today,
+                                              LocalDateTime readAt,
+                                              List<String> productNames) {
+        ReminderResponse response = of(
+                ReminderType.PRODUCT_MATURITY,
+                giftId,
+                familyId,
+                familyName,
+                null,
+                null,
+                targetDate,
+                notifyFrom,
+                today,
                 readAt
         );
+
+        response.setProductNames(productNames);
+
+        return response;
     }
 }
