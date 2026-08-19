@@ -9,6 +9,7 @@ import com.example.project.batch.product.etf.domain.EtfProductTarget;
 import com.example.project.batch.product.etf.domain.EtfReturnMetric;
 import com.example.project.batch.product.etf.domain.ExternalEtfPrice;
 import com.example.project.batch.product.etf.mapper.EtfMarketDataMapper;
+import com.example.project.common.product.RiseEtfPolicy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.beans.factory.annotation.Value;
@@ -55,9 +56,16 @@ public class EtfMarketDataService {
             throw new IllegalStateException("ETF 수집 기준이 될 COMPLETED 상품 데이터 버전이 없습니다.");
         }
 
-        List<EtfProductTarget> targets = mapper.selectCurrentEtfTargets();
+        List<EtfProductTarget> currentTargets = mapper.selectCurrentEtfTargets();
+        List<EtfProductTarget> targets = currentTargets.stream()
+                .filter(target -> RiseEtfPolicy.isRiseProductName(target.getProductName()))
+                .toList();
+        int excludedCount = currentTargets.size() - targets.size();
+        if (excludedCount > 0) {
+            log.info("RISE 브랜드가 아닌 ETF {}건을 시세 수집 대상에서 제외했습니다.", excludedCount);
+        }
         if (targets.isEmpty()) {
-            throw new IllegalStateException("수집할 판매 중 ETF 상품이 없습니다.");
+            throw new IllegalStateException("수집할 판매 중 RISE ETF 상품이 없습니다.");
         }
 
         LocalDate historyFrom = asOfDate.minusYears(lookbackYears);

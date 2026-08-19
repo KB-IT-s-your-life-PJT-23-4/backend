@@ -184,6 +184,8 @@ class SimulationMapperXmlTest {
 
         assertTrue(xml.contains("'EX_LOW', 'LOW', 'MEDIUM', 'HIGH'"));
         assertTrue(xml.contains("'EX_LOW', 'LOW', 'MEDIUM'"));
+        assertTrue(xml.contains("UPPER(TRIM(pv.product_name)) = 'RISE'"));
+        assertTrue(xml.contains("UPPER(TRIM(pv.product_name)) LIKE 'RISE %'"));
         assertFalse(xml.contains("LOW_MEDIUM"));
         assertFalse(xml.contains("MEDIUM_HIGH"));
         assertFalse(xml.contains("condition_name"));
