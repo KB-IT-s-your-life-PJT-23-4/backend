@@ -51,7 +51,9 @@ class AdminDashboardMapperXmlTest {
                         "selectDailySignupCounts",
                         "selectSimulationCounts",
                         "selectLatestCompletedProductDataVersion",
-                        "selectProductTypeCounts"
+                        "selectProductTypeCounts",
+                        "selectErrorCounts",
+                        "insertApiErrorLog"
                 ),
                 expectedIds
         );
@@ -102,6 +104,45 @@ class AdminDashboardMapperXmlTest {
         assertTrue(countSql.contains("p.product_type = 'ETF'"));
         assertTrue(countSql.contains("pv.kb_product_data_version_id = ?"));
         assertFalse(countSql.contains("sales_status"));
+    }
+
+    @Test
+    @DisplayName("오류 집계는 최근 기간의 실제 422·500 상태와 TIMEOUT 결과를 독립 집계한다")
+    void aggregateActualHttpStatusesAndTimeouts() {
+        Map<String, Object> parameters = Map.of(
+                "startDateTime", LocalDateTime.of(2026, 8, 12, 0, 0),
+                "endDateTime", LocalDateTime.of(2026, 8, 19, 0, 0)
+        );
+
+        String errorSql = sql("selectErrorCounts", parameters);
+
+        assertTrue(errorSql.contains("response_status = 422"));
+        assertTrue(errorSql.contains("response_status = 500"));
+        assertTrue(errorSql.contains("result = 'TIMEOUT'"));
+        assertTrue(errorSql.contains("occurred_at >= ? AND occurred_at < ?"));
+        assertTrue(errorSql.contains("request_uri LIKE '/api/%'"));
+        assertTrue(errorSql.contains("request_uri NOT LIKE '/api/admin/%'"));
+        assertFalse(errorSql.contains("response_status >= 500"));
+    }
+
+    @Test
+    @DisplayName("오류 기록은 기존 admin_access_log 컬럼만 사용한다")
+    void insertApiErrorWithoutSchemaChange() {
+        Map<String, Object> parameters = Map.of(
+                "httpMethod", "POST",
+                "requestUri", "/api/ai/consult",
+                "responseStatus", 500,
+                "result", "TIMEOUT",
+                "elapsedMs", 25_000L,
+                "occurredAt", LocalDateTime.of(2026, 8, 18, 12, 0)
+        );
+
+        String insertSql = sql("insertApiErrorLog", parameters);
+
+        assertTrue(insertSql.startsWith("INSERT INTO admin_access_log"));
+        assertTrue(insertSql.contains("response_status"));
+        assertTrue(insertSql.contains("result"));
+        assertTrue(insertSql.contains("occurred_at"));
     }
 
     private String sql(String statementId, Object parameter) {

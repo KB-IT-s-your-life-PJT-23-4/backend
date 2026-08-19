@@ -1,6 +1,7 @@
 package com.example.project.admin.dashboard.service;
 
 import com.example.project.admin.dashboard.domain.DailySignupCount;
+import com.example.project.admin.dashboard.domain.AdminDashboardErrorCount;
 import com.example.project.admin.dashboard.domain.LatestProductDataVersion;
 import com.example.project.admin.dashboard.domain.ProductTypeCount;
 import com.example.project.admin.dashboard.domain.SimulationDashboardCount;
@@ -49,6 +50,7 @@ class AdminDashboardServiceTest {
         mapper.dailySignupCounts.add(dailyCount(LocalDate.of(2026, 12, 28), 2L));
         mapper.dailySignupCounts.add(dailyCount(LocalDate.of(2026, 12, 31), 3L));
         mapper.simulationCounts = simulationCounts(3L, 2L);
+        mapper.errorCounts = errorCounts(2L, 1L, 1L);
         mapper.latestProductDataVersion = productVersion(
                 10L,
                 LocalDate.of(2027, 1, 1),
@@ -111,8 +113,12 @@ class AdminDashboardServiceTest {
         assertFalse(response.getFastApi().isAvailable());
         assertEquals("unavailable", response.getFastApi().getStatus());
         assertNull(response.getFastApi().getAverageResponseMs());
-        assertFalse(response.getErrors().isAvailable());
-        assertNull(response.getErrors().getHttp500());
+        assertTrue(response.getErrors().isAvailable());
+        assertEquals(2L, response.getErrors().getHttp422());
+        assertEquals(1L, response.getErrors().getHttp500());
+        assertEquals(1L, response.getErrors().getTimeout());
+        assertEquals(mapper.signupStartDateTime, mapper.errorStartDateTime);
+        assertEquals(mapper.signupEndDateTime, mapper.errorEndDateTime);
     }
 
     @Test
@@ -135,6 +141,10 @@ class AdminDashboardServiceTest {
         assertEquals(0L, response.getProducts().getSavings());
         assertEquals(0L, response.getProducts().getEtfs());
         assertNull(mapper.productCountVersionId);
+        assertTrue(response.getErrors().isAvailable());
+        assertEquals(0L, response.getErrors().getHttp422());
+        assertEquals(0L, response.getErrors().getHttp500());
+        assertEquals(0L, response.getErrors().getTimeout());
     }
 
     @Test
@@ -177,17 +187,28 @@ class AdminDashboardServiceTest {
         return counts;
     }
 
+    private AdminDashboardErrorCount errorCounts(Long http422, Long http500, Long timeout) {
+        AdminDashboardErrorCount counts = new AdminDashboardErrorCount();
+        counts.setHttp422(http422);
+        counts.setHttp500(http500);
+        counts.setTimeout(timeout);
+        return counts;
+    }
+
     private static final class FakeAdminDashboardMapper implements AdminDashboardMapper {
 
         private final List<DailySignupCount> dailySignupCounts = new ArrayList<>();
         private SimulationDashboardCount simulationCounts;
         private LatestProductDataVersion latestProductDataVersion;
         private ProductTypeCount productTypeCounts;
+        private AdminDashboardErrorCount errorCounts;
         private LocalDateTime signupStartDateTime;
         private LocalDateTime signupEndDateTime;
         private LocalDateTime simulationStartDateTime;
         private LocalDateTime simulationEndDateTime;
         private Long productCountVersionId;
+        private LocalDateTime errorStartDateTime;
+        private LocalDateTime errorEndDateTime;
 
         @Override
         public List<DailySignupCount> selectDailySignupCounts(
@@ -218,6 +239,28 @@ class AdminDashboardServiceTest {
         public ProductTypeCount selectProductTypeCounts(Long productDataVersionId) {
             productCountVersionId = productDataVersionId;
             return productTypeCounts;
+        }
+
+        @Override
+        public AdminDashboardErrorCount selectErrorCounts(
+                LocalDateTime startDateTime,
+                LocalDateTime endDateTime
+        ) {
+            errorStartDateTime = startDateTime;
+            errorEndDateTime = endDateTime;
+            return errorCounts;
+        }
+
+        @Override
+        public int insertApiErrorLog(
+                String httpMethod,
+                String requestUri,
+                int responseStatus,
+                String result,
+                long elapsedMs,
+                LocalDateTime occurredAt
+        ) {
+            return 1;
         }
     }
 }

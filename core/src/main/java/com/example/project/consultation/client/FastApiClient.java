@@ -2,6 +2,7 @@ package com.example.project.consultation.client;
 
 import com.example.project.common.api.ResponseCode;
 import com.example.project.common.exception.ServiceException;
+import com.example.project.common.logging.ApiErrorTrackingContext;
 import com.example.project.consultation.dto.fastapi.ChatRequest;
 import com.example.project.consultation.dto.fastapi.ChatResponse;
 import com.example.project.consultation.dto.fastapi.ClarificationRequest;
@@ -24,6 +25,7 @@ public class FastApiClient {
 
     private static final String CHAT_URI = "/api/v1/chat";
     private static final String CLARIFICATION_URI = "/api/v1/chat/clarification";
+    static final Duration RESPONSE_TIMEOUT = Duration.ofSeconds(25);
 
     public Mono<ChatResponse> startChat(ChatRequest request) {
         return fastApiWebClient.post()
@@ -31,7 +33,7 @@ public class FastApiClient {
                 .bodyValue(request)
                 .retrieve()
                 .bodyToMono(ChatResponse.class)
-                .timeout(Duration.ofSeconds(25))
+                .timeout(RESPONSE_TIMEOUT)
                 .onErrorMap(this::mapError);
     }
 
@@ -41,7 +43,7 @@ public class FastApiClient {
                 .bodyValue(request)
                 .retrieve()
                 .bodyToMono(ChatResponse.class)
-                .timeout(Duration.ofSeconds(25))
+                .timeout(RESPONSE_TIMEOUT)
                 .onErrorMap(this::mapError);
     }
 
@@ -52,18 +54,24 @@ public class FastApiClient {
                     wcre.getStatusCode(),
                     e
             );
-            return new ServiceException(resolveResponseCode(wcre.getStatusCode().value()));
+            return new ServiceException(
+                    resolveResponseCode(wcre.getStatusCode().value()),
+                    e
+            );
         }
         if (e instanceof WebClientRequestException) {
             log.error("FastAPI 연결 실패: {}", e.getMessage(), e);
-            return new ServiceException(ResponseCode.EXTERNAL_API_TIMEOUT);
+            ResponseCode responseCode = ApiErrorTrackingContext.isTimeout(e)
+                    ? ResponseCode.EXTERNAL_API_TIMEOUT
+                    : ResponseCode.EXTERNAL_API_ERROR;
+            return new ServiceException(responseCode, e);
         }
         if (e instanceof java.util.concurrent.TimeoutException) {
             log.error("FastAPI 응답 타임아웃: {}", e.getMessage(), e);
-            return new ServiceException(ResponseCode.EXTERNAL_API_TIMEOUT);
+            return new ServiceException(ResponseCode.EXTERNAL_API_TIMEOUT, e);
         }
         log.error("FastAPI 호출 중 알 수 없는 오류: {}", e.getMessage(), e);
-        return new ServiceException(ResponseCode.EXTERNAL_API_ERROR);
+        return new ServiceException(ResponseCode.EXTERNAL_API_ERROR, e);
     }
 
     // 오류코드

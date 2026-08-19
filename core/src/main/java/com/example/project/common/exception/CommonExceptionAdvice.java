@@ -3,6 +3,7 @@ package com.example.project.common.exception;
 
 import com.example.project.common.api.ApiResponse;
 import com.example.project.common.api.ResponseCode;
+import com.example.project.common.logging.ApiErrorTrackingContext;
 import com.example.project.simulation.exception.SimulationError;
 import com.example.project.simulation.exception.SimulationException;
 import lombok.extern.log4j.Log4j2;
@@ -46,7 +47,12 @@ public class CommonExceptionAdvice {
     }
 
     @ExceptionHandler(Exception.class)
-    public String handleException(Exception exception, Model model) {
+    public String handleException(
+            Exception exception,
+            Model model,
+            HttpServletRequest request
+    ) {
+        ApiErrorTrackingContext.markIfTimeout(request, exception);
         log.error("Unhandled exception", exception);
         model.addAttribute("exception", exception);
         return "error_page";
@@ -63,6 +69,7 @@ public class CommonExceptionAdvice {
     @ExceptionHandler(ServiceException.class)
     public ResponseEntity<ApiResponse<Void>> handleServiceException(ServiceException e, HttpServletRequest request){
         ResponseCode responseCode = e.getResponseCode();
+        ApiErrorTrackingContext.markIfTimeout(request, e);
 
         ApiResponse<Void> res = ApiResponse.error(responseCode, request.getRequestURI());
 

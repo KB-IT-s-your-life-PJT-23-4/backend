@@ -1,6 +1,7 @@
 package com.example.project.admin.dashboard.service;
 
 import com.example.project.admin.dashboard.domain.DailySignupCount;
+import com.example.project.admin.dashboard.domain.AdminDashboardErrorCount;
 import com.example.project.admin.dashboard.domain.LatestProductDataVersion;
 import com.example.project.admin.dashboard.domain.ProductTypeCount;
 import com.example.project.admin.dashboard.domain.SimulationDashboardCount;
@@ -11,6 +12,7 @@ import com.example.project.admin.dashboard.dto.response.AdminSignupSummaryRespon
 import com.example.project.admin.dashboard.dto.response.AdminSimulationSummaryResponse;
 import com.example.project.admin.dashboard.mapper.AdminDashboardMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,6 +29,7 @@ import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
+@Log4j2
 public class AdminDashboardService {
 
     private static final ZoneId SERVICE_ZONE = ZoneId.of("Asia/Seoul");
@@ -54,6 +57,10 @@ public class AdminDashboardService {
                 endDateTime
         );
         AdminProductSummaryResponse products = productSummary();
+        AdminDashboardResponse.ErrorMetrics errors = errorMetrics(
+                startDateTime,
+                endDateTime
+        );
 
         return new AdminDashboardResponse(
                 "database",
@@ -62,7 +69,7 @@ public class AdminDashboardService {
                 signups,
                 AdminDashboardResponse.unavailableConsultations(),
                 AdminDashboardResponse.unavailableFastApi(),
-                AdminDashboardResponse.unavailableErrors(),
+                errors,
                 simulations,
                 products
         );
@@ -149,6 +156,27 @@ public class AdminDashboardService {
                 counts == null ? 0L : nonNegative(counts.getSavings()),
                 counts == null ? 0L : nonNegative(counts.getEtfs())
         );
+    }
+
+    private AdminDashboardResponse.ErrorMetrics errorMetrics(
+            LocalDateTime startDateTime,
+            LocalDateTime endDateTime
+    ) {
+        try {
+            AdminDashboardErrorCount counts = adminDashboardMapper.selectErrorCounts(
+                    startDateTime,
+                    endDateTime
+            );
+            return new AdminDashboardResponse.ErrorMetrics(
+                    true,
+                    counts == null ? 0L : nonNegative(counts.getHttp422()),
+                    counts == null ? 0L : nonNegative(counts.getHttp500()),
+                    counts == null ? 0L : nonNegative(counts.getTimeout())
+            );
+        } catch (RuntimeException exception) {
+            log.error("Failed to aggregate dashboard error metrics", exception);
+            return AdminDashboardResponse.unavailableErrors();
+        }
     }
 
     private long nonNegative(Long value) {

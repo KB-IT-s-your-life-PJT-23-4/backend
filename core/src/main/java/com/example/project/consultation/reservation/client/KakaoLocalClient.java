@@ -2,6 +2,7 @@ package com.example.project.consultation.reservation.client;
 
 import com.example.project.common.api.ResponseCode;
 import com.example.project.common.exception.ServiceException;
+import com.example.project.common.logging.ApiErrorTrackingContext;
 import com.example.project.consultation.reservation.dto.response.KakaoKeywordSearchResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
@@ -41,17 +42,23 @@ public class KakaoLocalClient {
     private Throwable mapError(Throwable e) {
         if (e instanceof WebClientResponseException wcre) {
             log.error("카카오 로컬 API 오류 응답: status={}, body={}", wcre.getStatusCode(), wcre.getResponseBodyAsString(), e);
-            return new ServiceException(ResponseCode.EXTERNAL_API_ERROR);
+            ResponseCode responseCode = wcre.getStatusCode().value() == 504
+                    ? ResponseCode.EXTERNAL_API_TIMEOUT
+                    : ResponseCode.EXTERNAL_API_ERROR;
+            return new ServiceException(responseCode, e);
         }
         if (e instanceof WebClientRequestException) {
             log.error("카카오 로컬 API 연결 실패: {}", e.getMessage(), e);
-            return new ServiceException(ResponseCode.EXTERNAL_API_TIMEOUT);
+            ResponseCode responseCode = ApiErrorTrackingContext.isTimeout(e)
+                    ? ResponseCode.EXTERNAL_API_TIMEOUT
+                    : ResponseCode.EXTERNAL_API_ERROR;
+            return new ServiceException(responseCode, e);
         }
         if (e instanceof TimeoutException) {
             log.error("카카오 로컬 API 응답 타임아웃: {}", e.getMessage(), e);
-            return new ServiceException(ResponseCode.EXTERNAL_API_TIMEOUT);
+            return new ServiceException(ResponseCode.EXTERNAL_API_TIMEOUT, e);
         }
         log.error("카카오 로컬 API 호출 중 알 수 없는 오류: {}", e.getMessage(), e);
-        return new ServiceException(ResponseCode.EXTERNAL_API_ERROR);
+        return new ServiceException(ResponseCode.EXTERNAL_API_ERROR, e);
     }
 }

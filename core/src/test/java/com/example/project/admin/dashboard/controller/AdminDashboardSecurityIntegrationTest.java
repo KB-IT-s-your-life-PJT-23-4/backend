@@ -3,6 +3,7 @@ package com.example.project.admin.dashboard.controller;
 import com.example.project.admin.auth.mapper.AdminAuthMapper;
 import com.example.project.admin.auth.service.AdminAuthorizationService;
 import com.example.project.admin.dashboard.domain.DailySignupCount;
+import com.example.project.admin.dashboard.domain.AdminDashboardErrorCount;
 import com.example.project.admin.dashboard.domain.LatestProductDataVersion;
 import com.example.project.admin.dashboard.domain.ProductTypeCount;
 import com.example.project.admin.dashboard.domain.SimulationDashboardCount;
@@ -130,6 +131,10 @@ class AdminDashboardSecurityIntegrationTest {
             assertFalse(body.path("data").path("consultations").path("available").asBoolean());
             assertTrue(body.path("data").path("consultations").path("requests").isNull());
             assertFalse(body.path("data").path("products").path("available").asBoolean());
+            assertTrue(body.path("data").path("errors").path("available").asBoolean());
+            assertEquals(0, body.path("data").path("errors").path("http422").asInt());
+            assertEquals(0, body.path("data").path("errors").path("http500").asInt());
+            assertEquals(0, body.path("data").path("errors").path("timeout").asInt());
 
             String json = result.getResponse().getContentAsString().toLowerCase();
             assertFalse(json.contains("password"));
@@ -253,6 +258,26 @@ class AdminDashboardSecurityIntegrationTest {
         @Override
         public ProductTypeCount selectProductTypeCounts(Long productDataVersionId) {
             return null;
+        }
+
+        @Override
+        public AdminDashboardErrorCount selectErrorCounts(
+                LocalDateTime startDateTime,
+                LocalDateTime endDateTime
+        ) {
+            return null;
+        }
+
+        @Override
+        public int insertApiErrorLog(
+                String httpMethod,
+                String requestUri,
+                int responseStatus,
+                String result,
+                long elapsedMs,
+                LocalDateTime occurredAt
+        ) {
+            return 1;
         }
     }
 

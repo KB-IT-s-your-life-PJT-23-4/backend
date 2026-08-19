@@ -1,6 +1,7 @@
 package com.example.project.admin.dashboard.mapper;
 
 import com.example.project.admin.dashboard.domain.DailySignupCount;
+import com.example.project.admin.dashboard.domain.AdminDashboardErrorCount;
 import com.example.project.admin.dashboard.domain.LatestProductDataVersion;
 import com.example.project.admin.dashboard.domain.ProductTypeCount;
 import com.example.project.admin.dashboard.domain.SimulationDashboardCount;
@@ -27,5 +28,19 @@ public interface AdminDashboardMapper {
 
     ProductTypeCount selectProductTypeCounts(
             @Param("productDataVersionId") Long productDataVersionId
+    );
+
+    AdminDashboardErrorCount selectErrorCounts(
+            @Param("startDateTime") LocalDateTime startDateTime,
+            @Param("endDateTime") LocalDateTime endDateTime
+    );
+
+    int insertApiErrorLog(
+            @Param("httpMethod") String httpMethod,
+            @Param("requestUri") String requestUri,
+            @Param("responseStatus") int responseStatus,
+            @Param("result") String result,
+            @Param("elapsedMs") long elapsedMs,
+            @Param("occurredAt") LocalDateTime occurredAt
     );
 }
