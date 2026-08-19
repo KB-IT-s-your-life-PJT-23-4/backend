@@ -137,6 +137,40 @@ class SimulationServiceExecuteTest {
     }
 
     @Test
+    @DisplayName("적금 한도는 재가입 전체 기간이 아니라 첫 계약 납입기간으로 계산한다")
+    void capSavingsAllocationByFirstContractContributionMonths() {
+        LocalDate giftDate = futureDate();
+        Fixture fixture = adultFixture(giftDate);
+        fixture.useSafeAssetTerms(12, 36);
+        fixture.depositBaseRate = new BigDecimal("2.00");
+        fixture.savingsBaseRate = new BigDecimal("5.00");
+        fixture.savingsCandidates.get(0).setMonthlyMinAmount(10_000L);
+        fixture.savingsCandidates.get(0).setMonthlyMaxAmount(1_000_000L);
+
+        SimulationResponse response = fixture.execute(
+                100_000_000L,
+                60,
+                giftDate
+        );
+        SimulationResponse.Portfolio portfolio = result(
+                response,
+                ScenarioType.IMMEDIATE
+        ).portfolios().stream()
+                .filter(item -> item.portfolioType() == RiskProfile.CONSERVATIVE)
+                .findFirst()
+                .orElseThrow();
+        SimulationResponse.Product savings = portfolio.productCandidates().stream()
+                .filter(product -> product.productType() == ProductType.SAVINGS)
+                .findFirst()
+                .orElseThrow();
+
+        // 회귀 방지: 60개월을 36+24개월로 재가입해도 신규 원금은 첫 36개월에 납입한다.
+        assertEquals(36_000_000L, portfolio.allocation().savingsAmount());
+        assertEquals(1_000_000L, savings.monthlyContributionAmount());
+        assertTrue(portfolio.allocation().depositAmount() > 0);
+    }
+
+    @Test
     @DisplayName("짧은 마지막 분할 회차가 있어도 정상 상품 후보를 유지한다")
     void keepCandidateWhenOnlyLastTrancheIsTooShort() {
         LocalDate giftDate = futureDate();
@@ -667,6 +701,8 @@ class SimulationServiceExecuteTest {
                 ProductType.DEPOSIT, 101L, new BigDecimal("3.40")));
         private List<ProductCandidate> savingsCandidates = List.of(candidate(
                 ProductType.SAVINGS, 201L, new BigDecimal("3.10")));
+        private BigDecimal depositBaseRate = new BigDecimal("3.40");
+        private BigDecimal savingsBaseRate = new BigDecimal("3.10");
         private int baseRateMinimumMonths = 1;
         private int baseRateMaximumMonths = 240;
         private Set<Long> missingBaseRateProductVersionIds = Set.of();
@@ -752,8 +788,8 @@ class SimulationServiceExecuteTest {
                                         : List.of(baseRate(
                                         (Long) args[0],
                                         (Long) args[0] == 1_101L
-                                                ? new BigDecimal("3.40")
-                                                : new BigDecimal("3.10"),
+                                                ? depositBaseRate
+                                                : savingsBaseRate,
                                         baseRateMinimumMonths,
                                         baseRateMaximumMonths
                                 ));
