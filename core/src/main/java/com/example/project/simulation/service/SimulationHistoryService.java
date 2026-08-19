@@ -344,8 +344,12 @@ public class SimulationHistoryService {
                                 () -> new EnumMap<>(RiskProfile.class),
                                 Collectors.toList()
                         ));
-        boolean complete = recommendations.size() == RiskProfile.values().length;
-        for (RiskProfile type : RiskProfile.values()) {
+        List<SimulationPortfolioRecord> presetRecommendations = recommendations.stream()
+                .filter(portfolio -> portfolio.getPortfolioType() != null)
+                .filter(portfolio -> portfolio.getPortfolioType().isPreset())
+                .toList();
+        boolean complete = presetRecommendations.size() == RiskProfile.presetValues().length;
+        for (RiskProfile type : RiskProfile.presetValues()) {
             complete &= byPortfolioType.getOrDefault(type, List.of()).size() == 1;
         }
         if (!complete) {
@@ -355,7 +359,7 @@ public class SimulationHistoryService {
         }
 
         List<SimulationHistoryResponse.ReturnPoint> points = new ArrayList<>();
-        for (RiskProfile type : RiskProfile.values()) {
+        for (RiskProfile type : RiskProfile.presetValues()) {
             SimulationPortfolioRecord portfolio = byPortfolioType.get(type).get(0);
             SimulationResultRecord result = resultById.get(portfolio.getResultId());
             if (result == null

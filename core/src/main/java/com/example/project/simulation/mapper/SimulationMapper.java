@@ -82,6 +82,8 @@ public interface SimulationMapper {
 
     int markPortfolioRecommended(@Param("portfolioId") Long portfolioId);
 
+    int deletePortfolio(@Param("portfolioId") Long portfolioId);
+
     int insertProductSnapshot(SimulationProductRecord product);
 
     SimulationRecord selectSimulation(@Param("simulationId") Long simulationId);
@@ -197,6 +199,12 @@ public interface SimulationMapper {
             @Param("expectedVersion") Long expectedVersion,
             @Param("selectedPortfolioId") Long selectedPortfolioId,
             @Param("savedAt") LocalDateTime savedAt
+    );
+
+    int updateDraftVersion(
+            @Param("simulationId") Long simulationId,
+            @Param("expectedVersion") Long expectedVersion,
+            @Param("updatedAt") LocalDateTime updatedAt
     );
 
     int resetSavedSimulation(

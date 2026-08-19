@@ -122,10 +122,14 @@ public class CommonExceptionAdvice {
                     default -> SimulationError.INVALID_SIMULATION_REQUEST;
                 };
             } else {
-                error = "PUT".equalsIgnoreCase(request.getMethod())
-                        || "PATCH".equalsIgnoreCase(request.getMethod())
-                        ? SimulationError.INVALID_SAVE_REQUEST
-                        : SimulationError.INVALID_SIMULATION_REQUEST;
+                if (request.getRequestURI().endsWith("/portfolios/custom")) {
+                    error = SimulationError.INVALID_CUSTOM_PORTFOLIO_REQUEST;
+                } else {
+                    error = "PUT".equalsIgnoreCase(request.getMethod())
+                            || "PATCH".equalsIgnoreCase(request.getMethod())
+                            ? SimulationError.INVALID_SAVE_REQUEST
+                            : SimulationError.INVALID_SIMULATION_REQUEST;
+                }
             }
             return ResponseEntity
                     .status(error.getHttpStatus())

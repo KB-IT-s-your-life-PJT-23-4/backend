@@ -50,6 +50,10 @@ class SimulationMapperXmlTest {
                 "com.example.project.simulation.mapper.SimulationMapper.resetSavedSimulation"));
         assertTrue(configuration.hasStatement(
                 "com.example.project.simulation.mapper.SimulationMapper.saveSimulation"));
+        assertTrue(configuration.hasStatement(
+                "com.example.project.simulation.mapper.SimulationMapper.deletePortfolio"));
+        assertTrue(configuration.hasStatement(
+                "com.example.project.simulation.mapper.SimulationMapper.updateDraftVersion"));
 
         String namespace = "com.example.project.simulation.mapper.SimulationMapper.";
         String insertSimulation = sql(configuration, namespace + "insertSimulation",

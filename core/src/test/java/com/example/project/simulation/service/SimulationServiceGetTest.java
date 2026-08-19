@@ -374,7 +374,7 @@ class SimulationServiceGetTest {
             tranches.add(tranche);
 
             int index = 0;
-            for (RiskProfile profile : RiskProfile.values()) {
+            for (RiskProfile profile : RiskProfile.presetValues()) {
                 long portfolioId = firstPortfolioId + index;
                 SimulationPortfolioRecord portfolio = new SimulationPortfolioRecord();
                 portfolio.setPortfolioId(portfolioId);

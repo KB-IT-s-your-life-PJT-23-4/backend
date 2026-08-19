@@ -250,6 +250,11 @@
         WHERE simul_portfolio_id = #{portfolioId}
     </update>
 
+    <delete id="deletePortfolio">
+        DELETE FROM simulation_portfolio
+        WHERE simul_portfolio_id = #{portfolioId}
+    </delete>
+
     <insert id="insertProductSnapshot"
             parameterType="com.example.project.simulation.domain.SimulationProductRecord"
             useGeneratedKeys="true"
@@ -755,6 +760,15 @@
             expired_at = NULL,
             version = version + 1
         WHERE simul_id = #{simulationId}
+          AND version = #{expectedVersion}
+    </update>
+
+    <update id="updateDraftVersion">
+        UPDATE simulation
+        SET version = version + 1,
+            updated_at = #{updatedAt}
+        WHERE simul_id = #{simulationId}
+          AND status = 'DRAFT'
           AND version = #{expectedVersion}
     </update>
 

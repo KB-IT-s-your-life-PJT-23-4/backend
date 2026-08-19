@@ -17,6 +17,8 @@ import com.example.project.simulation.domain.SimulationTrancheRecord;
 import com.example.project.simulation.domain.TaxBracket;
 import com.example.project.simulation.domain.TaxPaymentMethod;
 import com.example.project.simulation.dto.request.SimulationExecuteRequest;
+import com.example.project.simulation.dto.request.CustomPortfolioRequest;
+import com.example.project.simulation.dto.response.CustomPortfolioResponse;
 import com.example.project.simulation.dto.response.SimulationResponse;
 import com.example.project.simulation.exception.SimulationError;
 import com.example.project.simulation.exception.SimulationException;
@@ -43,6 +45,55 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class SimulationServiceExecuteTest {
+
+    @Test
+    @DisplayName("추천 포트폴리오를 기준으로 커스텀 비율을 생성하고 다시 요청하면 교체한다")
+    void createAndReplaceCustomPortfolio() {
+        LocalDate giftDate = futureDate();
+        Fixture fixture = adultFixture(giftDate);
+        SimulationResponse initial = fixture.execute(100_000_000L, 120, giftDate);
+        SimulationResponse.Recommendation base = initial.recommendations().stream()
+                .filter(item -> item.portfolioType() == RiskProfile.BALANCED)
+                .findFirst()
+                .orElseThrow();
+
+        CustomPortfolioResponse first = fixture.service().customizePortfolio(
+                initial.simulationId(),
+                customRequest(initial.version(), base.resultId(), 30, 30, 40),
+                USER_ID
+        );
+        SimulationResponse.Portfolio firstCustom = customPortfolio(first.getSimulation());
+        long principal = first.getSimulation().results().stream()
+                .filter(item -> Objects.equals(item.resultId(), base.resultId()))
+                .findFirst()
+                .orElseThrow()
+                .investmentPrincipal();
+
+        // 회귀 방지: 사용자가 정한 세 유형의 금액 합은 투자 원금과 정확히 일치해야 한다.
+        assertEquals(Math.round(principal * 0.30), firstCustom.allocation().depositAmount());
+        assertEquals(Math.round(principal * 0.30), firstCustom.allocation().savingsAmount());
+        assertEquals(
+                principal - firstCustom.allocation().depositAmount()
+                        - firstCustom.allocation().savingsAmount(),
+                firstCustom.allocation().etfAmount()
+        );
+        assertEquals(2L, first.getSimulation().version());
+
+        CustomPortfolioResponse replaced = fixture.service().customizePortfolio(
+                initial.simulationId(),
+                customRequest(2L, base.resultId(), 40, 20, 40),
+                USER_ID
+        );
+        SimulationResponse.Portfolio replacedCustom = customPortfolio(replaced.getSimulation());
+
+        // 회귀 방지: CUSTOM은 누적하지 않고 시뮬레이션당 최신 한 건으로 교체한다.
+        assertEquals(1, fixture.portfolios.stream()
+                .filter(item -> item.getPortfolioType() == RiskProfile.CUSTOM)
+                .count());
+        assertEquals(Math.round(principal * 0.40), replacedCustom.allocation().depositAmount());
+        assertEquals(Math.round(principal * 0.20), replacedCustom.allocation().savingsAmount());
+        assertEquals(3L, replaced.getSimulation().version());
+    }
 
     private static final long USER_ID = 7L;
     private static final long FAMILY_ID = 31L;
@@ -195,7 +246,7 @@ class SimulationServiceExecuteTest {
                 .anyMatch(holding -> holding.trancheSequenceNo() == 2));
 
         // 회귀 방지: 대기 자금 반영 후에도 각 성향의 추천은 종료 시점 총 가치로 결정한다.
-        for (RiskProfile profile : RiskProfile.values()) {
+        for (RiskProfile profile : RiskProfile.presetValues()) {
             SimulationResponse.Recommendation recommendation = response.recommendations().stream()
                     .filter(item -> item.portfolioType() == profile)
                     .findFirst()
@@ -405,7 +456,7 @@ class SimulationServiceExecuteTest {
         SimulationResponse response = fixture.execute(80_000_000L, 240, giftDate);
 
         // 회귀 방지: 절세 여부만으로 고정 추천하지 않고 운용 종료 시점의 총 가치를 비교한다.
-        for (RiskProfile profile : RiskProfile.values()) {
+        for (RiskProfile profile : RiskProfile.presetValues()) {
             SimulationResponse.Recommendation recommendation = response.recommendations().stream()
                     .filter(item -> item.portfolioType() == profile)
                     .findFirst()
@@ -805,6 +856,9 @@ class SimulationServiceExecuteTest {
                         case "updatePortfolioExpectedFutureValue" -> updatePortfolioValue(
                                 (Long) args[0], (Long) args[1]);
                         case "markPortfolioRecommended" -> markRecommended((Long) args[0]);
+                        case "deletePortfolio" -> deletePortfolio((Long) args[0]);
+                        case "updateDraftVersion" -> updateDraftVersion(
+                                (Long) args[0], (Long) args[1], (LocalDateTime) args[2]);
                         case "selectSimulation" -> simulation;
                         case "selectResults" -> List.copyOf(results);
                         case "selectTranches" -> List.copyOf(tranches);
@@ -908,6 +962,26 @@ class SimulationServiceExecuteTest {
             return 1;
         }
 
+        private int deletePortfolio(Long portfolioId) {
+            boolean removed = portfolios.removeIf(item -> Objects.equals(
+                    item.getPortfolioId(), portfolioId));
+            products.removeIf(item -> Objects.equals(item.getPortfolioId(), portfolioId));
+            return removed ? 1 : 0;
+        }
+
+        private int updateDraftVersion(
+                Long simulationId,
+                Long expectedVersion,
+                LocalDateTime updatedAt
+        ) {
+            if (simulation == null
+                    || !Objects.equals(simulation.getSimulationId(), simulationId)
+                    || !Objects.equals(simulation.getVersion(), expectedVersion)) {
+                return 0;
+            }
+            return 1;
+        }
+
         private SimulationResultRecord resultById(Long resultId) {
             return results.stream()
                     .filter(item -> Objects.equals(item.getResultId(), resultId))
@@ -945,6 +1019,33 @@ class SimulationServiceExecuteTest {
         return candidate;
     }
 
+    private static CustomPortfolioRequest customRequest(
+            long version,
+            long resultId,
+            int depositRatio,
+            int savingsRatio,
+            int etfRatio
+    ) {
+        CustomPortfolioRequest request = new CustomPortfolioRequest();
+        request.setVersion(version);
+        request.setResultId(resultId);
+        request.setBasePortfolioType(RiskProfile.BALANCED);
+        CustomPortfolioRequest.Allocation allocation = new CustomPortfolioRequest.Allocation();
+        allocation.setDepositRatio(depositRatio);
+        allocation.setSavingsRatio(savingsRatio);
+        allocation.setEtfRatio(etfRatio);
+        request.setAllocation(allocation);
+        return request;
+    }
+
+    private static SimulationResponse.Portfolio customPortfolio(SimulationResponse response) {
+        return response.results().stream()
+                .flatMap(result -> result.portfolios().stream())
+                .filter(portfolio -> portfolio.portfolioType() == RiskProfile.CUSTOM)
+                .findFirst()
+                .orElseThrow();
+    }
+
     private static BaseRateRecord baseRate(
             long productVersionId,
             BigDecimal rate,
@@ -966,6 +1067,7 @@ class SimulationServiceExecuteTest {
             case CONSERVATIVE -> new BigDecimal("3.00");
             case BALANCED -> new BigDecimal("5.00");
             case AGGRESSIVE -> new BigDecimal("8.00");
+            case CUSTOM -> throw new IllegalArgumentException("CUSTOM is not a preset profile");
         };
         ProductCandidate candidate = candidate(
                 ProductType.ETF,
