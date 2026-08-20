@@ -1,0 +1,166 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.example.project.admin.lawtax.mapper.AdminLawTaxMapper">
+
+    <select id="selectAllBrackets" resultType="com.example.project.admin.lawtax.domain.GiftTaxBracketRow">
+        SELECT bracket_id            AS bracketId,
+               effective_from        AS effectiveFrom,
+               effective_to          AS effectiveTo,
+               lower_bound           AS lowerBound,
+               upper_bound           AS upperBound,
+               tax_rate              AS taxRate,
+               progressive_deduction AS progressiveDeduction,
+               created_at            AS createdAt
+        FROM gift_tax_bracket
+        ORDER BY effective_from DESC, lower_bound ASC
+    </select>
+
+    <select id="selectAllDeductionLimits" resultType="com.example.project.admin.lawtax.domain.GiftDeductionLimitRow">
+        SELECT deduction_limit_id AS deductionLimitId,
+               effective_from     AS effectiveFrom,
+               effective_to       AS effectiveTo,
+               relation,
+               is_minor           AS isMinor,
+               deduction_limit    AS deductionLimit,
+               created_at         AS createdAt
+        FROM gift_deduction_limit
+        ORDER BY effective_from DESC, relation ASC, is_minor ASC
+    </select>
+
+    <select id="selectBracketsByEffectiveFrom" resultType="com.example.project.admin.lawtax.domain.GiftTaxBracketRow">
+        SELECT bracket_id            AS bracketId,
+               effective_from        AS effectiveFrom,
+               effective_to          AS effectiveTo,
+               lower_bound           AS lowerBound,
+               upper_bound           AS upperBound,
+               tax_rate              AS taxRate,
+               progressive_deduction AS progressiveDeduction,
+               created_at            AS createdAt
+        FROM gift_tax_bracket
+        WHERE effective_from = #{effectiveFrom}
+        ORDER BY lower_bound ASC
+    </select>
+
+    <select id="selectDeductionLimitsByEffectiveFrom" resultType="com.example.project.admin.lawtax.domain.GiftDeductionLimitRow">
+        SELECT deduction_limit_id AS deductionLimitId,
+               effective_from     AS effectiveFrom,
+               effective_to       AS effectiveTo,
+               relation,
+               is_minor           AS isMinor,
+               deduction_limit    AS deductionLimit,
+               created_at         AS createdAt
+        FROM gift_deduction_limit
+        WHERE effective_from = #{effectiveFrom}
+        ORDER BY relation ASC, is_minor ASC
+    </select>
+
+    <select id="selectMaxBracketEffectiveFrom" resultType="java.time.LocalDate">
+        SELECT MAX(effective_from) FROM gift_tax_bracket
+    </select>
+
+    <update id="setBracketEffectiveTo">
+        UPDATE gift_tax_bracket
+        SET effective_to = #{effectiveTo}
+        WHERE effective_from = #{effectiveFrom}
+    </update>
+
+    <update id="setDeductionLimitEffectiveTo">
+        UPDATE gift_deduction_limit
+        SET effective_to = #{effectiveTo}
+        WHERE effective_from = #{effectiveFrom}
+    </update>
+
+    <insert id="insertBracket">
+        INSERT INTO gift_tax_bracket
+        (effective_from, effective_to, lower_bound, upper_bound, tax_rate, progressive_deduction)
+        VALUES
+        (#{effectiveFrom}, #{effectiveTo}, #{lowerBound}, #{upperBound}, #{taxRate}, #{progressiveDeduction})
+    </insert>
+
+    <insert id="insertDeductionLimit">
+        INSERT INTO gift_deduction_limit
+        (effective_from, effective_to, relation, is_minor, deduction_limit)
+        VALUES
+        (#{effectiveFrom}, #{effectiveTo}, #{relation}, #{isMinor}, #{deductionLimit})
+    </insert>
+
+    <delete id="deleteBracketsByEffectiveFrom">
+        DELETE FROM gift_tax_bracket WHERE effective_from = #{effectiveFrom}
+    </delete>
+
+    <delete id="deleteDeductionLimitsByEffectiveFrom">
+        DELETE FROM gift_deduction_limit WHERE effective_from = #{effectiveFrom}
+    </delete>
+
+    <sql id="lawArticleColumns">
+        law_id                 AS lawId,
+        law_code                AS lawCode,
+        law_key                 AS lawKey,
+        law_name                AS lawName,
+        law_type                AS lawType,
+        ministry,
+        promulgation_no          AS promulgationNo,
+        promulgation_date        AS promulgationDate,
+        effective_date           AS effectiveDate,
+        unit_type                AS unitType,
+        article_no               AS articleNo,
+        article_key              AS articleKey,
+        title,
+        article_effective_date   AS articleEffectiveDate,
+        content,
+        revision_history         AS revisionHistory,
+        latest_revision_date     AS latestRevisionDate,
+        created_at               AS createdAt,
+        updated_at               AS updatedAt
+    </sql>
+
+    <sql id="lawArticleFilter">
+        <where>
+            <if test="lawCode != null and lawCode != ''">
+                law_code = #{lawCode}
+            </if>
+            <if test="keyword != null and keyword != ''">
+                AND (
+                    law_name LIKE CONCAT('%', #{keyword}, '%')
+                    OR article_no LIKE CONCAT('%', #{keyword}, '%')
+                    OR title LIKE CONCAT('%', #{keyword}, '%')
+                    OR content LIKE CONCAT('%', #{keyword}, '%')
+                )
+            </if>
+        </where>
+    </sql>
+
+    <select id="selectLawArticlePage" resultType="com.example.project.admin.lawtax.domain.LawArticleRow">
+        SELECT <include refid="lawArticleColumns" />
+        FROM law_article
+        <include refid="lawArticleFilter" />
+        ORDER BY law_name ASC, article_no ASC, law_id ASC
+        LIMIT #{size}
+        OFFSET #{offset}
+    </select>
+
+    <select id="countLawArticles" resultType="long">
+        SELECT COUNT(*)
+        FROM law_article
+        <include refid="lawArticleFilter" />
+    </select>
+
+    <select id="selectLawArticleById" resultType="com.example.project.admin.lawtax.domain.LawArticleRow">
+        SELECT <include refid="lawArticleColumns" />
+        FROM law_article
+        WHERE law_id = #{lawId}
+    </select>
+
+    <select id="selectDistinctLaws" resultType="com.example.project.admin.lawtax.domain.LawSummaryRow">
+        SELECT DISTINCT
+            law_code AS lawCode,
+            law_name AS lawName,
+            law_type AS lawType
+        FROM law_article
+        ORDER BY law_name ASC
+    </select>
+
+</mapper>
