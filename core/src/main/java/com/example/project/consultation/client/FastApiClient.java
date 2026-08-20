@@ -21,6 +21,7 @@ import java.time.Duration;
 @Log4j2
 public class FastApiClient {
 
+    private static final Duration RESPONSE_TIMEOUT = Duration.ofSeconds(45);
     private final WebClient fastApiWebClient;
 
     private static final String CHAT_URI = "/api/v1/chat";

@@ -90,17 +90,6 @@ public class SimulationService {
             validateExecuteRequest(request);
             LocalDate asOfDate = LocalDate.now();
             LocalDate giftDate = request.getGiftDate();
-            String fingerprint = executeFingerprint(request, asOfDate);
-            var cached = idempotencyStore.find(
-                    userId,
-                    "POST:/api/gs",
-                    idempotencyKey,
-                    fingerprint,
-                    SimulationResponse.class
-            );
-            if (cached.isPresent()) {
-                return cached.get();
-            }
 
             FamilySnapshot family = requireFamily(request.getFamilyId(), userId);
             long deductionLimit = resolveDeductionLimit(family, giftDate);
@@ -224,13 +213,6 @@ public class SimulationService {
                 }
                 throw exception;
             }
-            idempotencyStore.remember(
-                    userId,
-                    "POST:/api/gs",
-                    idempotencyKey,
-                    fingerprint,
-                    response
-            );
             return response;
         } catch (SimulationException exception) {
             throw exception;
@@ -3089,18 +3071,6 @@ public class SimulationService {
                 && calculationDate != null
                 && giftDate.isAfter(calculationDate.minusYears(DEDUCTION_WINDOW_YEARS))
                 && !giftDate.isAfter(calculationDate);
-    }
-
-    private String executeFingerprint(
-            SimulationExecuteRequest request,
-            LocalDate asOfDate
-    ) {
-        return request.getFamilyId() + "|"
-                + request.getRequestedAmount() + "|"
-                + request.getTaxPaymentMethod() + "|"
-                + request.getInvestmentPeriodMonths() + "|"
-                + request.getGiftDate() + "|"
-                + asOfDate;
     }
 
     private String saveFingerprint(Long simulationId, SimulationSaveRequest request) {

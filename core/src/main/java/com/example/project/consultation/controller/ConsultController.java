@@ -32,7 +32,7 @@ public class ConsultController {
     private final ConsultService consultService;
     private final AccountAccessService accountAccessService;
 
-    private static final long TIMEOUT_MS = 35_000L;
+    private static final long TIMEOUT_MS = 50_000L;
 
     @ApiOperation(
             value = "AI 상담 시작",

@@ -37,6 +37,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -488,8 +489,8 @@ class SimulationServiceExecuteTest {
     }
 
     @Test
-    @DisplayName("동일 멱등성 키와 동일 실행 요청은 최초 응답을 재사용한다")
-    void reuseIdempotentExecuteResponse() {
+    @DisplayName("실행 결과 캐시를 사용하지 않으면 동일한 키 요청도 다시 계산한다")
+    void recalculateSameExecuteRequestWithoutCache() {
         LocalDate giftDate = futureDate();
         Fixture fixture = adultFixture(giftDate);
         SimulationService service = fixture.service();
@@ -498,32 +499,31 @@ class SimulationServiceExecuteTest {
         SimulationResponse first = service.execute(request, USER_ID, "execute-key");
         SimulationResponse second = service.execute(request, USER_ID, "execute-key");
 
-        // 회귀 방지: 네트워크 재시도가 동일 시뮬레이션을 두 번 생성하지 않도록 한다.
-        assertSame(first, second);
-        assertEquals(1, fixture.insertSimulationCount);
-        assertEquals(2, fixture.results.size());
+        assertNotEquals(first.simulationId(), second.simulationId());
+        assertEquals(2, fixture.insertSimulationCount);
+        assertEquals(4, fixture.results.size());
     }
 
     @Test
-    @DisplayName("같은 멱등성 키에 다른 실행 요청이 오면 충돌로 처리한다")
-    void rejectDifferentExecuteRequestWithSameIdempotencyKey() {
+    @DisplayName("실행 결과 캐시를 사용하지 않으면 동일한 키의 다른 요청도 각각 계산한다")
+    void calculateDifferentExecuteRequestsWithSameKeyWithoutCache() {
         LocalDate giftDate = futureDate();
         Fixture fixture = adultFixture(giftDate);
         SimulationService service = fixture.service();
-        service.execute(request(80_000_000L, 240, giftDate), USER_ID, "execute-key");
-
-        SimulationException exception = assertThrows(
-                SimulationException.class,
-                () -> service.execute(
-                        request(90_000_000L, 240, giftDate),
-                        USER_ID,
-                        "execute-key"
-                )
+        SimulationResponse first = service.execute(
+                request(80_000_000L, 240, giftDate),
+                USER_ID,
+                "execute-key"
+        );
+        SimulationResponse second = service.execute(
+                request(90_000_000L, 240, giftDate),
+                USER_ID,
+                "execute-key"
         );
 
-        // 회귀 방지: 같은 키를 다른 금액에 재사용해 최초 요청 의미가 변조되는 것을 막는다.
-        assertEquals(SimulationError.IDEMPOTENCY_KEY_CONFLICT, exception.getError());
-        assertEquals(1, fixture.insertSimulationCount);
+        assertNotEquals(first.simulationId(), second.simulationId());
+        assertEquals(2, fixture.insertSimulationCount);
+        assertEquals(4, fixture.results.size());
     }
 
     @Test
@@ -758,6 +758,7 @@ class SimulationServiceExecuteTest {
         private int baseRateMaximumMonths = 240;
         private Set<Long> missingBaseRateProductVersionIds = Set.of();
         private int insertSimulationCount;
+        private long simulationSequence = SIMULATION_ID - 1;
         private long resultSequence = 9_100L;
         private long trancheSequence = 9_200L;
         private long portfolioSequence = 9_300L;
@@ -860,10 +861,10 @@ class SimulationServiceExecuteTest {
                         case "updateDraftVersion" -> updateDraftVersion(
                                 (Long) args[0], (Long) args[1], (LocalDateTime) args[2]);
                         case "selectSimulation" -> simulation;
-                        case "selectResults" -> List.copyOf(results);
-                        case "selectTranches" -> List.copyOf(tranches);
-                        case "selectPortfolios" -> List.copyOf(portfolios);
-                        case "selectProductSnapshots" -> List.copyOf(products);
+                        case "selectResults" -> selectResults((Long) args[0]);
+                        case "selectTranches" -> selectTranches((Long) args[0]);
+                        case "selectPortfolios" -> selectPortfolios((Long) args[0]);
+                        case "selectProductSnapshots" -> selectProducts((Long) args[0]);
                         case "selectRecentEtfPrices", "selectSelectedPreferentialRates" -> List.of();
                         case "toString" -> "SimulationMapperExecuteFixture";
                         case "hashCode" -> System.identityHashCode(proxy);
@@ -915,7 +916,7 @@ class SimulationServiceExecuteTest {
 
         private int insertSimulation(SimulationRecord record) {
             insertSimulationCount++;
-            record.setSimulationId(SIMULATION_ID);
+            record.setSimulationId(++simulationSequence);
             record.setUserId(USER_ID);
             record.setFamilyName(family.getFamilyName());
             record.setRelation(family.getRelation());
@@ -940,10 +941,43 @@ class SimulationServiceExecuteTest {
         private int insertPortfolio(SimulationPortfolioRecord record) {
             record.setPortfolioId(++portfolioSequence);
             SimulationResultRecord result = resultById(record.getResultId());
-            record.setSimulationId(SIMULATION_ID);
+            record.setSimulationId(result.getSimulationId());
             record.setScenarioType(result.getScenarioType());
             portfolios.add(record);
             return 1;
+        }
+
+        private List<SimulationResultRecord> selectResults(Long simulationId) {
+            return results.stream()
+                    .filter(result -> Objects.equals(result.getSimulationId(), simulationId))
+                    .toList();
+        }
+
+        private List<SimulationTrancheRecord> selectTranches(Long simulationId) {
+            Set<Long> resultIds = selectResults(simulationId).stream()
+                    .map(SimulationResultRecord::getResultId)
+                    .collect(Collectors.toSet());
+            return tranches.stream()
+                    .filter(tranche -> resultIds.contains(tranche.getResultId()))
+                    .toList();
+        }
+
+        private List<SimulationPortfolioRecord> selectPortfolios(Long simulationId) {
+            return portfolios.stream()
+                    .filter(portfolio -> Objects.equals(
+                            portfolio.getSimulationId(),
+                            simulationId
+                    ))
+                    .toList();
+        }
+
+        private List<SimulationProductRecord> selectProducts(Long simulationId) {
+            Set<Long> portfolioIds = selectPortfolios(simulationId).stream()
+                    .map(SimulationPortfolioRecord::getPortfolioId)
+                    .collect(Collectors.toSet());
+            return products.stream()
+                    .filter(product -> portfolioIds.contains(product.getPortfolioId()))
+                    .toList();
         }
 
         private int insertProduct(SimulationProductRecord record) {
