@@ -5,6 +5,8 @@ import org.springframework.batch.core.*;
 import org.springframework.batch.core.launch.JobLauncher;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 
+import java.util.Arrays;
+
 public final class BatchApplication {
     private BatchApplication() {
     }
@@ -14,16 +16,27 @@ public final class BatchApplication {
     public static void main(String[] args) throws Exception {
 
         BatchStatus status;
+        String jobName = resolveJobName(args);
 
         try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext(BatchConfig.class)) {
             JobLauncher jobLauncher = context.getBean(JobLauncher.class);
-            Job lawArticleJob = context.getBean("lawArticleJob", Job.class);
+            Job job = context.getBean(jobName, Job.class);
 
-            JobParameters params = new JobParametersBuilder()
-                    .addLong("time", System.currentTimeMillis())
-                    .toJobParameters();
+            JobParametersBuilder parameterBuilder = new JobParametersBuilder()
+                    .addLong("time", System.currentTimeMillis());
+            Arrays.stream(args)
+                    .filter(argument -> argument.contains("="))
+                    .map(argument -> argument.startsWith("--") ? argument.substring(2) : argument)
+                    .forEach(argument -> {
+                        int separator = argument.indexOf('=');
+                        String key = argument.substring(0, separator);
+                        String value = argument.substring(separator + 1);
+                        if (!"job".equals(key)) {
+                            parameterBuilder.addString(key, value);
+                        }
+                    });
 
-            JobExecution execution = jobLauncher.run(lawArticleJob, params);
+            JobExecution execution = jobLauncher.run(job, parameterBuilder.toJobParameters());
             status = execution.getStatus();
 
             System.out.println("배치 종료: " + status);
@@ -34,5 +47,18 @@ public final class BatchApplication {
         if (status != BatchStatus.COMPLETED) {
             System.exit(EXIT_FAILED);
         }
+    }
+
+    private static String resolveJobName(String[] args) {
+        for (String argument : args) {
+            String normalized = argument.startsWith("--") ? argument.substring(2) : argument;
+            if (normalized.startsWith("job=")) {
+                return normalized.substring("job=".length());
+            }
+        }
+        if (args.length > 0 && !args[0].contains("=")) {
+            return args[0];
+        }
+        return "lawArticleJob";
     }
 }

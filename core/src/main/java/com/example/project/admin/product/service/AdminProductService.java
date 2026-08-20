@@ -20,6 +20,7 @@ import com.example.project.admin.product.dto.response.AdminProductVersionRespons
 import com.example.project.admin.product.mapper.AdminProductMapper;
 import com.example.project.common.api.ResponseCode;
 import com.example.project.common.exception.ServiceException;
+import com.example.project.common.product.RiseEtfPolicy;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
@@ -89,6 +90,7 @@ public class AdminProductService {
         if (existing == null || !productDataVersionId.equals(existing.getProductDataVersionId())) {
             throw new ServiceException(ResponseCode.PRODUCT_NOT_FOUND);
         }
+        validateRiseEtf(productType, request.getProductName());
 
         int updated = adminProductMapper.updateProductVersion(
                 productVersionId, request.getProductName(), request.getDescription(),
@@ -153,13 +155,24 @@ public class AdminProductService {
         if (type == null) {
             throw new ServiceException(ResponseCode.BAD_REQUEST);
         }
+        validateRiseEtf(type, request.getProductName());
 
-        try {
-            adminProductMapper.insertProduct(request.getProductCode(), type);
-        } catch (DuplicateKeyException exception) {
-            throw new ServiceException(ResponseCode.DUPLICATE_DATA);
+        Long productId = adminProductMapper.selectProductIdByCode(request.getProductCode());
+        if (productId == null) {
+            try {
+                adminProductMapper.insertProduct(request.getProductCode(), type);
+            } catch (DuplicateKeyException exception) {
+                throw new ServiceException(ResponseCode.DUPLICATE_DATA);
+            }
+            productId = adminProductMapper.selectLastInsertedId();
+        } else {
+            String existingType = adminProductMapper.selectProductTypeByCode(request.getProductCode());
+            if (!type.equals(existingType)
+                    || adminProductMapper.countProductVersionInDataVersion(
+                    productDataVersionId, productId) > 0) {
+                throw new ServiceException(ResponseCode.DUPLICATE_DATA);
+            }
         }
-        Long productId = adminProductMapper.selectLastInsertedId();
 
         adminProductMapper.insertProductVersion(
                 productDataVersionId, productId, request.getProductName(),
@@ -309,6 +322,9 @@ public class AdminProductService {
             clonePreferentialRates(row.getProductVersionId(), newVersionId);
         }
         for (AdminProductRow row : adminProductMapper.selectEtfProducts(sourceDataVersionId, null)) {
+            if (!RiseEtfPolicy.isRiseProductName(row.getProductName())) {
+                continue;
+            }
             Long newVersionId = cloneProductVersion(targetDataVersionId, row);
             adminProductMapper.insertEtf(newVersionId, row.getStockCode(), row.getEtfCategory(),
                     row.getTrackingIndex(), row.getAnnualReturn10yPercent(),
@@ -512,6 +528,12 @@ public class AdminProductService {
             throw new ServiceException(ResponseCode.BAD_REQUEST);
         }
         if (tier.getMaxRatePercent().compareTo(tier.getBaseRatePercent()) < 0) {
+            throw new ServiceException(ResponseCode.BAD_REQUEST);
+        }
+    }
+
+    private void validateRiseEtf(String productType, String productName) {
+        if ("ETF".equals(productType) && !RiseEtfPolicy.isRiseProductName(productName)) {
             throw new ServiceException(ResponseCode.BAD_REQUEST);
         }
     }

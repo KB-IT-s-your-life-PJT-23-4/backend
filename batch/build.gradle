@@ -13,7 +13,7 @@ dependencies {
     implementation "org.springframework:spring-jdbc:${springVersion}"
     implementation "org.springframework.batch:spring-batch-core:${springBatchVersion}"
 
-    // 법령 API 응답(JSON) 파싱. HTTP 는 Java 17 내장 HttpClient 사용
+    // 외부 API JSON 응답 처리. HTTP 호출은 Java 17 내장 HttpClient 사용
     implementation "com.fasterxml.jackson.core:jackson-databind:${jacksonVersion}"
 
     implementation "org.mybatis:mybatis:${mybatisVersion}"
@@ -35,23 +35,44 @@ application {
     mainClass = 'com.example.project.batch.BatchApplication'
 }
 
+// core가 배포 시 batch JAR를 runtimeOnly로 포함하므로 batch -> core 의존성을 따라오면
+// JavaExec 클래스패스에 현재 batch의 classes/resources와 batch JAR가 함께 들어올 수 있다.
+// MyBatis가 동일 Mapper XML을 두 번 읽지 않도록 현재 모듈 JAR만 제외한다.
+def standaloneBatchRuntimeClasspath = {
+    def ownJar = tasks.named('jar').get().archiveFile.get().asFile.canonicalFile
+    sourceSets.main.runtimeClasspath.filter { it.canonicalFile != ownJar }
+}
+
 tasks.register('runPiiMigration', JavaExec) {
     group = 'application'
     description = 'Runs the explicitly confirmed one-time KAN-265 PII migration.'
-    classpath = sourceSets.main.runtimeClasspath
+    classpath = standaloneBatchRuntimeClasspath()
     mainClass = 'com.example.project.batch.pii.PiiMigrationApplication'
 }
 
 tasks.register('renderPiiMockDataSql', JavaExec) {
     group = 'application'
     description = 'Renders the DDL 0.9.1 mock DML with locally configured AES/HMAC keys.'
-    classpath = sourceSets.main.runtimeClasspath
+    classpath = standaloneBatchRuntimeClasspath()
     mainClass = 'com.example.project.batch.pii.mock.PiiMockDataSqlApplication'
     workingDir = rootProject.projectDir
 }
 
-// cron 이 부르는 래퍼를 배포본 루트에 함께 넣는다. 스크립트가 자기 위치로 APP_HOME 을 잡기 때문에
-// bin/ 과 같은 레벨에 있어야 한다. git 의 실행 권한에 기대지 않도록 여기서 직접 지정한다.
+tasks.register('runEtfMarketData', JavaExec) {
+    group = 'application'
+    description = 'Collects 10-year ETF prices and publishes a new product data version.'
+    classpath = standaloneBatchRuntimeClasspath()
+    mainClass = 'com.example.project.batch.BatchApplication'
+    args '--job=etfMarketDataJob'
+
+    // 로컬 Windows JDK의 cacerts가 최신 공인 인증서 체인을 포함하지 않더라도
+    // 인증서 검증을 끄지 않고 운영체제의 신뢰 저장소를 사용한다.
+    if (System.getProperty('os.name').toLowerCase().contains('windows')) {
+        jvmArgs '-Djavax.net.ssl.trustStoreType=Windows-ROOT'
+    }
+}
+
+// cron 호출용 셸 스크립트를 배포본 루트의 bin/ 아래에 함께 둔다.
 distributions {
     main {
         contents {

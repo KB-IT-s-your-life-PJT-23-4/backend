@@ -1,0 +1,228 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.project.batch.product.etf.mapper.EtfMarketDataMapper">
+
+    <select id="selectCurrentEtfTargets"
+            resultType="com.example.project.batch.product.etf.domain.EtfProductTarget">
+        SELECT p.product_id,
+               e.stock_code,
+               pv.product_name,
+               e.annual_return_10y AS annual_return_10y_percent
+        FROM kb_product_data_version dv
+        JOIN kb_product_version pv
+          ON pv.kb_product_data_version_id = dv.kb_product_data_version_id
+        JOIN kb_product p
+          ON p.product_id = pv.product_id
+        JOIN etf e
+          ON e.kb_product_version_id = pv.kb_product_version_id
+        WHERE dv.kb_product_data_version_id = (
+            SELECT completed.kb_product_data_version_id
+            FROM kb_product_data_version completed
+            WHERE completed.status = 'COMPLETED'
+            ORDER BY completed.data_date DESC,
+                     completed.kb_product_data_version_id DESC
+            LIMIT 1
+        )
+          AND pv.sales_status = 'ON_SALE'
+        ORDER BY p.product_id
+    </select>
+
+    <select id="selectProductIdByEtfStockCode" resultType="long">
+        SELECT pv.product_id
+        FROM etf e
+        JOIN kb_product_version pv
+          ON pv.kb_product_version_id = e.kb_product_version_id
+        WHERE e.stock_code = #{stockCode}
+        ORDER BY pv.kb_product_version_id DESC
+        LIMIT 1
+    </select>
+
+    <select id="selectProductTypeByCode" resultType="string">
+        SELECT product_type
+        FROM kb_product
+        WHERE product_code = #{productCode}
+    </select>
+
+    <insert id="insertEtfProductMaster">
+        INSERT IGNORE INTO kb_product (product_code, product_type)
+        VALUES (#{productCode}, 'ETF')
+    </insert>
+
+    <insert id="upsertHistoryPrices">
+        INSERT INTO etf_history_price
+            (product_id, base_date, close_price, data_source)
+        VALUES
+        <foreach collection="prices" item="price" separator=",">
+            (#{price.productId}, #{price.baseDate}, #{price.closePrice}, #{price.dataSource})
+        </foreach>
+        ON DUPLICATE KEY UPDATE
+            close_price = VALUES(close_price),
+            data_source = VALUES(data_source)
+    </insert>
+
+    <select id="selectFirstPriceInWindow"
+            resultType="com.example.project.batch.product.etf.domain.EtfPricePoint">
+        SELECT base_date, close_price
+        FROM etf_history_price
+        WHERE product_id = #{productId}
+          AND base_date BETWEEN #{from} AND #{to}
+        ORDER BY base_date ASC
+        LIMIT 1
+    </select>
+
+    <select id="selectLatestPriceOnOrBefore"
+            resultType="com.example.project.batch.product.etf.domain.EtfPricePoint">
+        SELECT base_date, close_price
+        FROM etf_history_price
+        WHERE product_id = #{productId}
+          AND base_date &lt;= #{to}
+        ORDER BY base_date DESC
+        LIMIT 1
+    </select>
+
+    <select id="selectLatestCompletedDataVersionId" resultType="long">
+        SELECT kb_product_data_version_id
+        FROM kb_product_data_version
+        WHERE status = 'COMPLETED'
+        ORDER BY data_date DESC, kb_product_data_version_id DESC
+        LIMIT 1
+    </select>
+
+    <select id="countLoadingDataVersions" resultType="int">
+        SELECT COUNT(*)
+        FROM kb_product_data_version
+        WHERE status = 'LOADING'
+    </select>
+
+    <insert id="insertProductDataVersion">
+        INSERT INTO kb_product_data_version (version_code, data_date, status)
+        VALUES (#{versionCode}, #{dataDate}, 'LOADING')
+    </insert>
+
+    <select id="selectLastInsertedId" resultType="long">
+        SELECT LAST_INSERT_ID()
+    </select>
+
+    <insert id="cloneProductVersions">
+        INSERT INTO kb_product_version
+            (kb_product_data_version_id, product_id, product_name,
+             description, product_url, sales_status)
+        SELECT #{targetDataVersionId}, product_id, product_name,
+               description, product_url, sales_status
+        FROM kb_product_version
+        WHERE kb_product_data_version_id = #{sourceDataVersionId}
+    </insert>
+
+    <insert id="cloneDeposits">
+        INSERT INTO deposit
+            (kb_product_version_id, min_amount, max_amount, min_month, max_month)
+        SELECT target.kb_product_version_id,
+               detail.min_amount, detail.max_amount, detail.min_month, detail.max_month
+        FROM kb_product_version source
+        JOIN deposit detail
+          ON detail.kb_product_version_id = source.kb_product_version_id
+        JOIN kb_product_version target
+          ON target.kb_product_data_version_id = #{targetDataVersionId}
+         AND target.product_id = source.product_id
+        WHERE source.kb_product_data_version_id = #{sourceDataVersionId}
+    </insert>
+
+    <insert id="cloneSavings">
+        INSERT INTO savings
+            (kb_product_version_id, savings_category, min_month, max_month,
+             monthly_min_amount, monthly_max_amount)
+        SELECT target.kb_product_version_id,
+               detail.savings_category, detail.min_month, detail.max_month,
+               detail.monthly_min_amount, detail.monthly_max_amount
+        FROM kb_product_version source
+        JOIN savings detail
+          ON detail.kb_product_version_id = source.kb_product_version_id
+        JOIN kb_product_version target
+          ON target.kb_product_data_version_id = #{targetDataVersionId}
+         AND target.product_id = source.product_id
+        WHERE source.kb_product_data_version_id = #{sourceDataVersionId}
+    </insert>
+
+    <insert id="cloneEtfs">
+        INSERT INTO etf
+            (kb_product_version_id, stock_code, etf_category, tracking_index,
+             annual_return_10y, bond_ratio, risk_level)
+        SELECT target.kb_product_version_id,
+               detail.stock_code, detail.etf_category, detail.tracking_index,
+               detail.annual_return_10y, detail.bond_ratio, detail.risk_level
+        FROM kb_product_version source
+        JOIN etf detail
+          ON detail.kb_product_version_id = source.kb_product_version_id
+        JOIN kb_product_version target
+          ON target.kb_product_data_version_id = #{targetDataVersionId}
+         AND target.product_id = source.product_id
+        WHERE source.kb_product_data_version_id = #{sourceDataVersionId}
+    </insert>
+
+    <insert id="cloneBaseInterestRates">
+        INSERT INTO base_interest_rate
+            (kb_product_version_id, min_month, max_month,
+             base_rate_percent, max_rate_percent, base_date)
+        SELECT target.kb_product_version_id,
+               rate.min_month, rate.max_month,
+               rate.base_rate_percent, rate.max_rate_percent, rate.base_date
+        FROM kb_product_version source
+        JOIN base_interest_rate rate
+          ON rate.kb_product_version_id = source.kb_product_version_id
+        JOIN kb_product_version target
+          ON target.kb_product_data_version_id = #{targetDataVersionId}
+         AND target.product_id = source.product_id
+        WHERE source.kb_product_data_version_id = #{sourceDataVersionId}
+    </insert>
+
+    <insert id="clonePreferentialInterestRates">
+        INSERT INTO preferential_interest_rate
+            (kb_product_version_id, additional_rate_percent,
+             condition_code, preferential_condition, base_date)
+        SELECT target.kb_product_version_id,
+               rate.additional_rate_percent,
+               rate.condition_code, rate.preferential_condition, rate.base_date
+        FROM kb_product_version source
+        JOIN preferential_interest_rate rate
+          ON rate.kb_product_version_id = source.kb_product_version_id
+        JOIN kb_product_version target
+          ON target.kb_product_data_version_id = #{targetDataVersionId}
+         AND target.product_id = source.product_id
+        WHERE source.kb_product_data_version_id = #{sourceDataVersionId}
+    </insert>
+
+    <insert id="cloneEtfHoldings">
+        INSERT INTO etf_holding
+            (kb_product_version_id, holding_rank, holding_name, holding_code,
+             asset_type, country_code, weight_percent, base_date)
+        SELECT target.kb_product_version_id,
+               holding.holding_rank, holding.holding_name, holding.holding_code,
+               holding.asset_type, holding.country_code,
+               holding.weight_percent, holding.base_date
+        FROM kb_product_version source
+        JOIN etf_holding holding
+          ON holding.kb_product_version_id = source.kb_product_version_id
+        JOIN kb_product_version target
+          ON target.kb_product_data_version_id = #{targetDataVersionId}
+         AND target.product_id = source.product_id
+        WHERE source.kb_product_data_version_id = #{sourceDataVersionId}
+    </insert>
+
+    <update id="updateEtfAnnualReturn">
+        UPDATE etf detail
+        JOIN kb_product_version pv
+          ON pv.kb_product_version_id = detail.kb_product_version_id
+        SET detail.annual_return_10y = #{annualReturn10yPercent}
+        WHERE pv.kb_product_data_version_id = #{targetDataVersionId}
+          AND pv.product_id = #{productId}
+    </update>
+
+    <update id="completeProductDataVersion">
+        UPDATE kb_product_data_version
+        SET status = 'COMPLETED', completed_at = NOW()
+        WHERE kb_product_data_version_id = #{targetDataVersionId}
+          AND status = 'LOADING'
+    </update>
+</mapper>

@@ -164,6 +164,10 @@
           AND pv.sales_status = 'ON_SALE'
           AND p.product_type = 'ETF'
           AND (
+              UPPER(TRIM(pv.product_name)) = 'RISE'
+              OR UPPER(TRIM(pv.product_name)) LIKE 'RISE %'
+          )
+          AND (
               #{riskProfile} = 'AGGRESSIVE'
               OR (#{riskProfile} = 'BALANCED'
                   AND e.risk_level IN ('EX_LOW', 'LOW', 'MEDIUM', 'HIGH'))
