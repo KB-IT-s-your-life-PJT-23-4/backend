@@ -10,9 +10,13 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.io.Resource;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 
 import javax.sql.DataSource;
+import java.io.IOException;
+import java.util.Arrays;
+import java.util.stream.Stream;
 
 /**
  * batch 모듈용 DB 연동 설정.
@@ -41,9 +45,18 @@ public class BatchDataSourceConfig {
     public SqlSessionFactory sqlSessionFactory(DataSource dataSource, ApplicationContext context) throws Exception {
         SqlSessionFactoryBean factory = new SqlSessionFactoryBean();
         factory.setConfigLocation(context.getResource("classpath:mybatis-config.xml"));
-        factory.setMapperLocations(context.getResources("classpath*:mapper/**/*.xml"));
+        factory.setMapperLocations(mapperLocations(context));
         factory.setDataSource(dataSource);
         return factory.getObject();
+    }
+
+    private Resource[] mapperLocations(ApplicationContext context) throws IOException {
+        return Stream.of(
+                        context.getResources("classpath*:mapper/pii/*.xml"),
+                        context.getResources("classpath*:mapper/law/*.xml"),
+                        context.getResources("classpath*:mapper/common/*.xml"))
+                .flatMap(Arrays::stream)
+                .toArray(Resource[]::new);
     }
 
     @Bean
