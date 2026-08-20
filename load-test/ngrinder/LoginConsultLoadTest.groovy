@@ -125,7 +125,6 @@ class LoginConsultLoadTest {
 
     void consult(String accessToken) {
         HTTPRequest consultRequest = consultRequestHolder.get()
-        Map<String, Object> currentUser = userHolder.get()
 
         consultRequest.setHeaders(authHeaders(accessToken))
         String requestBody = JsonOutput.toJson([question: QUESTION])
@@ -134,36 +133,6 @@ class LoginConsultLoadTest {
                 "${TARGET_HOST}/api/ai/consult",
                 requestBody.getBytes("UTF-8")
         )
-
-        String responseBody = response.getBodyText()
-        def contentTypeHeader = response.getHeader("Content-Type")
-        String contentType = contentTypeHeader == null
-                ? "[NONE]"
-                : contentTypeHeader.getValue()
-
-        // HTML 응답 원인을 찾기 위한 임시 진단 로그이며 문제 확인 후 삭제한다.
-        grinder.logger.info(
-                "상담 응답 thread={}, email={}, status={}, contentType={}, bytes={}",
-                grinder.threadNumber,
-                currentUser.email,
-                response.statusCode,
-                contentType,
-                response.getBodyBytes().length
-        )
-
-        if (responseBody == null || !responseBody.trim().startsWith("{")) {
-            if (acquireConsultErrorLogSlot()) {
-                grinder.logger.error(
-                        "상담 응답이 JSON 객체가 아닙니다. thread={}, email={}, status={}, contentType={}, body={}",
-                        grinder.threadNumber,
-                        currentUser.email,
-                        response.statusCode,
-                        contentType,
-                        safeResponseBody(response)
-                )
-            }
-            throw new AssertionError("AI 상담 응답이 JSON 객체 형식이 아닙니다.")
-        }
 
         logConsultHttpError(response)
         assertHttpStatus(response, 200, "AI 상담")

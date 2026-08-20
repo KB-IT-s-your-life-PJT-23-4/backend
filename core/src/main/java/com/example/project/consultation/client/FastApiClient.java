@@ -26,7 +26,6 @@ public class FastApiClient {
 
     private static final String CHAT_URI = "/api/v1/chat";
     private static final String CLARIFICATION_URI = "/api/v1/chat/clarification";
-    static final Duration RESPONSE_TIMEOUT = Duration.ofSeconds(25);
 
     public Mono<ChatResponse> startChat(ChatRequest request) {
         return fastApiWebClient.post()

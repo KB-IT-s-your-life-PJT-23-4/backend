@@ -53,8 +53,13 @@ public class ConversationPersistenceService {
             throw new ServiceException(ResponseCode.MEMBER_NOT_FOUND);
         }
 
+        /*
+         * 동일 사용자의 요청은 위의 사용자 행 잠금으로 이미 직렬화된다.
+         * 활성 대화가 없는 상태에서 대화 테이블을 FOR UPDATE로 조회하면
+         * 인덱스 갭 잠금이 서로 다른 사용자의 신규 대화 INSERT를 막을 수 있다.
+         */
         AiConversationVO conversation = consultationMapper
-                .selectActiveConversationForUpdate(userId);
+                .selectActiveConversation(userId);
 
         if (conversation == null) {
             conversation = createConversation(userId);
