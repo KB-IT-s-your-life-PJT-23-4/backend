@@ -263,7 +263,92 @@ class SimulationServiceExecuteTest {
     }
 
     @Test
-    @DisplayName("모든 회차가 최소 가입기간보다 짧으면 해당 예적금 후보를 사용할 수 없다")
+    @DisplayName("공제 해제 후 한 달 미만이 남아도 대기 자금으로 실행한다")
+    void keepDeferredScenarioAsCashWhenLessThanOneMonthRemains() {
+        LocalDate giftDate = futureDate();
+        LocalDate priorGiftDate = giftDate.minusMonths(1);
+        Fixture fixture = new Fixture(giftDate.minusMonths(2).minusDays(1));
+        fixture.useSafeAssetTerms(1, 36);
+        fixture.addCompletedGift(42_000_000L, priorGiftDate);
+
+        SimulationResponse response = fixture.execute(40_000_000L, 120, giftDate);
+        SimulationResponse.Result optimized = result(response, ScenarioType.TAX_OPTIMIZED);
+        SimulationResponse.Product deposit = optimized.portfolios().get(0)
+                .productCandidates().stream()
+                .filter(product -> product.productType() == ProductType.DEPOSIT)
+                .findFirst()
+                .orElseThrow();
+
+        // Regression guard: the twelve days between deduction release and the
+        // evaluation date must not disappear when whole-month calculation is zero.
+        assertEquals(1, optimized.tranches().size());
+        assertEquals(priorGiftDate.plusYears(10).plusDays(1),
+                optimized.tranches().get(0).giftDate());
+        assertTrue(deposit.contractRateSchedule().isEmpty());
+        assertEquals(1, deposit.cashHoldingSchedule().size());
+        assertEquals(0, deposit.cashHoldingSchedule().get(0).holdingMonths());
+        assertEquals(priorGiftDate.plusYears(10).plusDays(1),
+                deposit.cashHoldingSchedule().get(0).holdingStartDate());
+        assertEquals(giftDate.plusYears(10),
+                deposit.cashHoldingSchedule().get(0).holdingEndDate());
+        assertEquals(deposit.allocatedAmount(),
+                deposit.cashHoldingSchedule().get(0).holdingAmount());
+    }
+
+    @Test
+    @DisplayName("최소 가입기간이 1개월인 상품은 짧은 이연 회차에도 실제 계약을 구성한다")
+    void useOneMonthMinimumProductForShortDeferredTranche() {
+        LocalDate giftDate = futureDate();
+        LocalDate priorGiftDate = giftDate.minusMonths(11);
+        Fixture fixture = adultFixture(giftDate);
+        fixture.useSafeAssetTerms(1, 36);
+        fixture.addCompletedGift(60_000_000L, priorGiftDate);
+
+        SimulationResponse response = fixture.execute(40_000_000L, 120, giftDate);
+        SimulationResponse.Product deposit = result(response, ScenarioType.TAX_OPTIMIZED)
+                .portfolios().get(0).productCandidates().stream()
+                .filter(product -> product.productType() == ProductType.DEPOSIT)
+                .findFirst()
+                .orElseThrow();
+
+        // Regression guard: short contracts are based on each product's own
+        // minimum term; the calculation must not impose a hidden 12-month unit.
+        assertTrue(deposit.contractRateSchedule().stream()
+                .anyMatch(contract -> contract.contractMonths() > 0
+                        && contract.contractMonths() < 12));
+        // Calendar day differences that do not form a complete month remain as
+        // zero-month cash holding instead of invalidating the short contract.
+        assertTrue(deposit.cashHoldingSchedule().stream()
+                .allMatch(holding -> holding.holdingMonths() == 0));
+    }
+
+    @Test
+    @DisplayName("상품 가입기간은 충족해도 적용 금리 구간이 없으면 대기 자금으로 처리한다")
+    void keepPrincipalAsCashWhenShortContractHasNoRateTier() {
+        LocalDate giftDate = futureDate();
+        LocalDate priorGiftDate = giftDate.minusMonths(2);
+        Fixture fixture = new Fixture(giftDate.minusMonths(3));
+        fixture.useSafeAssetTerms(1, 36);
+        fixture.baseRateMinimumMonths = 12;
+        fixture.addCompletedGift(42_000_000L, priorGiftDate);
+
+        SimulationResponse response = fixture.execute(40_000_000L, 120, giftDate);
+        SimulationResponse.Product deposit = result(response, ScenarioType.TAX_OPTIMIZED)
+                .portfolios().get(0).productCandidates().stream()
+                .filter(product -> product.productType() == ProductType.DEPOSIT)
+                .findFirst()
+                .orElseThrow();
+
+        // Regression guard: min_month=1 alone is insufficient when the first
+        // available interest-rate tier starts at twelve months.
+        assertTrue(deposit.contractRateSchedule().isEmpty());
+        assertEquals(1, deposit.cashHoldingSchedule().size());
+        assertEquals(deposit.allocatedAmount(),
+                deposit.cashHoldingSchedule().get(0).holdingAmount());
+    }
+
+    @Test
+    @DisplayName("전체 운용 기간이 최소 가입기간보다 짧으면 상품 후보 없음으로 처리한다")
     void rejectCandidateWhenEveryTrancheIsTooShort() {
         LocalDate giftDate = futureDate();
         Fixture fixture = adultFixture(giftDate);

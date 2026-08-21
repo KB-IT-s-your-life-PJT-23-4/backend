@@ -1041,7 +1041,6 @@ public class SimulationService {
                         tranche.getGiftDate(),
                         evaluationDate
                 ))
-                .filter(months -> months > 0)
                 .distinct()
                 .toList();
         List<ProductCandidate> eligible = safeList(candidates).stream()
@@ -1050,11 +1049,26 @@ public class SimulationService {
                         investmentPeriods
                 ))
                 .toList();
-        if (eligible.isEmpty()) {
-            throw new SimulationException(
-                    SimulationError.PRODUCT_CANDIDATE_NOT_FOUND);
+        if (!eligible.isEmpty()) {
+            return eligible;
         }
-        return eligible;
+
+        // A deferred gift may arrive too close to the evaluation date for any
+        // fixed-term product. Keep a product snapshot only as the allocation
+        // carrier so the full amount can be represented as cash holding instead
+        // of aborting both simulation scenarios.
+        List<ProductCandidate> cashHoldingCandidates = safeList(candidates).stream()
+                .filter(candidate -> candidateSupportsCashHoldingOnly(
+                        candidate,
+                        investmentPeriods
+                ))
+                .toList();
+        if (!cashHoldingCandidates.isEmpty()) {
+            return cashHoldingCandidates;
+        }
+
+        throw new SimulationException(
+                SimulationError.PRODUCT_CANDIDATE_NOT_FOUND);
     }
 
     private void validateCustomPortfolioRequest(CustomPortfolioRequest request) {
@@ -1159,7 +1173,8 @@ public class SimulationService {
                             tranches,
                             evaluationDate,
                             candidate.getMinMonth(),
-                            candidate.getMaxMonth()
+                            candidate.getMaxMonth(),
+                            candidate.getBaseRateTiers()
                     );
                     return Math.min(
                             investmentPrincipal,
@@ -1209,30 +1224,108 @@ public class SimulationService {
             ProductCandidate candidate,
             List<Integer> investmentPeriods
     ) {
-        boolean hasInvestmentContract = false;
-        for (Integer months : investmentPeriods) {
-            SimulationCalculator.ReinvestmentPlan plan = calculator.reinvestmentPlan(
-                    months,
-                    candidate.getMinMonth(),
-                    candidate.getMaxMonth()
-            );
-            if (!plan.hasInvestmentContract()) {
-                continue;
-            }
-            try {
-                plan.contractPeriods().forEach(period -> requiredRateTier(
-                        candidate.getBaseRateTiers(),
-                        period
-                ));
-                hasInvestmentContract = true;
-            } catch (SimulationException exception) {
-                if (exception.getError() == SimulationError.PRODUCT_DATA_NOT_READY) {
-                    return false;
-                }
-                throw exception;
+        return investmentPeriods.stream().anyMatch(months ->
+                rateAwareReinvestmentPlan(
+                        months,
+                        candidate.getMinMonth(),
+                        candidate.getMaxMonth(),
+                        candidate.getBaseRateTiers()
+                ).hasInvestmentContract());
+    }
+
+    private boolean candidateSupportsCashHoldingOnly(
+            ProductCandidate candidate,
+            List<Integer> investmentPeriods
+    ) {
+        return !investmentPeriods.isEmpty()
+                && investmentPeriods.stream().allMatch(months ->
+                !rateAwareReinvestmentPlan(
+                        months,
+                        candidate.getMinMonth(),
+                        candidate.getMaxMonth(),
+                        candidate.getBaseRateTiers()
+                ).hasInvestmentContract());
+    }
+
+    /**
+     * 상품 가입 가능 기간과 실제 금리 구간을 모두 만족하는 계약 조합을 만든다.
+     * 어떤 금리도 적용할 수 없는 잔여 기간은 상품 후보를 제거하지 않고
+     * 대기 자금 기간으로 남긴다.
+     */
+    private SimulationCalculator.ReinvestmentPlan rateAwareReinvestmentPlan(
+            int totalMonths,
+            Integer minimumContractMonths,
+            Integer maximumContractMonths,
+            List<BaseRateRecord> rateTiers
+    ) {
+        int safeTotalMonths = Math.max(0, totalMonths);
+        if (safeTotalMonths == 0
+                || minimumContractMonths == null
+                || maximumContractMonths == null
+                || minimumContractMonths <= 0
+                || maximumContractMonths < minimumContractMonths) {
+            return new SimulationCalculator.ReinvestmentPlan(
+                    List.of(), safeTotalMonths);
+        }
+
+        List<Integer> supportedDurations = new ArrayList<>();
+        int upperBound = Math.min(safeTotalMonths, maximumContractMonths);
+        for (int months = upperBound; months >= minimumContractMonths; months--) {
+            if (hasRateTier(rateTiers, months)) {
+                supportedDurations.add(months);
             }
         }
-        return hasInvestmentContract;
+        if (supportedDurations.isEmpty()) {
+            return new SimulationCalculator.ReinvestmentPlan(
+                    List.of(), safeTotalMonths);
+        }
+
+        List<List<Integer>> plans = new ArrayList<>(safeTotalMonths + 1);
+        for (int index = 0; index <= safeTotalMonths; index++) {
+            plans.add(null);
+        }
+        plans.set(0, List.of());
+        for (int coveredMonths = 1;
+             coveredMonths <= safeTotalMonths;
+             coveredMonths++) {
+            List<Integer> best = null;
+            for (Integer duration : supportedDurations) {
+                if (duration > coveredMonths
+                        || plans.get(coveredMonths - duration) == null) {
+                    continue;
+                }
+                List<Integer> candidate = new ArrayList<>(
+                        plans.get(coveredMonths - duration));
+                candidate.add(duration);
+                candidate.sort(Comparator.reverseOrder());
+                if (best == null || candidate.size() < best.size()) {
+                    best = List.copyOf(candidate);
+                }
+            }
+            plans.set(coveredMonths, best);
+        }
+
+        for (int coveredMonths = safeTotalMonths;
+             coveredMonths >= 1;
+             coveredMonths--) {
+            List<Integer> periods = plans.get(coveredMonths);
+            if (periods != null) {
+                return new SimulationCalculator.ReinvestmentPlan(
+                        periods,
+                        safeTotalMonths - coveredMonths
+                );
+            }
+        }
+        return new SimulationCalculator.ReinvestmentPlan(
+                List.of(), safeTotalMonths);
+    }
+
+    private boolean hasRateTier(List<BaseRateRecord> tiers, int contractMonths) {
+        return safeList(tiers).stream()
+                .anyMatch(tier -> tier.getMinimumMonths() != null
+                        && tier.getMinimumMonths() <= contractMonths
+                        && (tier.getMaximumMonths() == null
+                        || contractMonths <= tier.getMaximumMonths()));
     }
 
     private void updatePortfolioValue(SimulationPortfolioRecord portfolio) {
@@ -1468,7 +1561,8 @@ public class SimulationService {
                     tranches,
                     evaluationDate,
                     savingsCandidate.getMinMonth(),
-                    savingsCandidate.getMaxMonth()
+                    savingsCandidate.getMaxMonth(),
+                    savingsCandidate.getBaseRateTiers()
             );
             savingsCapacity = safeMultiply(
                     savingsCandidate.getMonthlyMaxAmount(),
@@ -1506,7 +1600,8 @@ public class SimulationService {
             List<SimulationTrancheRecord> tranches,
             LocalDate evaluationDate,
             Integer minimumContractMonths,
-            Integer maximumContractMonths
+            Integer maximumContractMonths,
+            List<BaseRateRecord> rateTiers
     ) {
         long totalMonths = 0;
         for (SimulationTrancheRecord tranche : safeList(tranches)) {
@@ -1519,10 +1614,11 @@ public class SimulationService {
                     tranche.getGiftDate(),
                     evaluationDate
             );
-            int firstContractMonths = calculator.reinvestmentPlan(
+            int firstContractMonths = rateAwareReinvestmentPlan(
                             remainingMonths,
                             minimumContractMonths,
-                            maximumContractMonths
+                            maximumContractMonths,
+                            rateTiers
                     ).contractPeriods().stream()
                     .findFirst()
                     .orElse(0);
@@ -1544,7 +1640,8 @@ public class SimulationService {
                 tranches,
                 evaluationDate,
                 candidate.getMinMonth(),
-                candidate.getMaxMonth()
+                candidate.getMaxMonth(),
+                candidate.getBaseRateTiers()
         );
         if (contributionMonths <= 0) {
             return false;
@@ -1742,11 +1839,13 @@ public class SimulationService {
             }
         }
         if (product.getProductType() == ProductType.SAVINGS) {
+            hydrateBaseRateTiers(product);
             int contributionMonths = savingsContributionMonths(
                     tranches,
                     evaluationDate,
                     detail.getMinimumMonths(),
-                    detail.getMaximumMonths()
+                    detail.getMaximumMonths(),
+                    product.getBaseRateTiers()
             );
             if (contributionMonths <= 0) {
                 throw new SimulationException(SimulationError.PRODUCT_LIMIT_EXCEEDED);
@@ -1784,17 +1883,19 @@ public class SimulationService {
                         tranche.getGiftDate(),
                         investmentEndDate
                 ))
-                .filter(months -> months > 0)
-                .mapToObj(months -> calculator.reinvestmentPlan(
+                .mapToObj(months -> rateAwareReinvestmentPlan(
                         months,
                         product.getMinimumContractMonths(),
-                        product.getMaximumContractMonths()
+                        product.getMaximumContractMonths(),
+                        product.getBaseRateTiers()
                 ).contractPeriods())
                 .filter(periods -> !periods.isEmpty())
                 .mapToInt(periods -> periods.get(0))
                 .findFirst()
-                .orElseThrow(() -> new SimulationException(
-                        SimulationError.PRODUCT_LIMIT_EXCEEDED));
+                .orElse(0);
+        if (firstContractMonths == 0) {
+            return BigDecimal.ZERO;
+        }
         return appliedRateForContract(product, rates, firstContractMonths);
     }
 
@@ -1816,18 +1917,46 @@ public class SimulationService {
             );
         }
         hydrateBaseRateTiers(product);
-        return calculator.calculateSelectedProductValue(
-                product,
+        List<SimulationTrancheRecord> safeTranches = safeList(tranches);
+        List<Long> portions = calculator.splitAllocatedAmountAcrossTranches(
                 allocatedAmount,
-                tranches,
-                investmentPrincipal,
-                investmentEndDate,
-                contractMonths -> appliedRateForContract(
-                        product,
-                        preferentialRates,
-                        contractMonths
-                )
+                safeTranches,
+                investmentPrincipal
         );
+        long total = 0;
+        for (int index = 0; index < safeTranches.size(); index++) {
+            SimulationTrancheRecord tranche = safeTranches.get(index);
+            if (tranche.getGiftDate() == null
+                    || tranche.getGiftDate().isAfter(investmentEndDate)
+                    || value(tranche.getInvestmentAmount()) <= 0) {
+                continue;
+            }
+            int totalMonths = calculator.remainingMonths(
+                    tranche.getGiftDate(),
+                    investmentEndDate
+            );
+            SimulationCalculator.ReinvestmentPlan plan = rateAwareReinvestmentPlan(
+                    totalMonths,
+                    product.getMinimumContractMonths(),
+                    product.getMaximumContractMonths(),
+                    product.getBaseRateTiers()
+            );
+            long maturityValue = portions.get(index);
+            for (Integer contractMonths : plan.contractPeriods()) {
+                maturityValue = calculator.calculateProductFutureValue(
+                        product.calculationType(),
+                        maturityValue,
+                        appliedRateForContract(
+                                product,
+                                preferentialRates,
+                                contractMonths
+                        ),
+                        contractMonths
+                );
+            }
+            total += maturityValue;
+        }
+        return total;
     }
 
     private BigDecimal appliedRateForContract(
@@ -2004,7 +2133,8 @@ public class SimulationService {
                         tranches,
                         evaluationDate,
                         product.getMinimumContractMonths(),
-                        product.getMaximumContractMonths()
+                        product.getMaximumContractMonths(),
+                        product.getBaseRateTiers()
                 ))
         ) : null;
         SimulationResponse.ReturnMetric metric =
@@ -2129,10 +2259,11 @@ public class SimulationService {
                     tranche.getGiftDate(),
                     investmentEndDate
             );
-            List<Integer> periods = calculator.reinvestmentPlan(
+            List<Integer> periods = rateAwareReinvestmentPlan(
                     totalMonths,
                     product.getMinimumContractMonths(),
-                    product.getMaximumContractMonths()
+                    product.getMaximumContractMonths(),
+                    product.getBaseRateTiers()
             ).contractPeriods();
             LocalDate renewalDate = tranche.getGiftDate();
             for (int index = 0; index < periods.size() - 1; index++) {
@@ -2181,32 +2312,32 @@ public class SimulationService {
                     tranche.getGiftDate(),
                     evaluationDate
             );
-            SimulationCalculator.ReinvestmentPlan plan = calculator.reinvestmentPlan(
+            SimulationCalculator.ReinvestmentPlan plan = rateAwareReinvestmentPlan(
                     totalMonths,
                     product.getMinimumContractMonths(),
-                    product.getMaximumContractMonths()
+                    product.getMaximumContractMonths(),
+                    product.getBaseRateTiers()
             );
-            if (plan.cashHoldingMonths() <= 0) {
+            LocalDate holdingStartDate = tranche.getGiftDate()
+                    .plusMonths(plan.investedMonths());
+            boolean hasPartialMonthHolding = holdingStartDate.isBefore(evaluationDate);
+            if (plan.cashHoldingMonths() <= 0 && !hasPartialMonthHolding) {
                 continue;
             }
 
             long holdingAmount = portions.get(index);
-            if (plan.investedMonths() > 0) {
-                holdingAmount = calculator.calculateReinvestedProductFutureValue(
+            for (Integer contractMonths : plan.contractPeriods()) {
+                holdingAmount = calculator.calculateProductFutureValue(
                         product.calculationType(),
                         holdingAmount,
-                        plan.investedMonths(),
-                        product.getMinimumContractMonths(),
-                        product.getMaximumContractMonths(),
-                        contractMonths -> appliedRateForContract(
+                        appliedRateForContract(
                                 product,
                                 safeList(product.getSelectedPreferentialConditions()),
                                 contractMonths
-                        )
+                        ),
+                        contractMonths
                 );
             }
-            LocalDate holdingStartDate = tranche.getGiftDate()
-                    .plusMonths(plan.investedMonths());
             schedule.add(new SimulationResponse.CashHolding(
                     tranche.getSequenceNo(),
                     holdingStartDate,
@@ -2585,16 +2716,10 @@ public class SimulationService {
                         investmentPeriodMonths
                 ))
                 .sorted(Comparator.comparingLong((ProductCandidate candidate) ->
-                        calculator.calculateReinvestedProductFutureValue(
-                                candidate.calculationType(),
+                        candidateFutureValue(
+                                candidate,
                                 100_000_000L,
-                                investmentPeriodMonths,
-                                candidate.getMinMonth(),
-                                candidate.getMaxMonth(),
-                                contractMonths -> requiredRateTier(
-                                        candidate.getBaseRateTiers(),
-                                        contractMonths
-                                ).getBaseRatePercent()
+                                investmentPeriodMonths
                         )).reversed())
                 .toList();
         if (eligible.isEmpty()) {
@@ -2604,24 +2729,51 @@ public class SimulationService {
         return eligible;
     }
 
+    private long candidateFutureValue(
+            ProductCandidate candidate,
+            long principal,
+            int investmentPeriodMonths
+    ) {
+        SimulationCalculator.ReinvestmentPlan plan = rateAwareReinvestmentPlan(
+                investmentPeriodMonths,
+                candidate.getMinMonth(),
+                candidate.getMaxMonth(),
+                candidate.getBaseRateTiers()
+        );
+        long maturityValue = principal;
+        for (Integer contractMonths : plan.contractPeriods()) {
+            maturityValue = calculator.calculateProductFutureValue(
+                    candidate.calculationType(),
+                    maturityValue,
+                    requiredRateTier(
+                            candidate.getBaseRateTiers(),
+                            contractMonths
+                    ).getBaseRatePercent(),
+                    contractMonths
+            );
+        }
+        return maturityValue;
+    }
+
     private boolean prepareCandidateRateTiers(
             ProductCandidate candidate,
             int investmentPeriodMonths
     ) {
-        List<Integer> periods = calculator.reinvestmentPlan(
-                investmentPeriodMonths,
-                candidate.getMinMonth(),
-                candidate.getMaxMonth()
-        ).contractPeriods();
-        if (periods.isEmpty()) {
-            return false;
-        }
         List<BaseRateRecord> tiers = safeList(
                 simulationMapper.selectBaseRates(candidate.getProductVersionId()));
         if (tiers.isEmpty()) {
             return false;
         }
         candidate.setBaseRateTiers(tiers);
+        List<Integer> periods = rateAwareReinvestmentPlan(
+                investmentPeriodMonths,
+                candidate.getMinMonth(),
+                candidate.getMaxMonth(),
+                tiers
+        ).contractPeriods();
+        if (periods.isEmpty()) {
+            return false;
+        }
         try {
             for (Integer period : periods) {
                 requiredRateTier(tiers, period);
@@ -2949,10 +3101,11 @@ public class SimulationService {
                     tranche.getGiftDate(),
                     investmentEndDate
             );
-            List<Integer> periods = calculator.reinvestmentPlan(
+            List<Integer> periods = rateAwareReinvestmentPlan(
                     totalMonths,
                     product.getMinimumContractMonths(),
-                    product.getMaximumContractMonths()
+                    product.getMaximumContractMonths(),
+                    product.getBaseRateTiers()
             ).contractPeriods();
             LocalDate contractStartDate = tranche.getGiftDate();
             for (int index = 0; index < periods.size(); index++) {
