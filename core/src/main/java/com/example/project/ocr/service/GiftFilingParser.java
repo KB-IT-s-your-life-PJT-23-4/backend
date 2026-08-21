@@ -251,7 +251,8 @@ public class GiftFilingParser {
     }
 
     private String compact(String line) {
-        return LAW_REFERENCE.matcher(line).replaceAll(" ").replaceAll("\\s+", "");
+        String noWhitespace = LAW_REFERENCE.matcher(line).replaceAll(" ").replaceAll("\\s+", "");
+        return noWhitespace.replace("중여", "증여");
     }
 
     private Long parseAmount(String token) {
