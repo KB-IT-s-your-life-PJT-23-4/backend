@@ -128,11 +128,6 @@ class AiSafetyPersistenceServiceTest {
         }
 
         @Override
-        public AiConversationVO selectActiveConversationForUpdate(Long userId) {
-            return null;
-        }
-
-        @Override
         public AiConversationVO selectConversationForUpdate(
                 Long aiConversationId,
                 Long userId
