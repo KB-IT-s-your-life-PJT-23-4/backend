@@ -24,8 +24,6 @@ public interface ConsultationMapper {
 
     Long lockUser(@Param("userId") Long userId);
 
-    AiConversationVO selectActiveConversationForUpdate(@Param("userId") Long userId);
-
     AiConversationVO selectConversationForUpdate(
             @Param("aiConversationId")
             Long aiConversationId,

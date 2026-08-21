@@ -54,7 +54,7 @@ public class ConversationPersistenceService {
         }
 
         AiConversationVO conversation = consultationMapper
-                .selectActiveConversationForUpdate(userId);
+                .selectActiveConversation(userId);
 
         if (conversation == null) {
             conversation = createConversation(userId);

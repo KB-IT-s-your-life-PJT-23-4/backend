@@ -226,28 +226,6 @@
         FOR UPDATE
     </select>
 
-    <!-- 활성 대화 조회 및 잠금 -->
-    <select id="selectActiveConversationForUpdate" resultMap="aiConversationResultMap">
-        SELECT
-            ai_conversation_id,
-            conversation_id,
-            user_id,
-            status,
-            processing_status,
-            processing_started_at,
-            transcript_json,
-            turn_count,
-            last_message_at,
-            closed_at,
-            created_at,
-            updated_at
-        FROM ai_conversation
-        WHERE user_id = #{userId}
-        AND status = 'ACTIVE'
-        LIMIT 1
-        FOR UPDATE
-    </select>
-
     <!-- 내부 ID로 대화 조회 및 잠금 -->
     <select id="selectConversationForUpdate" resultMap="aiConversationResultMap">
         SELECT

@@ -32,6 +32,18 @@ class ConsultationMapperXmlTest {
     }
 
     @Test
+    void 활성대화조회는갭잠금을사용하지않는다() throws Exception {
+        BoundSql boundSql = configuration()
+                .getMappedStatement(NAMESPACE + "selectActiveConversation")
+                .getBoundSql(Map.of("userId", 1L));
+
+        String sql = normalize(boundSql.getSql());
+
+        assertTrue(sql.contains("status = 'ACTIVE'"));
+        assertFalse(sql.contains("FOR UPDATE"));
+    }
+
+    @Test
     void 질문시작은처리상태와질문순번을함께갱신한다() throws Exception {
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("aiConversationId", 1L);
