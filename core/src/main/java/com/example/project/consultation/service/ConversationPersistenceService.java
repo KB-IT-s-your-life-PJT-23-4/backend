@@ -117,7 +117,6 @@ public class ConversationPersistenceService {
                 .questionExcerpt(
                         questionExcerptMasker.mask(question, familyNames)
                 )
-                .conversationHistory(contextSnapshot.getMessages())
                 .facts(contextSnapshot.getFacts())
                 .build();
     }
