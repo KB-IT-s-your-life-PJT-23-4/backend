@@ -91,8 +91,7 @@ public class ConsultService {
                                 families,
                                 fetchAllProducts(),
                                 fetchAllEtfProducts(),
-                                facts,
-                                prepared.getConversationHistory()
+                                facts
                         );
 
                         Mono<ChatResponse> responseMono = fastApiClient.startChat(request)
@@ -159,8 +158,7 @@ public class ConsultService {
                                 req.getAnswers(),
                                 families,
                                 fetchAllProducts(),
-                                fetchAllEtfProducts(),
-                                prepared.getConversationHistory()
+                                fetchAllEtfProducts()
                         );
 
                         Mono<ChatResponse> responseMono = fastApiClient
