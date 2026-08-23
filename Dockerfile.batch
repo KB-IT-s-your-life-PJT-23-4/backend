@@ -1,0 +1,26 @@
+FROM gradle:8.5-jdk17 AS build
+
+WORKDIR /app
+COPY . .
+
+# Docker 환경변수를 사용하는 DB 설정 생성
+RUN test -f batch/src/main/resources/database.docker.properties \
+    && cp \
+        batch/src/main/resources/database.docker.properties \
+        batch/src/main/resources/database.properties
+
+RUN gradle :batch:installDist --no-daemon
+
+
+FROM eclipse-temurin:17-jre-jammy
+
+WORKDIR /app
+
+COPY --from=build /app/batch/build/install/batch/ /app/
+
+RUN chmod +x /app/bin/batch \
+    && chmod +x /app/run-law-batch.sh
+
+ENV LAW_BATCH_HOME=/app
+
+ENTRYPOINT ["/bin/bash", "/app/run-law-batch.sh"]

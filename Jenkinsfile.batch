@@ -1,0 +1,131 @@
+pipeline {
+    agent any
+
+    options {
+        skipDefaultCheckout(true)
+        disableConcurrentBuilds()
+        timeout(time: 30, unit: 'MINUTES')
+        timestamps()
+    }
+
+    environment {
+        IMAGE_NAME = 'wosyh18/mirizoom-batch'
+        REPOSITORY_URL = 'https://github.com/KB-IT-s-your-life-PJT-23-4/backend.git'
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Validate') {
+            steps {
+                sh '''
+                    set -eu
+
+                    docker --version
+
+                    test -f Dockerfile.batch
+                    test -f gradlew
+                    test -f settings.gradle
+                    test -f batch/build.gradle
+                    test -f batch/src/main/resources/database.docker.properties
+                    test -f batch/scripts/run-law-batch.sh
+
+                    echo "Repository: ${REPOSITORY_URL}"
+                    echo "Commit: $(git rev-parse HEAD)"
+                    echo "Image: ${IMAGE_NAME}:${BUILD_NUMBER}"
+                '''
+            }
+        }
+
+        stage('Test') {
+            steps {
+                sh '''
+                    set -eu
+
+                    chmod +x gradlew
+                    ./gradlew :batch:test --no-daemon
+                '''
+            }
+        }
+
+        stage('Build Batch Image') {
+            steps {
+                sh '''
+                    set -eu
+
+                    docker build \
+                        --pull \
+                        --file Dockerfile.batch \
+                        --tag "${IMAGE_NAME}:${BUILD_NUMBER}" \
+                        --tag "${IMAGE_NAME}:latest" \
+                        .
+                '''
+            }
+        }
+
+        stage('Validate Batch Image') {
+            steps {
+                sh '''
+                    set -eu
+
+                    docker image inspect "${IMAGE_NAME}:${BUILD_NUMBER}" >/dev/null
+
+                    echo "배치 이미지 생성 완료"
+                    echo "Image: ${IMAGE_NAME}:${BUILD_NUMBER}"
+                '''
+            }
+        }
+
+        stage('Push Image to Docker Hub') {
+            steps {
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'dockerhub-credentials',
+                        usernameVariable: 'DOCKERHUB_USERNAME',
+                        passwordVariable: 'DOCKERHUB_TOKEN'
+                    )
+                ]) {
+                    sh '''
+                        set -eu
+
+                        export DOCKER_CONFIG="${WORKSPACE}/.docker"
+                        mkdir -p "${DOCKER_CONFIG}"
+
+                        echo "${DOCKERHUB_TOKEN}" |
+                            docker login \
+                                --username "${DOCKERHUB_USERNAME}" \
+                                --password-stdin
+
+                        docker push "${IMAGE_NAME}:${BUILD_NUMBER}"
+                        docker push "${IMAGE_NAME}:latest"
+                    '''
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "Batch 이미지 Push 완료: ${IMAGE_NAME}:${BUILD_NUMBER}"
+        }
+
+        failure {
+            echo 'Batch 테스트, 이미지 Build 또는 Push에 실패했습니다.'
+        }
+
+        always {
+            sh '''
+                docker image rm \
+                    "${IMAGE_NAME}:${BUILD_NUMBER}" \
+                    "${IMAGE_NAME}:latest" \
+                    >/dev/null 2>&1 || true
+            '''
+
+            deleteDir()
+        }
+    }
+}
