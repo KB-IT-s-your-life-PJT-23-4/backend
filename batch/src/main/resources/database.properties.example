@@ -1,5 +1,0 @@
-# Copy this file to database.properties and replace the placeholders locally.
-jdbc.driver=com.mysql.cj.jdbc.Driver
-jdbc.url=jdbc:mysql://localhost:3306/miriZoom?serverTimezone=Asia/Seoul&characterEncoding=UTF-8&useSSL=false&allowPublicKeyRetrieval=true
-jdbc.username=YOUR_DB_USERNAME
-jdbc.password=YOUR_DB_PASSWORD
