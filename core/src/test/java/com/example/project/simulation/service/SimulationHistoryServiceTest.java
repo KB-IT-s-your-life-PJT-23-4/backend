@@ -23,6 +23,7 @@ import java.lang.reflect.Proxy;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -49,7 +50,90 @@ class SimulationHistoryServiceTest {
         assertEquals(SimulationStatus.SAVED, mapperStub.observedStatus);
         assertTrue(response.items().isEmpty());
         assertEquals(0, response.pagination().getPage());
-        assertEquals(10, response.pagination().getSize());
+        assertEquals(5, response.pagination().getSize());
+    }
+
+    @Test
+    @DisplayName("시뮬레이션 이력은 요청 크기가 10이어도 페이지당 최대 5개를 반환한다")
+    void limitHistoryPageSizeToFive() {
+        long[][] cases = {
+                {0L, 0L},
+                {1L, 1L},
+                {5L, 1L},
+                {6L, 2L},
+                {10L, 2L},
+                {11L, 3L},
+                {17L, 4L}
+        };
+
+        for (long[] testCase : cases) {
+            HistoryMapperStub mapperStub = new HistoryMapperStub();
+            mapperStub.totalElements = testCase[0];
+            configureDraftPage(
+                    mapperStub,
+                    (int) Math.min(testCase[0], 5L),
+                    1L
+            );
+
+            SimulationHistoryResponse response = service(mapperStub).getHistory(
+                    1L,
+                    null,
+                    null,
+                    0,
+                    10
+            );
+
+            assertEquals(5, response.pagination().getSize());
+            assertEquals(testCase[0], response.pagination().getTotalElements());
+            assertEquals((int) testCase[1], response.pagination().getTotalPages());
+            assertEquals((int) Math.min(testCase[0], 5L), response.items().size());
+            assertEquals(0L, mapperStub.observedOffset);
+            assertEquals(5, mapperStub.observedSize);
+        }
+    }
+
+    @Test
+    @DisplayName("수증자 필터의 두 번째 페이지와 마지막 페이지에 5개 기준 오프셋을 적용한다")
+    void paginateFilteredHistoryWithFiveItemsPerPage() {
+        HistoryMapperStub secondPageMapper = new HistoryMapperStub();
+        secondPageMapper.totalElements = 17L;
+        secondPageMapper.family = family(31L, 1L);
+        configureDraftPage(secondPageMapper, 5, 6L);
+
+        SimulationHistoryResponse secondPage = service(secondPageMapper).getHistory(
+                1L,
+                null,
+                31L,
+                1,
+                10
+        );
+
+        assertEquals(5L, secondPageMapper.observedOffset);
+        assertEquals(5, secondPageMapper.observedSize);
+        assertEquals(6L, secondPage.items().get(0).simulationId());
+        assertEquals(10L, secondPage.items().get(4).simulationId());
+        assertEquals(4, secondPage.pagination().getTotalPages());
+        assertEquals(false, secondPage.pagination().isFirst());
+        assertEquals(false, secondPage.pagination().isLast());
+        assertEquals(31L, secondPageMapper.observedFamilyId);
+
+        HistoryMapperStub lastPageMapper = new HistoryMapperStub();
+        lastPageMapper.totalElements = 17L;
+        lastPageMapper.family = family(31L, 1L);
+        configureDraftPage(lastPageMapper, 2, 16L);
+
+        SimulationHistoryResponse lastPage = service(lastPageMapper).getHistory(
+                1L,
+                null,
+                31L,
+                3,
+                10
+        );
+
+        assertEquals(15L, lastPageMapper.observedOffset);
+        assertEquals(2, lastPage.items().size());
+        assertEquals(2, lastPage.pagination().getNumberOfElements());
+        assertTrue(lastPage.pagination().isLast());
     }
 
     @Test
@@ -299,6 +383,53 @@ class SimulationHistoryServiceTest {
         );
     }
 
+    private void configureDraftPage(
+            HistoryMapperStub mapperStub,
+            int itemCount,
+            long firstSimulationId
+    ) {
+        List<SimulationRecord> simulations = new ArrayList<>();
+        List<SimulationResultRecord> results = new ArrayList<>();
+        List<SimulationPortfolioRecord> recommendations = new ArrayList<>();
+
+        for (int index = 0; index < itemCount; index++) {
+            long simulationId = firstSimulationId + index;
+            long resultId = 1_000L + simulationId;
+            simulations.add(simulation(
+                    simulationId,
+                    SimulationStatus.DRAFT,
+                    null,
+                    1_000L
+            ));
+            results.add(result(resultId, simulationId, 1_000L, 0L));
+            recommendations.add(portfolio(
+                    10_000L + simulationId * 10,
+                    resultId,
+                    simulationId,
+                    RiskProfile.CONSERVATIVE,
+                    1_050L
+            ));
+            recommendations.add(portfolio(
+                    10_001L + simulationId * 10,
+                    resultId,
+                    simulationId,
+                    RiskProfile.BALANCED,
+                    1_100L
+            ));
+            recommendations.add(portfolio(
+                    10_002L + simulationId * 10,
+                    resultId,
+                    simulationId,
+                    RiskProfile.AGGRESSIVE,
+                    1_200L
+            ));
+        }
+
+        mapperStub.simulations = simulations;
+        mapperStub.results = results;
+        mapperStub.recommendations = recommendations;
+    }
+
     private SimulationRecord simulation(
             Long simulationId,
             SimulationStatus status,
@@ -423,6 +554,8 @@ class SimulationHistoryServiceTest {
         private FamilySnapshot family;
         private SimulationStatus observedStatus;
         private Long observedFamilyId;
+        private Long observedOffset;
+        private Integer observedSize;
 
         private SimulationMapper mapper() {
             return (SimulationMapper) Proxy.newProxyInstance(
@@ -441,7 +574,11 @@ class SimulationHistoryServiceTest {
                     yield totalElements;
                 }
                 case "selectFamily" -> family;
-                case "selectSimulationPage" -> simulations;
+                case "selectSimulationPage" -> {
+                    observedOffset = (Long) arguments[4];
+                    observedSize = (Integer) arguments[5];
+                    yield simulations;
+                }
                 case "selectResultsBySimulationIds" -> results;
                 case "selectRecommendedPortfoliosBySimulationIds" -> recommendations;
                 case "selectPortfoliosByIds" -> selectedPortfolios;
