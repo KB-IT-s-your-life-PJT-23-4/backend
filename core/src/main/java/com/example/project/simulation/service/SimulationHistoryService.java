@@ -39,7 +39,8 @@ import java.util.stream.Collectors;
 @Log4j2
 public class SimulationHistoryService {
 
-    private static final int DEFAULT_SIZE = 10;
+    private static final int DEFAULT_SIZE = 5;
+    private static final int PAGE_SIZE_LIMIT = 5;
     private static final int MAX_SIZE = 50;
     private static final String RETURN_RANGE_BASIS = "RECOMMENDED_PORTFOLIOS";
 
@@ -59,8 +60,9 @@ public class SimulationHistoryService {
             simulationService.validateUser(userId);
             SimulationStatus status = parseStatus(statusValue);
             int page = pageValue == null ? 0 : pageValue;
-            int size = sizeValue == null ? DEFAULT_SIZE : sizeValue;
-            validateRequest(userId, familyId, page, size);
+            int requestedSize = sizeValue == null ? DEFAULT_SIZE : sizeValue;
+            validateRequest(userId, familyId, page, requestedSize);
+            int size = Math.min(requestedSize, PAGE_SIZE_LIMIT);
 
             LocalDateTime now = LocalDateTime.now();
             long totalElements = simulationMapper.countSimulations(
