@@ -79,10 +79,20 @@
             #{countWindowEndedAt}
         )
         ON  DUPLICATE KEY UPDATE
+            trigger_event_id = CASE
+                WHEN VALUES(report_type) = 'OTHER_THRESHOLD'
+                    THEN VALUES(trigger_event_id)
+                ELSE trigger_event_id
+            END,
             occurrence_count = GREATEST(
                 occurrence_count,
                 VALUES(occurrence_count)
             ),
+            count_window_ended_at = CASE
+                WHEN VALUES(report_type) = 'OTHER_THRESHOLD'
+                    THEN VALUES(count_window_ended_at)
+                ELSE count_window_ended_at
+            END,
             updated_at = CURRENT_TIMESTAMP(6)
     </insert>
 

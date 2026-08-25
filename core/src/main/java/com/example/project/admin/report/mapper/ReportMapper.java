@@ -1,5 +1,6 @@
 package com.example.project.admin.report.mapper;
 
+import com.example.project.admin.report.domain.AdminReportQuestionRow;
 import com.example.project.consultation.domain.AiSafetyReportVO;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -18,6 +19,9 @@ public interface ReportMapper {
     long countAiReports(
            @Param("status") String status,
            @Param("reportType") String reportType);
+
+    List<AdminReportQuestionRow> selectReportQuestionExcerpts(
+            @Param("reportIds") List<Long> reportIds);
 
     int updateReport(
             @Param("reportId") long reportId,
