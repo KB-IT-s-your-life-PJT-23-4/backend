@@ -25,7 +25,8 @@ public class AdminDashboardController {
 
     @ApiOperation(
             value = "관리자 대시보드 조회",
-            notes = "한국 시간 기준 최근 7일의 가입자·시뮬레이션 통계와 최신 상품 통계를 조회합니다."
+            notes = "한국 시간 기준 최근 7일의 가입자·AI 상담·시뮬레이션 통계와 "
+                    + "FastAPI 상태, 최신 상품 통계를 조회합니다."
     )
     @GetMapping("/dashboard")
     public ApiResponse<AdminDashboardResponse> getDashboard(HttpServletRequest request) {

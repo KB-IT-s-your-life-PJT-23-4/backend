@@ -18,6 +18,9 @@ import com.example.project.simulation.service.SimulationHistoryService;
 import com.example.project.simulation.service.SimulationProductService;
 import com.example.project.simulation.service.SimulationService;
 import com.example.project.user.service.AccountAccessService;
+import io.swagger.annotations.Api;
+import io.swagger.annotations.ApiOperation;
+import io.swagger.annotations.ApiParam;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.http.CacheControl;
@@ -44,6 +47,7 @@ import java.net.URI;
 import java.util.concurrent.TimeUnit;
 
 @ApiLog
+@Api(tags = "증여 시뮬레이션 API", description = "증여 시나리오 실행, 결과 조회, 포트폴리오 조정 및 저장 기능을 제공합니다.")
 @RestController
 @RequestMapping("/api/gs")
 @RequiredArgsConstructor
@@ -61,6 +65,7 @@ public class SimulationController {
     private final AccountAccessService accountAccessService;
 
     @PostMapping({"", "/"})
+    @ApiOperation(value = "증여 시뮬레이션 실행", notes = "증여 조건을 계산하여 일괄·분할 증여 시나리오와 추천 포트폴리오를 생성합니다.", authorizations = @io.swagger.annotations.Authorization("Bearer"))
     public ResponseEntity<ApiResponse<SimulationResponse>> execute(
             @Valid @RequestBody SimulationExecuteRequest request,
             @RequestHeader(name = AUTHORIZATION, required = false) String authorization,
@@ -89,6 +94,7 @@ public class SimulationController {
     }
 
     @GetMapping
+    @ApiOperation(value = "시뮬레이션 이력 조회", notes = "상태, 수증자 및 페이지 조건으로 사용자의 시뮬레이션 이력을 조회합니다.", authorizations = @io.swagger.annotations.Authorization("Bearer"))
     public ApiResponse<SimulationHistoryResponse> history(
             @RequestParam(required = false) String status,
             @RequestParam(required = false) Long familyId,
@@ -118,8 +124,9 @@ public class SimulationController {
     }
 
     @GetMapping("/{simulationId}")
+    @ApiOperation(value = "시뮬레이션 상세 조회", notes = "본인이 실행한 시뮬레이션의 계산 결과를 조회합니다.", authorizations = @io.swagger.annotations.Authorization("Bearer"))
     public ApiResponse<SimulationResponse> get(
-            @PathVariable String simulationId,
+            @ApiParam(value = "시뮬레이션 ID", required = true, example = "1") @PathVariable String simulationId,
             @RequestHeader(name = AUTHORIZATION, required = false) String authorization,
             @AuthenticationPrincipal String principal,
             HttpServletRequest httpRequest
@@ -143,9 +150,10 @@ public class SimulationController {
     }
 
     @GetMapping("/{simulationId}/products/{kbProductVersionId}")
+    @ApiOperation(value = "추천 금융상품 상세 조회", notes = "시뮬레이션에 포함된 예금, 적금 또는 ETF 상품의 상세정보를 조회합니다.", authorizations = @io.swagger.annotations.Authorization("Bearer"))
     public ResponseEntity<ApiResponse<ProductDetailResponse>> productDetail(
-            @PathVariable String simulationId,
-            @PathVariable String kbProductVersionId,
+            @ApiParam(value = "시뮬레이션 ID", required = true, example = "1") @PathVariable String simulationId,
+            @ApiParam(value = "KB 상품 버전 ID", required = true, example = "1001") @PathVariable String kbProductVersionId,
             @RequestHeader(name = HttpHeaders.IF_NONE_MATCH, required = false)
             String ifNoneMatch,
             @RequestHeader(name = AUTHORIZATION, required = false) String authorization,
@@ -191,8 +199,9 @@ public class SimulationController {
     }
 
     @PutMapping("/{simulationId}/portfolios/custom")
+    @ApiOperation(value = "커스텀 포트폴리오 적용", notes = "사용자가 지정한 포트폴리오 비율을 시뮬레이션 결과에 적용합니다.", authorizations = @io.swagger.annotations.Authorization("Bearer"))
     public ApiResponse<CustomPortfolioResponse> customizePortfolio(
-            @PathVariable String simulationId,
+            @ApiParam(value = "시뮬레이션 ID", required = true, example = "1") @PathVariable String simulationId,
             @Valid @RequestBody CustomPortfolioRequest request,
             @RequestHeader(name = AUTHORIZATION, required = false) String authorization,
             @AuthenticationPrincipal String principal,
@@ -214,8 +223,9 @@ public class SimulationController {
     }
 
     @PatchMapping("/{simulationId}/save")
+    @ApiOperation(value = "시뮬레이션 최종 저장", notes = "선택한 시뮬레이션 결과를 최종 계획으로 저장하고 기존 저장 결과를 정리합니다.", authorizations = @io.swagger.annotations.Authorization("Bearer"))
     public ApiResponse<SimulationSaveResponse> save(
-            @PathVariable String simulationId,
+            @ApiParam(value = "시뮬레이션 ID", required = true, example = "1") @PathVariable String simulationId,
             @Valid @RequestBody SimulationSaveRequest request,
             @RequestHeader(name = AUTHORIZATION, required = false) String authorization,
             @RequestHeader(name = IDEMPOTENCY_KEY, required = false) String idempotencyKey,
