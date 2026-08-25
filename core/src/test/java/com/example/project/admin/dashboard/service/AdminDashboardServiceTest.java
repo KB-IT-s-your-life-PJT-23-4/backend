@@ -1,11 +1,14 @@
 package com.example.project.admin.dashboard.service;
 
+import com.example.project.admin.dashboard.client.FastApiHealthMonitor;
+import com.example.project.admin.dashboard.domain.ConsultationDashboardCount;
 import com.example.project.admin.dashboard.domain.DailySignupCount;
 import com.example.project.admin.dashboard.domain.AdminDashboardErrorCount;
 import com.example.project.admin.dashboard.domain.LatestProductDataVersion;
 import com.example.project.admin.dashboard.domain.ProductTypeCount;
 import com.example.project.admin.dashboard.domain.SimulationDashboardCount;
 import com.example.project.admin.dashboard.dto.response.AdminSignupSummaryResponse;
+import com.example.project.admin.dashboard.dto.response.AdminDashboardResponse;
 import com.example.project.admin.dashboard.mapper.AdminDashboardMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -40,7 +43,9 @@ class AdminDashboardServiceTest {
                 Instant.parse("2027-01-02T06:00:00Z"),
                 SEOUL
         );
-        service = new AdminDashboardService(mapper, fixedClock);
+        FastApiHealthMonitor fastApiHealthMonitor = () ->
+                new AdminDashboardResponse.FastApiMetrics(true, 18L, "healthy");
+        service = new AdminDashboardService(mapper, fastApiHealthMonitor, fixedClock);
     }
 
     @Test
@@ -50,6 +55,7 @@ class AdminDashboardServiceTest {
         mapper.dailySignupCounts.add(dailyCount(LocalDate.of(2026, 12, 28), 2L));
         mapper.dailySignupCounts.add(dailyCount(LocalDate.of(2026, 12, 31), 3L));
         mapper.simulationCounts = simulationCounts(3L, 2L);
+        mapper.consultationCounts = consultationCounts(10L, 8L, 2L);
         mapper.errorCounts = errorCounts(2L, 1L, 1L);
         mapper.latestProductDataVersion = productVersion(
                 10L,
@@ -75,6 +81,8 @@ class AdminDashboardServiceTest {
         );
         assertEquals(mapper.signupStartDateTime, mapper.simulationStartDateTime);
         assertEquals(mapper.signupEndDateTime, mapper.simulationEndDateTime);
+        assertEquals(mapper.signupStartDateTime, mapper.consultationStartDateTime);
+        assertEquals(mapper.signupEndDateTime, mapper.consultationEndDateTime);
 
         assertEquals(4L, response.getSignups().getToday());
         assertEquals(9L, response.getSignups().getLast7Days());
@@ -107,12 +115,14 @@ class AdminDashboardServiceTest {
         assertEquals(4L, response.getProducts().getEtfs());
         assertEquals(10L, mapper.productCountVersionId);
 
-        assertFalse(response.getConsultations().isAvailable());
-        assertNull(response.getConsultations().getRequests());
-        assertNull(response.getConsultations().getSuccessRate());
-        assertFalse(response.getFastApi().isAvailable());
-        assertEquals("unavailable", response.getFastApi().getStatus());
-        assertNull(response.getFastApi().getAverageResponseMs());
+        assertTrue(response.getConsultations().isAvailable());
+        assertEquals(10L, response.getConsultations().getRequests());
+        assertEquals(8L, response.getConsultations().getSuccesses());
+        assertEquals(2L, response.getConsultations().getFailures());
+        assertEquals(new BigDecimal("80.0"), response.getConsultations().getSuccessRate());
+        assertTrue(response.getFastApi().isAvailable());
+        assertEquals("healthy", response.getFastApi().getStatus());
+        assertEquals(18L, response.getFastApi().getAverageResponseMs());
         assertTrue(response.getErrors().isAvailable());
         assertEquals(2L, response.getErrors().getHttp422());
         assertEquals(1L, response.getErrors().getHttp500());
@@ -134,6 +144,11 @@ class AdminDashboardServiceTest {
         assertEquals(0L, response.getSimulations().getRuns());
         assertEquals(0L, response.getSimulations().getSaves());
         assertEquals(new BigDecimal("0.0"), response.getSimulations().getSaveRate());
+        assertTrue(response.getConsultations().isAvailable());
+        assertEquals(0L, response.getConsultations().getRequests());
+        assertEquals(0L, response.getConsultations().getSuccesses());
+        assertEquals(0L, response.getConsultations().getFailures());
+        assertEquals(new BigDecimal("0.0"), response.getConsultations().getSuccessRate());
         assertFalse(response.getProducts().isAvailable());
         assertNull(response.getProducts().getAsOfDate());
         assertNull(response.getProducts().getVersion());
@@ -171,6 +186,18 @@ class AdminDashboardServiceTest {
         return counts;
     }
 
+    private ConsultationDashboardCount consultationCounts(
+            Long requests,
+            Long successes,
+            Long failures
+    ) {
+        ConsultationDashboardCount counts = new ConsultationDashboardCount();
+        counts.setRequests(requests);
+        counts.setSuccesses(successes);
+        counts.setFailures(failures);
+        return counts;
+    }
+
     private LatestProductDataVersion productVersion(Long id, LocalDate date, String version) {
         LatestProductDataVersion dataVersion = new LatestProductDataVersion();
         dataVersion.setProductDataVersionId(id);
@@ -199,6 +226,7 @@ class AdminDashboardServiceTest {
 
         private final List<DailySignupCount> dailySignupCounts = new ArrayList<>();
         private SimulationDashboardCount simulationCounts;
+        private ConsultationDashboardCount consultationCounts;
         private LatestProductDataVersion latestProductDataVersion;
         private ProductTypeCount productTypeCounts;
         private AdminDashboardErrorCount errorCounts;
@@ -206,6 +234,8 @@ class AdminDashboardServiceTest {
         private LocalDateTime signupEndDateTime;
         private LocalDateTime simulationStartDateTime;
         private LocalDateTime simulationEndDateTime;
+        private LocalDateTime consultationStartDateTime;
+        private LocalDateTime consultationEndDateTime;
         private Long productCountVersionId;
         private LocalDateTime errorStartDateTime;
         private LocalDateTime errorEndDateTime;
@@ -228,6 +258,16 @@ class AdminDashboardServiceTest {
             simulationStartDateTime = startDateTime;
             simulationEndDateTime = endDateTime;
             return simulationCounts;
+        }
+
+        @Override
+        public ConsultationDashboardCount selectConsultationCounts(
+                LocalDateTime startDateTime,
+                LocalDateTime endDateTime
+        ) {
+            consultationStartDateTime = startDateTime;
+            consultationEndDateTime = endDateTime;
+            return consultationCounts;
         }
 
         @Override

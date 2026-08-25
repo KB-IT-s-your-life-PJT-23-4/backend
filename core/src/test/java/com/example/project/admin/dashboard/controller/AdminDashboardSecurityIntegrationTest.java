@@ -4,6 +4,9 @@ import com.example.project.admin.auth.mapper.AdminAuthMapper;
 import com.example.project.admin.auth.service.AdminAuthorizationService;
 import com.example.project.admin.dashboard.domain.DailySignupCount;
 import com.example.project.admin.dashboard.domain.AdminDashboardErrorCount;
+import com.example.project.admin.dashboard.domain.ConsultationDashboardCount;
+import com.example.project.admin.dashboard.client.FastApiHealthMonitor;
+import com.example.project.admin.dashboard.dto.response.AdminDashboardResponse;
 import com.example.project.admin.dashboard.domain.LatestProductDataVersion;
 import com.example.project.admin.dashboard.domain.ProductTypeCount;
 import com.example.project.admin.dashboard.domain.SimulationDashboardCount;
@@ -128,8 +131,11 @@ class AdminDashboardSecurityIntegrationTest {
             );
             assertEquals(7, body.path("data").path("signups").path("trend").size());
             assertEquals(0.0, body.path("data").path("simulations").path("saveRate").asDouble());
-            assertFalse(body.path("data").path("consultations").path("available").asBoolean());
-            assertTrue(body.path("data").path("consultations").path("requests").isNull());
+            assertTrue(body.path("data").path("consultations").path("available").asBoolean());
+            assertEquals(0, body.path("data").path("consultations").path("requests").asInt());
+            assertEquals(0.0, body.path("data").path("consultations").path("successRate").asDouble());
+            assertTrue(body.path("data").path("fastApi").path("available").asBoolean());
+            assertEquals("healthy", body.path("data").path("fastApi").path("status").asText());
             assertFalse(body.path("data").path("products").path("available").asBoolean());
             assertTrue(body.path("data").path("errors").path("available").asBoolean());
             assertEquals(0, body.path("data").path("errors").path("http422").asInt());
@@ -219,11 +225,21 @@ class AdminDashboardSecurityIntegrationTest {
         }
 
         @Bean
+        FastApiHealthMonitor fastApiHealthMonitor() {
+            return () -> new AdminDashboardResponse.FastApiMetrics(
+                    true,
+                    12L,
+                    "healthy"
+            );
+        }
+
+        @Bean
         AdminDashboardService adminDashboardService(
                 AdminDashboardMapper mapper,
+                FastApiHealthMonitor fastApiHealthMonitor,
                 Clock clock
         ) {
-            return new AdminDashboardService(mapper, clock);
+            return new AdminDashboardService(mapper, fastApiHealthMonitor, clock);
         }
 
         @Bean
@@ -244,6 +260,14 @@ class AdminDashboardSecurityIntegrationTest {
 
         @Override
         public SimulationDashboardCount selectSimulationCounts(
+                LocalDateTime startDateTime,
+                LocalDateTime endDateTime
+        ) {
+            return null;
+        }
+
+        @Override
+        public ConsultationDashboardCount selectConsultationCounts(
                 LocalDateTime startDateTime,
                 LocalDateTime endDateTime
         ) {

@@ -7,6 +7,8 @@ import com.example.project.common.web.CurrentUser;
 import com.example.project.reminder.dto.request.ReminderReadRequest;
 import com.example.project.reminder.dto.response.ReminderResponse;
 import com.example.project.reminder.service.ReminderService;
+import io.swagger.annotations.Api;
+import io.swagger.annotations.ApiOperation;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -20,6 +22,7 @@ import javax.servlet.http.HttpServletRequest;
 import java.util.List;
 
 @ApiLog
+@Api(tags = "리마인더 API", description = "로그인 사용자의 증여 일정 및 신고 기한 알림을 조회하고 읽음 처리합니다.")
 @Log4j2
 @RestController
 @RequestMapping("/api/rm")
@@ -36,6 +39,11 @@ public class ReminderController {
      * 클라이언트가 창을 넓히는 파라미터를 두면 화면마다 알림이 달라져 기준이 흐려진다.
      */
     @GetMapping
+    @ApiOperation(
+            value = "리마인더 목록 조회",
+            notes = "증여 일정과 신고 기한을 기준으로 현재 노출할 리마인더를 조회합니다.",
+            authorizations = @io.swagger.annotations.Authorization("Bearer")
+    )
     public ApiResponse<List<ReminderResponse>> getReminders(
             @AuthenticationPrincipal String principal,
             HttpServletRequest request
@@ -52,6 +60,11 @@ public class ReminderController {
      * <p>같은 알림을 여러 번 눌러도 행은 하나이고 읽은 시각만 갱신된다.
      */
     @PostMapping("/read")
+    @ApiOperation(
+            value = "리마인더 읽음 처리",
+            notes = "목록에서 받은 증여 ID와 알림 유형을 기준으로 리마인더를 읽음 처리합니다.",
+            authorizations = @io.swagger.annotations.Authorization("Bearer")
+    )
     public ApiResponse<Void> markRead(
             @RequestBody ReminderReadRequest reminderReadRequest,
             @AuthenticationPrincipal String principal,

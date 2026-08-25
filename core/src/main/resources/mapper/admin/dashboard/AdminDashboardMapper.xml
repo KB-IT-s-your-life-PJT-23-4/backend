@@ -17,6 +17,13 @@
         <result property="saves" column="save_count"/>
     </resultMap>
 
+    <resultMap id="consultationDashboardCountMap"
+               type="com.example.project.admin.dashboard.domain.ConsultationDashboardCount">
+        <result property="requests" column="request_count"/>
+        <result property="successes" column="success_count"/>
+        <result property="failures" column="failure_count"/>
+    </resultMap>
+
     <resultMap id="latestProductDataVersionMap"
                type="com.example.project.admin.dashboard.domain.LatestProductDataVersion">
         <id property="productDataVersionId" column="product_data_version_id"/>
@@ -55,6 +62,18 @@
         FROM simulation
         WHERE created_at &gt;= #{startDateTime}
           AND created_at &lt; #{endDateTime}
+    </select>
+
+    <select id="selectConsultationCounts" resultMap="consultationDashboardCountMap">
+        SELECT COUNT(*) AS request_count,
+               COUNT(CASE
+                         WHEN response_status IN ('COMPLETED', 'CLARIFICATION_REQUIRED')
+                         THEN 1
+                     END) AS success_count,
+               COUNT(CASE WHEN response_status = 'REJECTED' THEN 1 END) AS failure_count
+        FROM ai_consultation_event
+        WHERE occurred_at &gt;= #{startDateTime}
+          AND occurred_at &lt; #{endDateTime}
     </select>
 
     <select id="selectLatestCompletedProductDataVersion"

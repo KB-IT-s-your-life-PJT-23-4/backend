@@ -1,5 +1,7 @@
 package com.example.project.admin.dashboard.service;
 
+import com.example.project.admin.dashboard.client.FastApiHealthMonitor;
+import com.example.project.admin.dashboard.domain.ConsultationDashboardCount;
 import com.example.project.admin.dashboard.domain.DailySignupCount;
 import com.example.project.admin.dashboard.domain.AdminDashboardErrorCount;
 import com.example.project.admin.dashboard.domain.LatestProductDataVersion;
@@ -36,6 +38,7 @@ public class AdminDashboardService {
     private static final int DASHBOARD_DAYS = 7;
 
     private final AdminDashboardMapper adminDashboardMapper;
+    private final FastApiHealthMonitor fastApiHealthMonitor;
     private final Clock clock;
 
     @Transactional(readOnly = true)
@@ -56,6 +59,10 @@ public class AdminDashboardService {
                 startDateTime,
                 endDateTime
         );
+        AdminDashboardResponse.ConsultationMetrics consultations = consultationMetrics(
+                startDateTime,
+                endDateTime
+        );
         AdminProductSummaryResponse products = productSummary();
         AdminDashboardResponse.ErrorMetrics errors = errorMetrics(
                 startDateTime,
@@ -67,11 +74,33 @@ public class AdminDashboardService {
                 OffsetDateTime.now(serviceClock),
                 new AdminDashboardPeriodResponse(periodStart, today),
                 signups,
-                AdminDashboardResponse.unavailableConsultations(),
-                AdminDashboardResponse.unavailableFastApi(),
+                consultations,
+                fastApiHealthMonitor.check(),
                 errors,
                 simulations,
                 products
+        );
+    }
+
+    private AdminDashboardResponse.ConsultationMetrics consultationMetrics(
+            LocalDateTime startDateTime,
+            LocalDateTime endDateTime
+    ) {
+        ConsultationDashboardCount counts = adminDashboardMapper.selectConsultationCounts(
+                startDateTime,
+                endDateTime
+        );
+        long requests = counts == null ? 0L : nonNegative(counts.getRequests());
+        long successes = counts == null ? 0L : nonNegative(counts.getSuccesses());
+        long failures = counts == null ? 0L : nonNegative(counts.getFailures());
+        BigDecimal successRate = percentage(successes, requests);
+
+        return new AdminDashboardResponse.ConsultationMetrics(
+                true,
+                requests,
+                successes,
+                failures,
+                successRate
         );
     }
 
@@ -128,11 +157,7 @@ public class AdminDashboardService {
         long runs = counts == null ? 0L : nonNegative(counts.getRuns());
         long saves = counts == null ? 0L : nonNegative(counts.getSaves());
 
-        BigDecimal saveRate = runs == 0L
-                ? BigDecimal.ZERO.setScale(1)
-                : BigDecimal.valueOf(saves)
-                        .multiply(BigDecimal.valueOf(100L))
-                        .divide(BigDecimal.valueOf(runs), 1, RoundingMode.HALF_UP);
+        BigDecimal saveRate = percentage(saves, runs);
 
         return new AdminSimulationSummaryResponse(runs, saves, saveRate);
     }
@@ -181,5 +206,13 @@ public class AdminDashboardService {
 
     private long nonNegative(Long value) {
         return value == null ? 0L : Math.max(0L, value);
+    }
+
+    private BigDecimal percentage(long numerator, long denominator) {
+        return denominator == 0L
+                ? BigDecimal.ZERO.setScale(1)
+                : BigDecimal.valueOf(numerator)
+                        .multiply(BigDecimal.valueOf(100L))
+                        .divide(BigDecimal.valueOf(denominator), 1, RoundingMode.HALF_UP);
     }
 }

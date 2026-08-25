@@ -1,6 +1,7 @@
 package com.example.project.common.logging;
 
 import com.example.project.admin.dashboard.domain.AdminDashboardErrorCount;
+import com.example.project.admin.dashboard.domain.ConsultationDashboardCount;
 import com.example.project.admin.dashboard.domain.DailySignupCount;
 import com.example.project.admin.dashboard.domain.LatestProductDataVersion;
 import com.example.project.admin.dashboard.domain.ProductTypeCount;
@@ -173,6 +174,14 @@ class AdminDashboardErrorInterceptorTest {
 
         @Override
         public SimulationDashboardCount selectSimulationCounts(
+                LocalDateTime startDateTime,
+                LocalDateTime endDateTime
+        ) {
+            return null;
+        }
+
+        @Override
+        public ConsultationDashboardCount selectConsultationCounts(
                 LocalDateTime startDateTime,
                 LocalDateTime endDateTime
         ) {

@@ -50,6 +50,7 @@ class AdminDashboardMapperXmlTest {
                 Set.of(
                         "selectDailySignupCounts",
                         "selectSimulationCounts",
+                        "selectConsultationCounts",
                         "selectLatestCompletedProductDataVersion",
                         "selectProductTypeCounts",
                         "selectErrorCounts",
@@ -58,6 +59,24 @@ class AdminDashboardMapperXmlTest {
                 expectedIds
         );
         expectedIds.forEach(id -> assertTrue(configuration.hasStatement(NAMESPACE + id)));
+    }
+
+    @Test
+    @DisplayName("AI 상담 요청과 성공·실패는 최근 기간의 응답 상태를 기준으로 집계한다")
+    void aggregateConsultationsByResponseStatus() {
+        Map<String, Object> parameters = Map.of(
+                "startDateTime", LocalDateTime.of(2026, 8, 12, 0, 0),
+                "endDateTime", LocalDateTime.of(2026, 8, 19, 0, 0)
+        );
+
+        String consultationSql = sql("selectConsultationCounts", parameters);
+
+        assertTrue(consultationSql.contains("FROM ai_consultation_event"));
+        assertTrue(consultationSql.contains(
+                "response_status IN ('COMPLETED', 'CLARIFICATION_REQUIRED')"
+        ));
+        assertTrue(consultationSql.contains("response_status = 'REJECTED'"));
+        assertTrue(consultationSql.contains("occurred_at >= ? AND occurred_at < ?"));
     }
 
     @Test
