@@ -34,9 +34,34 @@ class ReportMapperXmlTest {
 
         assertTrue(sql.contains("WHERE status = ? AND report_type = ?"));
         assertTrue(sql.contains(
-                "ORDER BY created_at DESC, ai_safety_report_id DESC"
+                "ORDER BY r.created_at DESC, r.ai_safety_report_id DESC"
         ));
         assertTrue(sql.contains("LIMIT ? OFFSET ?"));
+    }
+
+    @Test
+    @DisplayName("신고 유형에 따라 단건 또는 누적 마스킹 질문을 조회한다")
+    void selectReportQuestionExcerptsAppliesReportTypeRange() throws Exception {
+        Configuration configuration = configuration();
+        Map<String, Object> parameters = new HashMap<>();
+        parameters.put("reportIds", java.util.List.of(10L, 11L));
+
+        BoundSql boundSql = configuration.getMappedStatement(
+                NAMESPACE + "selectReportQuestionExcerpts"
+        ).getBoundSql(parameters);
+        String sql = normalize(boundSql.getSql());
+
+        assertTrue(sql.contains("e.question_excerpt"));
+        assertTrue(sql.contains(
+                "r.report_type = 'JAILBREAK' AND e.ai_consultation_event_id = r.trigger_event_id"
+        ));
+        assertTrue(sql.contains(
+                "r.report_type = 'OTHER_THRESHOLD' AND e.user_id = r.user_id"
+        ));
+        assertTrue(sql.contains("LOWER(e.intent) = 'other'"));
+        assertTrue(sql.contains("e.occurred_at >= r.count_window_started_at"));
+        assertTrue(sql.contains("e.occurred_at <= r.count_window_ended_at"));
+        assertTrue(sql.contains("WHERE r.ai_safety_report_id IN ( ? , ? )"));
     }
 
     @Test

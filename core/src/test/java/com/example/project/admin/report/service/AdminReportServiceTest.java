@@ -3,6 +3,7 @@ package com.example.project.admin.report.service;
 import com.example.project.admin.audit.service.AdminAuditWriter;
 import com.example.project.admin.audit.support.InMemoryAdminAuditLogMapper;
 import com.example.project.admin.auth.domain.AdminPrincipal;
+import com.example.project.admin.report.domain.AdminReportQuestionRow;
 import com.example.project.admin.report.dto.request.ReportProcessRequest;
 import com.example.project.admin.report.dto.response.AdminReportPageResponse;
 import com.example.project.admin.report.mapper.ReportMapper;
@@ -33,6 +34,11 @@ class AdminReportServiceTest {
         ReportMapperStub mapper = new ReportMapperStub();
         mapper.totalElements = 45L;
         mapper.reports = List.of(report(101L), report(102L));
+        mapper.questionRows = List.of(
+                new AdminReportQuestionRow(101L, "탈옥 시도 질문"),
+                new AdminReportQuestionRow(102L, "반복 질문 1"),
+                new AdminReportQuestionRow(102L, "반복 질문 2")
+        );
         AdminReportService service = service(mapper);
 
         AdminReportPageResponse response = service.getPageReportList(
@@ -47,6 +53,10 @@ class AdminReportServiceTest {
         assertEquals(20L, mapper.observedOffset);
         assertEquals(20, mapper.observedSize);
         assertSame(mapper.reports, response.getReports());
+        assertEquals(List.of("탈옥 시도 질문"),
+                response.getReports().get(0).getQuestionExcerpts());
+        assertEquals(List.of("반복 질문 1", "반복 질문 2"),
+                response.getReports().get(1).getQuestionExcerpts());
 
         Pagination pagination = response.getPagination();
         assertEquals(1, pagination.getPage());
@@ -213,6 +223,7 @@ class AdminReportServiceTest {
 
         private long totalElements;
         private List<AiSafetyReportVO> reports = List.of();
+        private List<AdminReportQuestionRow> questionRows = List.of();
         private String observedStatus;
         private String observedReportType;
         private long observedOffset;
@@ -247,6 +258,13 @@ class AdminReportServiceTest {
             observedStatus = status;
             observedReportType = reportType;
             return totalElements;
+        }
+
+        @Override
+        public List<AdminReportQuestionRow> selectReportQuestionExcerpts(
+                List<Long> reportIds
+        ) {
+            return questionRows;
         }
 
         @Override
