@@ -32,6 +32,9 @@ public class AiSafetyReportVO {
     //신고를 발생시킨 AI 상담 이벤트 ID
     private Long triggerEventId;
 
+    //개인정보를 제거한 신고 발생 질문 일부
+    private String questionExcerpt;
+
     //신고 시점 발생 횟수
     private Integer occurrenceCount;
 

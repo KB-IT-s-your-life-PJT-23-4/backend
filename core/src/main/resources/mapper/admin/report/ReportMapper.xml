@@ -25,6 +25,9 @@
         <result property="triggerEventId"
                 column="trigger_event_id"/>
 
+        <result property="questionExcerpt"
+                column="question_excerpt"/>
+
         <result property="occurrenceCount"
                 column="occurrence_count"/>
 
@@ -67,27 +70,30 @@
             resultMap="aiSafetyReportResultMap">
 
         SELECT
-        ai_safety_report_id,
-        report_key,
-        report_type,
-        status,
-        user_id,
-        trigger_event_id,
-        occurrence_count,
-        count_window_started_at,
-        count_window_ended_at,
-        assigned_admin_id,
-        resolution_note,
-        reviewed_at,
-        created_at,
-        updated_at
-        FROM ai_safety_report
+        r.ai_safety_report_id,
+        r.report_key,
+        r.report_type,
+        r.status,
+        r.user_id,
+        r.trigger_event_id,
+        e.question_excerpt,
+        r.occurrence_count,
+        r.count_window_started_at,
+        r.count_window_ended_at,
+        r.assigned_admin_id,
+        r.resolution_note,
+        r.reviewed_at,
+        r.created_at,
+        r.updated_at
+        FROM ai_safety_report r
+        LEFT JOIN ai_consultation_event e
+          ON e.ai_consultation_event_id = r.trigger_event_id
 
         <include refid="reportFilter"/>
 
         ORDER BY
-        created_at DESC,
-        ai_safety_report_id DESC
+        r.created_at DESC,
+        r.ai_safety_report_id DESC
 
         LIMIT #{size}
         OFFSET #{offset}
