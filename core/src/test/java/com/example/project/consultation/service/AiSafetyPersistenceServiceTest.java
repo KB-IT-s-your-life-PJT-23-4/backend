@@ -74,6 +74,32 @@ class AiSafetyPersistenceServiceTest {
     }
 
     @Test
+    void other신고후추가질문은누적범위의마지막시각과이벤트를갱신한다() {
+        FakeConsultationMapper mapper = new FakeConsultationMapper();
+        AiSafetyPersistenceService service = createService(mapper);
+        LocalDateTime startedAt = LocalDateTime.of(2026, 8, 25, 10, 0);
+
+        for (long eventId = 1L; eventId <= 11L; eventId++) {
+            service.createReportIfRequired(
+                    USER_ID,
+                    eventId,
+                    "other",
+                    startedAt.plusMinutes(eventId - 1)
+            );
+        }
+
+        LocalDateTime latestAt = startedAt.plusMinutes(11);
+        service.createReportIfRequired(USER_ID, 12L, "other", latestAt);
+
+        assertEquals(2, mapper.reports.size());
+        AiSafetyReportVO latestReport = mapper.reports.get(1);
+        assertEquals(12L, latestReport.getTriggerEventId());
+        assertEquals(12, latestReport.getOccurrenceCount());
+        assertEquals(startedAt, latestReport.getCountWindowStartedAt());
+        assertEquals(latestAt, latestReport.getCountWindowEndedAt());
+    }
+
+    @Test
     void 안전대상이아닌분류는신고하지않는다() {
         FakeConsultationMapper mapper = new FakeConsultationMapper();
         AiSafetyPersistenceService service = createService(mapper);

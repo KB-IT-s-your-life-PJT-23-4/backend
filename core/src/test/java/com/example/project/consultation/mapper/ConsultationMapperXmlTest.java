@@ -44,6 +44,30 @@ class ConsultationMapperXmlTest {
     }
 
     @Test
+    void other중복신고는마지막이벤트와집계종료시각을갱신한다() throws Exception {
+        Map<String, Object> parameters = new HashMap<>();
+        parameters.put("reportKey", "OTHER_THRESHOLD:1:20260825");
+        parameters.put("reportType", "OTHER_THRESHOLD");
+        parameters.put("status", "OPEN");
+        parameters.put("userId", 1L);
+        parameters.put("triggerEventId", 12L);
+        parameters.put("occurrenceCount", 12);
+        parameters.put("countWindowStartedAt", LocalDateTime.now().minusMinutes(11));
+        parameters.put("countWindowEndedAt", LocalDateTime.now());
+
+        BoundSql boundSql = configuration()
+                .getMappedStatement(NAMESPACE + "insertAIReport")
+                .getBoundSql(parameters);
+        String sql = normalize(boundSql.getSql());
+
+        assertTrue(sql.contains("trigger_event_id = CASE"));
+        assertTrue(sql.contains("WHEN VALUES(report_type) = 'OTHER_THRESHOLD'"));
+        assertTrue(sql.contains("THEN VALUES(trigger_event_id)"));
+        assertTrue(sql.contains("count_window_ended_at = CASE"));
+        assertTrue(sql.contains("THEN VALUES(count_window_ended_at)"));
+    }
+
+    @Test
     void 질문시작은처리상태와질문순번을함께갱신한다() throws Exception {
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("aiConversationId", 1L);
