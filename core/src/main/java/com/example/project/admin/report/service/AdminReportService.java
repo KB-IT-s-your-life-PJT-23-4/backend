@@ -2,6 +2,7 @@ package com.example.project.admin.report.service;
 
 import com.example.project.admin.audit.service.AdminAuditWriter;
 import com.example.project.admin.auth.domain.AdminPrincipal;
+import com.example.project.admin.report.domain.AdminReportQuestionRow;
 import com.example.project.admin.report.dto.request.ReportProcessRequest;
 import com.example.project.admin.report.dto.response.AdminReportPageResponse;
 import com.example.project.admin.report.mapper.ReportMapper;
@@ -13,6 +14,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -70,6 +73,7 @@ public class AdminReportService {
                 offset,
                 size
         );
+        populateQuestionExcerpts(items);
 
         Pagination pagination = Pagination.of(
                 page,
@@ -83,6 +87,38 @@ public class AdminReportService {
                 .pagination(pagination)
                 .build();
     }
+
+    private void populateQuestionExcerpts(List<AiSafetyReportVO> reports) {
+        if (reports == null || reports.isEmpty()) {
+            return;
+        }
+
+        List<Long> reportIds = reports.stream()
+                .map(AiSafetyReportVO::getAiSafetyReportId)
+                .toList();
+        List<AdminReportQuestionRow> questionRows =
+                reportMapper.selectReportQuestionExcerpts(reportIds);
+
+        Map<Long, List<String>> excerptsByReportId = new HashMap<>();
+        for (AdminReportQuestionRow row : questionRows) {
+            if (row.getQuestionExcerpt() == null) {
+                continue;
+            }
+            excerptsByReportId
+                    .computeIfAbsent(row.getReportId(), ignored -> new ArrayList<>())
+                    .add(row.getQuestionExcerpt());
+        }
+
+        for (AiSafetyReportVO report : reports) {
+            report.setQuestionExcerpts(List.copyOf(
+                    excerptsByReportId.getOrDefault(
+                            report.getAiSafetyReportId(),
+                            List.of()
+                    )
+            ));
+        }
+    }
+
     private String normalizeFilter(
             String value,
             Set<String> allowedValues
