@@ -5,8 +5,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Data
 @AllArgsConstructor
@@ -31,6 +31,10 @@ public class AiSafetyReportVO {
 
     //신고를 발생시킨 AI 상담 이벤트 ID
     private Long triggerEventId;
+
+    //개인정보를 제거한 신고 범위의 질문 목록
+    @Builder.Default
+    private List<String> questionExcerpts = List.of();
 
     //신고 시점 발생 횟수
     private Integer occurrenceCount;

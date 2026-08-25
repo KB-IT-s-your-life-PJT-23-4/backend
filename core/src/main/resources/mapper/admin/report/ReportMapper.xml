@@ -51,6 +51,12 @@
 
     </resultMap>
 
+    <resultMap id="adminReportQuestionRowMap"
+               type="com.example.project.admin.report.domain.AdminReportQuestionRow">
+        <result property="reportId" column="report_id"/>
+        <result property="questionExcerpt" column="question_excerpt"/>
+    </resultMap>
+
     <sql id="reportFilter">
         <where>
             <if test="status != null">
@@ -67,30 +73,62 @@
             resultMap="aiSafetyReportResultMap">
 
         SELECT
-        ai_safety_report_id,
-        report_key,
-        report_type,
-        status,
-        user_id,
-        trigger_event_id,
-        occurrence_count,
-        count_window_started_at,
-        count_window_ended_at,
-        assigned_admin_id,
-        resolution_note,
-        reviewed_at,
-        created_at,
-        updated_at
-        FROM ai_safety_report
+        r.ai_safety_report_id,
+        r.report_key,
+        r.report_type,
+        r.status,
+        r.user_id,
+        r.trigger_event_id,
+        r.occurrence_count,
+        r.count_window_started_at,
+        r.count_window_ended_at,
+        r.assigned_admin_id,
+        r.resolution_note,
+        r.reviewed_at,
+        r.created_at,
+        r.updated_at
+        FROM ai_safety_report r
 
         <include refid="reportFilter"/>
 
         ORDER BY
-        created_at DESC,
-        ai_safety_report_id DESC
+        r.created_at DESC,
+        r.ai_safety_report_id DESC
 
         LIMIT #{size}
         OFFSET #{offset}
+    </select>
+
+    <select id="selectReportQuestionExcerpts"
+            resultMap="adminReportQuestionRowMap">
+        SELECT
+            r.ai_safety_report_id AS report_id,
+            e.question_excerpt
+        FROM ai_safety_report r
+        JOIN ai_consultation_event e
+          ON (
+              r.report_type = 'JAILBREAK'
+              AND e.ai_consultation_event_id = r.trigger_event_id
+          )
+          OR (
+              r.report_type = 'OTHER_THRESHOLD'
+              AND e.user_id = r.user_id
+              AND LOWER(e.intent) = 'other'
+              AND e.occurred_at &gt;= r.count_window_started_at
+              AND e.occurred_at &lt;= r.count_window_ended_at
+          )
+        WHERE r.ai_safety_report_id IN
+        <foreach collection="reportIds"
+                 item="reportId"
+                 open="("
+                 separator=","
+                 close=")">
+            #{reportId}
+        </foreach>
+        ORDER BY
+            r.ai_safety_report_id,
+            e.occurred_at,
+            e.ai_consultation_event_id
     </select>
 
     <select id="countAiReports"
