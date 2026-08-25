@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
@@ -60,7 +61,7 @@ public class AiSafetyPersistenceService {
                 userId,
                 eventId,
                 counter,
-                occurredAt
+                occurredAt.toLocalDate()
         );
     }
 
@@ -81,9 +82,9 @@ public class AiSafetyPersistenceService {
             Long userId,
             Long eventId,
             AIOtherIntentCounter.CounterSnapshot counter,
-            LocalDateTime occurredAt
+            LocalDate reportDate
     ) {
-        String reportKey = REPORT_TYPE_OTHER_THRESHOLD + ":" + userId + ":" + occurredAt.toLocalDate().format(DateTimeFormatter.BASIC_ISO_DATE);
+        String reportKey = REPORT_TYPE_OTHER_THRESHOLD + ":" + userId + ":" + reportDate.format(DateTimeFormatter.BASIC_ISO_DATE);
 
         AiSafetyReportVO report = AiSafetyReportVO.builder()
                 .reportKey(reportKey)
@@ -93,7 +94,7 @@ public class AiSafetyPersistenceService {
                 .triggerEventId(eventId)
                 .occurrenceCount(counter.getCount())
                 .countWindowStartedAt(counter.getFirstDetectedAt())
-                .countWindowEndedAt(occurredAt)
+                .countWindowEndedAt(counter.getThresholdReachedAt())
                 .build();
 
         consultationMapper.insertAIReport(report);
