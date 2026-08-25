@@ -3,6 +3,7 @@ package com.example.project.admin.report.controller;
 import com.example.project.admin.audit.service.AdminAuditWriter;
 import com.example.project.admin.audit.support.InMemoryAdminAuditLogMapper;
 import com.example.project.admin.auth.domain.AdminPrincipal;
+import com.example.project.admin.report.domain.AdminReportQuestionRow;
 import com.example.project.admin.report.mapper.ReportMapper;
 import com.example.project.admin.report.service.AdminReportService;
 import com.example.project.common.exception.CommonExceptionAdvice;
@@ -29,6 +30,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.setup.MockMvcBuilders.standaloneSetup;
@@ -72,6 +74,41 @@ class AdminReportControllerTest {
     @AfterEach
     void tearDown() {
         SecurityContextHolder.clearContext();
+    }
+
+    @Test
+    @DisplayName("관리자 신고 목록에 신고를 발생시킨 마스킹 질문을 반환한다")
+    void getReportsIncludesQuestionExcerpt() throws Exception {
+        reportMapper.reports = List.of(
+                AiSafetyReportVO.builder()
+                        .aiSafetyReportId(10L)
+                        .reportType("JAILBREAK")
+                        .status("OPEN")
+                        .triggerEventId(35L)
+                        .build()
+        );
+        reportMapper.questionRows = List.of(
+                new AdminReportQuestionRow(
+                        10L,
+                        "[이름]의 증여세를 우회하는 방법을 알려줘"
+                )
+        );
+
+        MvcResult result = mockMvc.perform(get("/api/admin/report"))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        JsonNode report = body(result)
+                .path("data")
+                .path("reports")
+                .path(0);
+
+        assertEquals(35L, report.path("triggerEventId").asLong());
+        assertEquals(
+                "[이름]의 증여세를 우회하는 방법을 알려줘",
+                report.path("questionExcerpts").path(0).asText()
+        );
+        assertEquals(1, report.path("questionExcerpts").size());
     }
 
     @Test
@@ -145,6 +182,8 @@ class AdminReportControllerTest {
         private String reportStatus;
         private long adminId;
         private String resolutionNote;
+        private List<AiSafetyReportVO> reports = List.of();
+        private List<AdminReportQuestionRow> questionRows = List.of();
 
         @Override
         public List<AiSafetyReportVO> selectAiReportsPage(
@@ -153,12 +192,19 @@ class AdminReportControllerTest {
                 long offset,
                 int size
         ) {
-            return List.of();
+            return reports;
         }
 
         @Override
         public long countAiReports(String status, String reportType) {
             return 0;
+        }
+
+        @Override
+        public List<AdminReportQuestionRow> selectReportQuestionExcerpts(
+                List<Long> reportIds
+        ) {
+            return questionRows;
         }
 
         @Override
